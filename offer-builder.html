@@ -325,26 +325,31 @@ function buildDealData(form) {
 // PDF FILL ENGINE — uses pdf-lib
 // ══════════════════════════════════════════════════════════════════════════════
 async function fillRPA(formState) {
+  let step = "INIT";
   try {
+    step = "DECODE";
     const { PDFDocument, StandardFonts, rgb } = PDFLib;
     const dealData = buildDealData(formState);
-
     const binaryStr = atob(BLANK_RPA_B64);
     const pdfBytes = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) pdfBytes[i] = binaryStr.charCodeAt(i);
 
+    step = "LOAD";
     const pdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: true, throwOnInvalidObject: false, updateMetadata: false });
 
+    step = "FONT";
     const font = await pdf.embedFont(StandardFonts.Helvetica);
+
+    step = "PAGES";
     const pages = pdf.getPages();
 
+    step = "DRAW";
     const byPage = {};
     for (const [pg,x,yTop,key,fontSize,maxChars] of FIELD_MAP) {
       if (!byPage[pg]) byPage[pg] = [];
       const val = (dealData[key]||"").toString().substring(0, maxChars);
       if (val) byPage[pg].push({x, y: PAGE_H - yTop, text: val, size: fontSize});
     }
-
     for (const [pgStr, fields] of Object.entries(byPage)) {
       const page = pages[parseInt(pgStr) - 1];
       if (!page) continue;
@@ -353,9 +358,10 @@ async function fillRPA(formState) {
       }
     }
 
+    step = "SAVE";
     return await pdf.save({ updateFieldAppearances: false });
   } catch(e) {
-    throw new Error("[FILLRPA] " + e.message);
+    throw new Error("[" + step + "] " + e.message);
   }
 }
 
