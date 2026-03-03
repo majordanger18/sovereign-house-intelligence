@@ -404,23 +404,36 @@ async function fillRPA(formState) {
     }
 
     step = "CLEANUP";
-    // Strip all non-essential catalog entries that may hold broken refs
     for (const key of ['AcroForm','StructTreeRoot','Names','Outlines','MarkInfo','Metadata','Perms','AA','OpenAction']) {
       try { pdf.catalog.delete(PDFName.of(key)); } catch(ex) {}
     }
-    // Strip annotations from all pages
     for (const pd of pageDicts) {
       try { pd.delete(PDFName.of('Annots')); } catch(ex) {}
     }
-    // Purge null/undefined indirect objects from context
+
+    step = "PURGE";
+    // Find and delete objects that can't be serialized
+    let purged = 0, total = 0, lastBad = "";
     try {
       for (const [ref, obj] of pdf.context.enumerateIndirectObjects()) {
-        if (!obj) pdf.context.delete(ref);
+        total++;
+        try {
+          if (obj === undefined || obj === null) throw new Error("nil");
+          if (typeof obj.sizeInBytes === 'function') obj.sizeInBytes();
+        } catch(ex) {
+          lastBad = ref.toString();
+          pdf.context.delete(ref);
+          purged++;
+        }
       }
-    } catch(ex) {}
+    } catch(ex) { lastBad = "enum:" + ex.message.substring(0,40); }
 
     step = "SAVE";
-    return await pdf.save({ updateFieldAppearances: false });
+    try {
+      return await pdf.save({ updateFieldAppearances: false });
+    } catch(e) {
+      throw new Error("[SAVE] total=" + total + " purged=" + purged + " lastBad=" + lastBad + " | " + e.message);
+    }
   } catch(e) {
     throw new Error("[" + step + "] " + e.message);
   }
