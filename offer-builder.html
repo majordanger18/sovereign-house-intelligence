@@ -328,7 +328,7 @@ async function fillRPA(formState) {
   const { PDFDocument, StandardFonts, rgb } = PDFLib;
   const dealData = buildDealData(formState);
   const pdfBytes = Uint8Array.from(atob(BLANK_RPA_B64), c => c.charCodeAt(0));
-  const pdf = await PDFDocument.load(pdfBytes);
+  const pdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const pages = pdf.getPages();
 

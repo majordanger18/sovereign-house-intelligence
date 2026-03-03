@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#09090b"/>
+<title>Sovereign House Intelligence v3.2</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+<div id="loading" style="min-height:100dvh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+  <div style="width:36px;height:36px;border:3px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite"></div>
+  <div style="color:#d4af37;font-size:12px;font-weight:700;letter-spacing:3px">SOVEREIGN HOUSE</div>
+</div>
+
+<div id="main" class="main-wrap" style="display:none">
+  <div id="stickyHeader" style="position:sticky;top:0;z-index:100;background:#09090b;padding-bottom:4px;">
+    <div style="padding:calc(20px + env(safe-area-inset-top)) 20px 10px;background:linear-gradient(180deg,rgba(212,175,55,0.03),transparent)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:9px;color:#d4af37;font-weight:800;letter-spacing:4px">SOVEREIGN HOUSE</div>
+          <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:900;margin-top:2px">Intelligence</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div id="alertBadge" style="display:none;cursor:pointer;background:#d4af37;color:#0a0a0a;font-size:12px;font-weight:800;border-radius:20px;padding:6px 12px;min-height:32px;align-items:center;gap:4px">🔔 <span id="alertCount">0</span></div>
+          <button onclick="togglePulse()" class="btn" style="padding:0 14px;min-height:42px;font-size:16px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8">📊</button>
+          <button onclick="this.style.opacity='0.4';loadData().then(()=>{this.style.opacity='1';checkHealth();})" class="btn" style="padding:0 12px;min-height:42px;font-size:14px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8">↻</button>
+        </div>
+      </div>
+      <div id="statsArea" class="stat-grid" style="margin-top:10px"></div>
+    </div>
+    <div id="alertToast"></div>
+    <div id="pulseArea"></div>
+    <div style="margin-top:4px"><div id="filtersArea" class="filters"></div></div>
+    <div style="padding:8px 20px 0;display:flex;gap:8px">
+      <div style="flex:1;position:relative">
+        <input id="searchBox" type="text" placeholder="Search address, MLS#, zip..." style="width:100%;padding:10px 36px 10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.04);color:#f1f5f9;font-size:16px;outline:none;min-height:44px"/>
+        <button id="searchClear" onclick="document.getElementById('searchBox').value='';document.getElementById('searchBox').dispatchEvent(new Event('input'));this.style.display='none';" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);border:none;color:#94a3b8;font-size:14px;cursor:pointer;align-items:center;justify-content:center">✕</button>
+      </div>
+      <select id="sortBox" style="padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:#131316;color:#f1f5f9;font-size:16px;font-weight:700;min-height:44px;min-width:130px;cursor:pointer">
+        <option value="sovereign_score">Score ↓</option>
+        <option value="price_asc">Price ↑</option>
+        <option value="price_desc">Price ↓</option>
+        <option value="dom">DOM ↓</option>
+        <option value="ppsf">$/sf ↑</option>
+        <option value="oldest">Oldest</option>
+        <option value="newest">Newest</option>
+      </select>
+    </div>
+    <div style="padding:6px 20px 2px"><span id="countLabel" style="font-size:11px;color:#475569;font-weight:600"></span></div>
+    <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(212,175,55,0.15),transparent);margin:0 20px"></div>
+  </div>
+  <div id="listArea" class="list-area" style="padding:4px 20px 100px;gap:8px"></div>
+</div>
+
+<div id="detailModal" class="overlay" style="display:none"></div>
+<div id="calcModal" class="overlay" style="display:none;z-index:1000"></div>
+<div id="alertModal" class="overlay" style="display:none;z-index:950"></div>
+<div id="offerModal" class="overlay" style="display:none;z-index:1100"></div>
+<div id="dealModal" class="overlay" style="display:none;z-index:1150"></div>
+
+<!-- Modular JS — load order matters -->
+<script src="sh-core.js"></script>
+<script src="sh-dashboard.js"></script>
+<script src="sh-deals.js"></script>
+<script src="sh-detail.js"></script>
+<script src="sh-ai.js"></script>
+<script src="sh-calculator.js"></script>
+<script src="sh-offer-calc.js"></script>
+<script src="sh-alerts.js"></script>
+<script src="sh-offer.js"></script>
+<script src="sh-rpa-init.js"></script>
+</body>
+</html>
