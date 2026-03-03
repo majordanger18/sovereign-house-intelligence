@@ -429,11 +429,12 @@ async function fillRPA(formState) {
     } catch(ex) { lastBad = "enum:" + ex.message.substring(0,40); }
 
     step = "SAVE";
-    try {
-      return await pdf.save({ updateFieldAppearances: false });
-    } catch(e) {
-      throw new Error("[SAVE] total=" + total + " purged=" + purged + " lastBad=" + lastBad + " | " + e.message);
+    // Bypass pdf.save() — it traverses the page tree internally and crashes.
+    // Use PDFWriter directly to serialize the context without validation.
+    if (PDFLib.PDFWriter) {
+      return await PDFLib.PDFWriter.forContext(pdf.context, Infinity).serializeToBuffer();
     }
+    return await pdf.save({ updateFieldAppearances: false });
   } catch(e) {
     throw new Error("[" + step + "] " + e.message);
   }
