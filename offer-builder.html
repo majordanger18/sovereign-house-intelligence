@@ -324,15 +324,22 @@ function buildDealData(form) {
 // ══════════════════════════════════════════════════════════════════════════════
 // PDF FILL ENGINE — uses pdf-lib
 // ══════════════════════════════════════════════════════════════════════════════
+// Return raw template bytes with zero modification — diagnostic test
+function getRawTemplate() {
+  const binaryStr = atob(BLANK_RPA_B64);
+  const pdfBytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) pdfBytes[i] = binaryStr.charCodeAt(i);
+  return pdfBytes;
+}
+
 async function fillRPA(formState) {
   let step = "INIT";
+  let saveMethod = "none";
   try {
     step = "DECODE";
     const { PDFDocument, StandardFonts, PDFName, PDFArray, PDFRef } = PDFLib;
     const dealData = buildDealData(formState);
-    const binaryStr = atob(BLANK_RPA_B64);
-    const pdfBytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) pdfBytes[i] = binaryStr.charCodeAt(i);
+    const pdfBytes = getRawTemplate();
 
     step = "LOAD";
     const pdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: true, updateMetadata: false });
@@ -342,7 +349,6 @@ async function fillRPA(formState) {
     const fontKey = PDFName.of('F_SH');
 
     step = "PAGETREE";
-    // Bypass getPages() — traverse page tree manually via context
     function collectPageDicts(ref) {
       try {
         const node = pdf.context.lookup(ref);
@@ -375,7 +381,6 @@ async function fillRPA(formState) {
       if (pgIdx < 0 || pgIdx >= pageDicts.length) continue;
       const pageDict = pageDicts[pgIdx];
 
-      // Register font in page Resources -> Font
       let res = pageDict.get(PDFName.of('Resources'));
       if (res instanceof PDFRef) res = pdf.context.lookup(res);
       if (!res) { res = pdf.context.obj({}); pageDict.set(PDFName.of('Resources'), res); }
@@ -384,7 +389,6 @@ async function fillRPA(formState) {
       if (!fd) { fd = pdf.context.obj({}); res.set(PDFName.of('Font'), fd); }
       fd.set(fontKey, font.ref);
 
-      // Build raw PDF content stream with text operators
       let ops = 'q\n';
       for (const f of fields) {
         const t = f.text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
@@ -404,29 +408,51 @@ async function fillRPA(formState) {
     }
 
     step = "SAVE";
-    // Use pdf.save() with options that bypass the two crashing code paths:
-    //   addDefaultPage:false  → skips getPageCount() → avoids page tree typed lookup crash
-    //   updateFieldAppearances:false → skips form traversal → avoids AcroForm crash
-    // This preserves ALL original content and lets flush() properly embed the font.
     let bytes;
+    let saveErr1 = "", saveErr2 = "";
+
+    // Try 1: pdf.save() with safe options
     try {
-      bytes = await pdf.save({
-        addDefaultPage: false,
-        updateFieldAppearances: false,
-        useObjectStreams: false,
-      });
-    } catch(saveErr) {
-      // Fallback: strip form layer + use raw writer
+      saveMethod = "pdf.save";
+      bytes = await pdf.save({ addDefaultPage: false, updateFieldAppearances: false });
+    } catch(e1) {
+      saveErr1 = e1.message;
+    }
+
+    // Try 2: pdf.save() with useObjectStreams:false
+    if (!bytes) {
+      try {
+        saveMethod = "pdf.save-nostreams";
+        bytes = await pdf.save({ addDefaultPage: false, updateFieldAppearances: false, useObjectStreams: false });
+      } catch(e2) {
+        saveErr2 = e2.message;
+      }
+    }
+
+    // Try 3: cleanup + PDFWriter
+    if (!bytes) {
+      saveMethod = "fallback-PDFWriter";
       try { pdf.catalog.delete(PDFName.of('AcroForm')); } catch(ex) {}
       for (const pd of pageDicts) { try { pd.delete(PDFName.of('Annots')); } catch(ex) {} }
       bytes = await PDFLib.PDFWriter.forContext(pdf.context, 50).serializeToBuffer();
     }
+
+    // Store debug info for display
+    window._rpaDebug = {
+      saveMethod,
+      saveErr1: saveErr1 || "none",
+      saveErr2: saveErr2 || "none",
+      size: bytes ? bytes.length : 0,
+      pages: pageDicts.length,
+      header: bytes ? String.fromCharCode(...bytes.slice(0,8)) : "N/A",
+    };
+
     if (!bytes || bytes.length < 1000) {
-      throw new Error("[SAVE] PDF too small: " + (bytes ? bytes.length : 0) + " bytes, pages found: " + pageDicts.length);
+      throw new Error("PDF too small: " + (bytes ? bytes.length : 0));
     }
     return bytes;
   } catch(e) {
-    throw new Error("[" + step + "] " + e.message);
+    throw new Error("[" + step + "] " + saveMethod + " | " + e.message);
   }
 }
 
@@ -495,12 +521,25 @@ async function generatePDF() {
     const blob = new Blob([bytes], {type:'application/pdf'});
     if (STATE.pdfUrl) URL.revokeObjectURL(STATE.pdfUrl);
     STATE.pdfUrl = URL.createObjectURL(blob);
+    STATE.debugInfo = window._rpaDebug || {};
     STATE.view = "preview";
   } catch(e) {
-    alert("RPA v2 error: " + e.message);
+    alert("RPA error: " + e.message);
     console.error(e);
   }
   STATE.generating = false; render();
+}
+
+// Diagnostic: show raw template PDF with zero modification
+function testRawTemplate() {
+  const raw = getRawTemplate();
+  const blob = new Blob([raw], {type:'application/pdf'});
+  if (STATE.pdfUrl) URL.revokeObjectURL(STATE.pdfUrl);
+  STATE.pdfUrl = URL.createObjectURL(blob);
+  STATE.pdfSize = raw.length;
+  STATE.debugInfo = { saveMethod:"RAW-TEMPLATE", size:raw.length, header:String.fromCharCode(...raw.slice(0,8)) };
+  STATE.view = "preview";
+  render();
 }
 
 function downloadPDF() {
@@ -589,6 +628,10 @@ function render() {
           <span>✓ RPA Generated — ${f.property_address.split(",")[0]} — $${pp.toLocaleString()} — ${STATE.pdfSize ? Math.round(STATE.pdfSize/1024)+'KB' : '?'}</span>
           <span style="font-size:11px;color:#5a8a5a">Review below, then download</span>
         </div>
+        ${STATE.debugInfo ? `<div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:10px;margin:8px 0;font-family:monospace;font-size:11px;color:#8be;word-break:break-all">
+          DEBUG: method=${STATE.debugInfo.saveMethod} | size=${STATE.debugInfo.size} | pages=${STATE.debugInfo.pages || '?'} | header=${STATE.debugInfo.header || '?'}<br>
+          err1: ${STATE.debugInfo.saveErr1 || 'n/a'}<br>err2: ${STATE.debugInfo.saveErr2 || 'n/a'}
+        </div>` : ''}
         <iframe src="${STATE.pdfUrl}" class="preview-frame"></iframe>
       </div>`;
     return;
@@ -722,6 +765,7 @@ function render() {
         <button class="btn btn-primary" ${!valid||STATE.generating?"disabled":""} onclick="generatePDF()">
           ${STATE.generating ? "⏳ Generating..." : "⚡ Generate RPA"}
         </button>
+        <button class="btn btn-outline" onclick="testRawTemplate()" style="font-size:11px">🔍 Test Template</button>
       </div>
     </div>
     <div class="container">
