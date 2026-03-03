@@ -403,12 +403,23 @@ async function fillRPA(formState) {
       }
     }
 
-    step = "SAVE";
-    // Strip AcroForm + page Annots so save won't serialize broken form refs
-    try { pdf.catalog.delete(PDFName.of('AcroForm')); } catch(ex) {}
+    step = "CLEANUP";
+    // Strip all non-essential catalog entries that may hold broken refs
+    for (const key of ['AcroForm','StructTreeRoot','Names','Outlines','MarkInfo','Metadata','Perms','AA','OpenAction']) {
+      try { pdf.catalog.delete(PDFName.of(key)); } catch(ex) {}
+    }
+    // Strip annotations from all pages
     for (const pd of pageDicts) {
       try { pd.delete(PDFName.of('Annots')); } catch(ex) {}
     }
+    // Purge null/undefined indirect objects from context
+    try {
+      for (const [ref, obj] of pdf.context.enumerateIndirectObjects()) {
+        if (!obj) pdf.context.delete(ref);
+      }
+    } catch(ex) {}
+
+    step = "SAVE";
     return await pdf.save({ updateFieldAppearances: false });
   } catch(e) {
     throw new Error("[" + step + "] " + e.message);
