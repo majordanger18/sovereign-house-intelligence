@@ -435,7 +435,7 @@ function downloadPDF() {
 
 function isValid() {
   const pp = parseFloat((STATE.form.purchase_price||"0").replace(/,/g,""));
-  return STATE.form.property_address && pp >= 800000 && STATE.form.coe_date && STATE.form.respond_by_date;
+  return STATE.form.property_address && pp > 0 && STATE.form.coe_date && STATE.form.respond_by_date;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -519,7 +519,7 @@ function render() {
 
   // FORM VIEW
   const validationBar = !valid ? `<div class="validation">Required: ${
-    (!f.property_address?"Address • ":"") + (pp<800000?"Purchase Price ≥ $800K • ":"") +
+    (!f.property_address?"Address • ":"") + (pp<=0?"Purchase Price • ":"") +
     (!f.coe_date?"COE Date • ":"") + (!f.respond_by_date?"Response Deadline":"")
   }</div>` : "";
 
