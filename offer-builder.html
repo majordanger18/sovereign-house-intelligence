@@ -404,37 +404,20 @@ async function fillRPA(formState) {
     }
 
     step = "CLEANUP";
-    for (const key of ['AcroForm','StructTreeRoot','Names','Outlines','MarkInfo','Metadata','Perms','AA','OpenAction']) {
-      try { pdf.catalog.delete(PDFName.of(key)); } catch(ex) {}
-    }
+    // Only strip AcroForm + page Annots (form widgets) — keep everything else
+    try { pdf.catalog.delete(PDFName.of('AcroForm')); } catch(ex) {}
     for (const pd of pageDicts) {
       try { pd.delete(PDFName.of('Annots')); } catch(ex) {}
     }
 
-    step = "PURGE";
-    // Find and delete objects that can't be serialized
-    let purged = 0, total = 0, lastBad = "";
-    try {
-      for (const [ref, obj] of pdf.context.enumerateIndirectObjects()) {
-        total++;
-        try {
-          if (obj === undefined || obj === null) throw new Error("nil");
-          if (typeof obj.sizeInBytes === 'function') obj.sizeInBytes();
-        } catch(ex) {
-          lastBad = ref.toString();
-          pdf.context.delete(ref);
-          purged++;
-        }
-      }
-    } catch(ex) { lastBad = "enum:" + ex.message.substring(0,40); }
-
     step = "SAVE";
     // Bypass pdf.save() — it traverses the page tree internally and crashes.
     // Use PDFWriter directly to serialize the context without validation.
-    if (PDFLib.PDFWriter) {
-      return await PDFLib.PDFWriter.forContext(pdf.context, Infinity).serializeToBuffer();
+    const bytes = await PDFLib.PDFWriter.forContext(pdf.context, 50).serializeToBuffer();
+    if (!bytes || bytes.length < 1000) {
+      throw new Error("[SAVE] PDF too small: " + (bytes ? bytes.length : 0) + " bytes, pages found: " + pageDicts.length);
     }
-    return await pdf.save({ updateFieldAppearances: false });
+    return bytes;
   } catch(e) {
     throw new Error("[" + step + "] " + e.message);
   }
