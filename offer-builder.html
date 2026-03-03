@@ -327,12 +327,30 @@ function buildDealData(form) {
 async function fillRPA(formState) {
   const { PDFDocument, StandardFonts, rgb } = PDFLib;
   const dealData = buildDealData(formState);
-  const pdfBytes = Uint8Array.from(atob(BLANK_RPA_B64), c => c.charCodeAt(0));
-  const pdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const pages = pdf.getPages();
 
-  // Group fields by page
+  const binaryStr = atob(BLANK_RPA_B64);
+  const pdfBytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) pdfBytes[i] = binaryStr.charCodeAt(i);
+
+  let templatePdf;
+  try {
+    templatePdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: true, throwOnInvalidObject: false, updateMetadata: false });
+  } catch(e) { throw new Error("[STEP1-LOAD] " + e.message); }
+
+  let pdf, pages;
+  try {
+    pdf = await PDFDocument.create();
+    const indices = templatePdf.getPageIndices();
+    const copiedPages = await pdf.copyPages(templatePdf, indices);
+    copiedPages.forEach(p => pdf.addPage(p));
+    pages = pdf.getPages();
+  } catch(e) { throw new Error("[STEP2-COPY] " + e.message); }
+
+  let font;
+  try {
+    font = await pdf.embedFont(StandardFonts.Helvetica);
+  } catch(e) { throw new Error("[STEP3-FONT] " + e.message); }
+
   const byPage = {};
   for (const [pg,x,yTop,key,fontSize,maxChars] of FIELD_MAP) {
     if (!byPage[pg]) byPage[pg] = [];
@@ -340,18 +358,19 @@ async function fillRPA(formState) {
     if (val) byPage[pg].push({x, y: PAGE_H - yTop, text: val, size: fontSize});
   }
 
-  // Draw text on each page
-  for (const [pgStr, fields] of Object.entries(byPage)) {
-    const page = pages[parseInt(pgStr) - 1];
-    if (!page) continue;
-    for (const f of fields) {
-      page.drawText(f.text, {
-        x: f.x, y: f.y, size: f.size, font: font, color: rgb(0, 0, 0),
-      });
+  try {
+    for (const [pgStr, fields] of Object.entries(byPage)) {
+      const page = pages[parseInt(pgStr) - 1];
+      if (!page) continue;
+      for (const f of fields) {
+        page.drawText(f.text, { x: f.x, y: f.y, size: f.size, font: font, color: rgb(0, 0, 0) });
+      }
     }
-  }
+  } catch(e) { throw new Error("[STEP4-DRAW] " + e.message); }
 
-  return await pdf.save();
+  try {
+    return await pdf.save();
+  } catch(e) { throw new Error("[STEP5-SAVE] " + e.message); }
 }
 
 
@@ -420,7 +439,7 @@ async function generatePDF() {
     STATE.pdfUrl = URL.createObjectURL(blob);
     STATE.view = "preview";
   } catch(e) {
-    alert("Error generating PDF: " + e.message);
+    alert("RPA v2 error: " + e.message);
     console.error(e);
   }
   STATE.generating = false; render();
