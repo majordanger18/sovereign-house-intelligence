@@ -403,18 +403,24 @@ async function fillRPA(formState) {
       }
     }
 
-    step = "CLEANUP";
-    // Remove AcroForm reference from catalog and Annots from pages.
-    // This unlinks the interactive form layer so PDFWriter can serialize.
-    // IMPORTANT: Do NOT delete/null the actual objects — the form widget
-    // appearances contain the visible template content (labels, lines, etc.)
-    try { pdf.catalog.delete(PDFName.of('AcroForm')); } catch(ex) {}
-    for (const pd of pageDicts) {
-      try { pd.delete(PDFName.of('Annots')); } catch(ex) {}
-    }
-
     step = "SAVE";
-    const bytes = await PDFLib.PDFWriter.forContext(pdf.context, 50).serializeToBuffer();
+    // Use pdf.save() with options that bypass the two crashing code paths:
+    //   addDefaultPage:false  → skips getPageCount() → avoids page tree typed lookup crash
+    //   updateFieldAppearances:false → skips form traversal → avoids AcroForm crash
+    // This preserves ALL original content and lets flush() properly embed the font.
+    let bytes;
+    try {
+      bytes = await pdf.save({
+        addDefaultPage: false,
+        updateFieldAppearances: false,
+        useObjectStreams: false,
+      });
+    } catch(saveErr) {
+      // Fallback: strip form layer + use raw writer
+      try { pdf.catalog.delete(PDFName.of('AcroForm')); } catch(ex) {}
+      for (const pd of pageDicts) { try { pd.delete(PDFName.of('Annots')); } catch(ex) {} }
+      bytes = await PDFLib.PDFWriter.forContext(pdf.context, 50).serializeToBuffer();
+    }
     if (!bytes || bytes.length < 1000) {
       throw new Error("[SAVE] PDF too small: " + (bytes ? bytes.length : 0) + " bytes, pages found: " + pageDicts.length);
     }
