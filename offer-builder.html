@@ -403,9 +403,49 @@ async function fillRPA(formState) {
       }
     }
 
+    step = "CLEANUP";
+    // Remove AcroForm + Annots (interactive form widgets) — they contain objects
+    // that crash pdf-lib's serializer. Collect refs first, then purge from context.
+    const refsToDelete = [];
+    try {
+      const acroRef = pdf.catalog.get(PDFName.of('AcroForm'));
+      if (acroRef) {
+        const acroDict = acroRef instanceof PDFRef ? pdf.context.lookup(acroRef) : acroRef;
+        if (acroRef instanceof PDFRef) refsToDelete.push(acroRef);
+        if (acroDict && typeof acroDict.get === 'function') {
+          const fields = acroDict.get(PDFName.of('Fields'));
+          if (fields && typeof fields.size === 'function') {
+            for (let fi = 0; fi < fields.size(); fi++) {
+              const fr = fields.get(fi);
+              if (fr instanceof PDFRef) refsToDelete.push(fr);
+            }
+          }
+        }
+        pdf.catalog.delete(PDFName.of('AcroForm'));
+      }
+    } catch(ex) {}
+    for (const pd of pageDicts) {
+      try {
+        const annots = pd.get(PDFName.of('Annots'));
+        if (annots) {
+          const arr = annots instanceof PDFRef ? pdf.context.lookup(annots) : annots;
+          if (arr && typeof arr.size === 'function') {
+            for (let ai = 0; ai < arr.size(); ai++) {
+              const ar = arr.get(ai);
+              if (ar instanceof PDFRef) refsToDelete.push(ar);
+            }
+          }
+          if (annots instanceof PDFRef) refsToDelete.push(annots);
+        }
+        pd.delete(PDFName.of('Annots'));
+      } catch(ex) {}
+    }
+    // Null out orphaned form/annotation objects so they don't corrupt the output
+    for (const ref of refsToDelete) {
+      try { pdf.context.assign(ref, pdf.context.obj(null)); } catch(ex) {}
+    }
+
     step = "SAVE";
-    // Bypass pdf.save() — it traverses the page tree internally and crashes.
-    // Use PDFWriter directly to serialize the context without validation.
     const bytes = await PDFLib.PDFWriter.forContext(pdf.context, 50).serializeToBuffer();
     if (!bytes || bytes.length < 1000) {
       throw new Error("[SAVE] PDF too small: " + (bytes ? bytes.length : 0) + " bytes, pages found: " + pageDicts.length);
