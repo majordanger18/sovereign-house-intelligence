@@ -328,7 +328,7 @@ async function fillRPA(formState) {
   let step = "INIT";
   try {
     step = "DECODE";
-    const { PDFDocument, StandardFonts, rgb, PDFName, PDFDict, PDFArray } = PDFLib;
+    const { PDFDocument, StandardFonts, PDFName, PDFArray, PDFRef } = PDFLib;
     const dealData = buildDealData(formState);
     const binaryStr = atob(BLANK_RPA_B64);
     const pdfBytes = new Uint8Array(binaryStr.length);
@@ -337,43 +337,69 @@ async function fillRPA(formState) {
     step = "LOAD";
     const pdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: true, updateMetadata: false });
 
-    step = "CLEAN";
-    // Strip AcroForm + page annotations via low-level context to prevent getPages crash
-    try { pdf.catalog.delete(PDFName.of('AcroForm')); } catch(ex) {}
-    try {
-      const pagesRef = pdf.catalog.get(PDFName.of('Pages'));
-      const pagesDict = pdf.context.lookup(pagesRef);
-      const kids = pagesDict.get(PDFName.of('Kids'));
-      if (kids) {
-        for (let i = 0; i < kids.size(); i++) {
-          try {
-            const pageDict = pdf.context.lookup(kids.get(i));
-            if (pageDict && typeof pageDict.delete === 'function') {
-              pageDict.delete(PDFName.of('Annots'));
-            }
-          } catch(ex) {}
-        }
-      }
-    } catch(ex) {}
-
     step = "FONT";
     const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const fontKey = PDFName.of('F_SH');
 
-    step = "PAGES";
-    const pages = pdf.getPages();
+    step = "PAGETREE";
+    // Bypass getPages() — traverse page tree manually via context
+    function collectPageDicts(ref) {
+      try {
+        const node = pdf.context.lookup(ref);
+        if (!node || typeof node.get !== 'function') return [];
+        const type = node.get(PDFName.of('Type'));
+        if (type && type.toString() === '/Page') return [node];
+        const kids = node.get(PDFName.of('Kids'));
+        if (!kids || typeof kids.size !== 'function') return [];
+        const result = [];
+        for (let i = 0; i < kids.size(); i++) {
+          result.push(...collectPageDicts(kids.get(i)));
+        }
+        return result;
+      } catch(e) { return []; }
+    }
+    const pagesRef = pdf.catalog.get(PDFName.of('Pages'));
+    const pageDicts = collectPageDicts(pagesRef);
 
     step = "DRAW";
     const byPage = {};
-    for (const [pg,x,yTop,key,fontSize,maxChars] of FIELD_MAP) {
+    for (const [pg, x, yTop, key, fontSize, maxChars] of FIELD_MAP) {
       if (!byPage[pg]) byPage[pg] = [];
-      const val = (dealData[key]||"").toString().substring(0, maxChars);
-      if (val) byPage[pg].push({x, y: PAGE_H - yTop, text: val, size: fontSize});
+      const val = (dealData[key] || "").toString().substring(0, maxChars);
+      if (val) byPage[pg].push({ x, y: PAGE_H - yTop, text: val, size: fontSize });
     }
+
+    const enc = new TextEncoder();
     for (const [pgStr, fields] of Object.entries(byPage)) {
-      const page = pages[parseInt(pgStr) - 1];
-      if (!page) continue;
+      const pgIdx = parseInt(pgStr) - 1;
+      if (pgIdx < 0 || pgIdx >= pageDicts.length) continue;
+      const pageDict = pageDicts[pgIdx];
+
+      // Register font in page Resources -> Font
+      let res = pageDict.get(PDFName.of('Resources'));
+      if (res instanceof PDFRef) res = pdf.context.lookup(res);
+      if (!res) { res = pdf.context.obj({}); pageDict.set(PDFName.of('Resources'), res); }
+      let fd = res.get(PDFName.of('Font'));
+      if (fd instanceof PDFRef) fd = pdf.context.lookup(fd);
+      if (!fd) { fd = pdf.context.obj({}); res.set(PDFName.of('Font'), fd); }
+      fd.set(fontKey, font.ref);
+
+      // Build raw PDF content stream with text operators
+      let ops = 'q\n';
       for (const f of fields) {
-        page.drawText(f.text, { x: f.x, y: f.y, size: f.size, font: font, color: rgb(0, 0, 0) });
+        const t = f.text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+        ops += 'BT /F_SH ' + f.size + ' Tf 1 0 0 1 ' + f.x + ' ' + f.y + ' Tm (' + t + ') Tj ET\n';
+      }
+      ops += 'Q\n';
+
+      const streamRef = pdf.context.register(pdf.context.stream(enc.encode(ops)));
+      const contents = pageDict.get(PDFName.of('Contents'));
+      if (contents instanceof PDFArray) {
+        contents.push(streamRef);
+      } else if (contents) {
+        pageDict.set(PDFName.of('Contents'), pdf.context.obj([contents, streamRef]));
+      } else {
+        pageDict.set(PDFName.of('Contents'), streamRef);
       }
     }
 
