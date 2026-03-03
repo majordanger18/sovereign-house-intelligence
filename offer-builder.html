@@ -484,10 +484,13 @@ async function generatePDF() {
   STATE.generating = true; render();
   try {
     const bytes = await fillRPA(STATE.form);
+    STATE.pdfSize = bytes ? bytes.length : 0;
     const blob = new Blob([bytes], {type:'application/pdf'});
     if (STATE.pdfUrl) URL.revokeObjectURL(STATE.pdfUrl);
     STATE.pdfUrl = URL.createObjectURL(blob);
     STATE.view = "preview";
+    // Auto-trigger download
+    setTimeout(function(){ downloadPDF(); }, 500);
   } catch(e) {
     alert("RPA v2 error: " + e.message);
     console.error(e);
@@ -578,7 +581,7 @@ function render() {
       </div>
       <div style="padding:16px">
         <div class="success-bar">
-          <span>✓ RPA Generated — ${f.property_address.split(",")[0]} — $${pp.toLocaleString()}</span>
+          <span>✓ RPA Generated — ${f.property_address.split(",")[0]} — $${pp.toLocaleString()} — ${STATE.pdfSize ? Math.round(STATE.pdfSize/1024)+'KB' : '?'}</span>
           <span style="font-size:11px;color:#5a8a5a">Review below, then download</span>
         </div>
         <iframe src="${STATE.pdfUrl}" class="preview-frame"></iframe>
