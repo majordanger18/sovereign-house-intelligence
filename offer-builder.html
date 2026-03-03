@@ -404,6 +404,11 @@ async function fillRPA(formState) {
     }
 
     step = "SAVE";
+    // Strip AcroForm + page Annots so save won't serialize broken form refs
+    try { pdf.catalog.delete(PDFName.of('AcroForm')); } catch(ex) {}
+    for (const pd of pageDicts) {
+      try { pd.delete(PDFName.of('Annots')); } catch(ex) {}
+    }
     return await pdf.save({ updateFieldAppearances: false });
   } catch(e) {
     throw new Error("[" + step + "] " + e.message);
