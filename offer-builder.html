@@ -332,24 +332,22 @@ async function fillRPA(formState) {
   const pdfBytes = new Uint8Array(binaryStr.length);
   for (let i = 0; i < binaryStr.length; i++) pdfBytes[i] = binaryStr.charCodeAt(i);
 
-  let templatePdf;
+  let pdf;
   try {
-    templatePdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: true, throwOnInvalidObject: false, updateMetadata: false });
+    pdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: true, throwOnInvalidObject: false, updateMetadata: false });
   } catch(e) { throw new Error("[STEP1-LOAD] " + e.message); }
 
-  let pdf, pages;
+  // Strip AcroForm from catalog so save() won't choke on form field references
   try {
-    pdf = await PDFDocument.create();
-    const indices = templatePdf.getPageIndices();
-    const copiedPages = await pdf.copyPages(templatePdf, indices);
-    copiedPages.forEach(p => pdf.addPage(p));
-    pages = pdf.getPages();
-  } catch(e) { throw new Error("[STEP2-COPY] " + e.message); }
+    pdf.catalog.delete(PDFLib.PDFName.of('AcroForm'));
+  } catch(e) { /* no AcroForm or PDFName unavailable — safe to continue */ }
 
   let font;
   try {
     font = await pdf.embedFont(StandardFonts.Helvetica);
-  } catch(e) { throw new Error("[STEP3-FONT] " + e.message); }
+  } catch(e) { throw new Error("[STEP2-FONT] " + e.message); }
+
+  const pages = pdf.getPages();
 
   const byPage = {};
   for (const [pg,x,yTop,key,fontSize,maxChars] of FIELD_MAP) {
@@ -366,11 +364,11 @@ async function fillRPA(formState) {
         page.drawText(f.text, { x: f.x, y: f.y, size: f.size, font: font, color: rgb(0, 0, 0) });
       }
     }
-  } catch(e) { throw new Error("[STEP4-DRAW] " + e.message); }
+  } catch(e) { throw new Error("[STEP3-DRAW] " + e.message); }
 
   try {
-    return await pdf.save();
-  } catch(e) { throw new Error("[STEP5-SAVE] " + e.message); }
+    return await pdf.save({ updateFieldAppearances: false });
+  } catch(e) { throw new Error("[STEP4-SAVE] " + e.message); }
 }
 
 
