@@ -403,13 +403,6 @@ async function fillRPA(formState) {
       }
     }
 
-    step = "CLEANUP";
-    // Only strip AcroForm + page Annots (form widgets) — keep everything else
-    try { pdf.catalog.delete(PDFName.of('AcroForm')); } catch(ex) {}
-    for (const pd of pageDicts) {
-      try { pd.delete(PDFName.of('Annots')); } catch(ex) {}
-    }
-
     step = "SAVE";
     // Bypass pdf.save() — it traverses the page tree internally and crashes.
     // Use PDFWriter directly to serialize the context without validation.
@@ -489,8 +482,6 @@ async function generatePDF() {
     if (STATE.pdfUrl) URL.revokeObjectURL(STATE.pdfUrl);
     STATE.pdfUrl = URL.createObjectURL(blob);
     STATE.view = "preview";
-    // Auto-trigger download
-    setTimeout(function(){ downloadPDF(); }, 500);
   } catch(e) {
     alert("RPA v2 error: " + e.message);
     console.error(e);
