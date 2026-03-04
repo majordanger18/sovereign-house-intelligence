@@ -67,6 +67,7 @@ async function openOffer(id){
       <div style="font-size:11px;color:#64748b;margin-top:1px">${(p.subdivision_name&&truncSub(p.subdivision_name))?esc(truncSub(p.subdivision_name))+' · ':''}${p.city}, NV ${p.zip_code} · MLS# ${p.mls_number}</div>
       <div style="font-size:12px;color:#94a3b8;margin-top:4px">List: <span style="color:#e2e8f0;font-weight:700">${$(p.list_price)}</span> · ${p.bedrooms}/${p.bathrooms} · ${p.sqft?.toLocaleString()}sf</div>
       <div style="font-size:9px;margin-top:4px;padding:3px 8px;border-radius:6px;display:inline-block;${hasCalc?'background:rgba(34,197,94,0.08);color:#22c55e;border:1px solid rgba(34,197,94,0.15)':'background:rgba(249,115,22,0.08);color:#f97316;border:1px solid rgba(249,115,22,0.15)'};font-weight:700">${hasCalc?'✓ Using saved calculator data':'⚠ Using AI defaults — save a calculator run for exact numbers'}</div>
+      ${(()=>{const ed=deals.find(x=>x.property_id===id&&!DEAD_STATUSES.includes(x.status));return ed?`<div style="margin-top:8px;padding:10px 14px;border-radius:10px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:#22c55e;font-weight:700">Active deal exists (${(DEAL_STAGES[ed.status]||{}).label||ed.status})</span><button onclick="closeOffer();document.getElementById('detailModal').style.display='none';openDeal('${ed.id}')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(34,197,94,0.3);background:rgba(34,197,94,0.12);color:#22c55e;font-size:11px;font-weight:700;cursor:pointer">Open Deal →</button></div>`:''})()}
     </div>
 
     <!-- LIVE PROFIT DISPLAY -->
@@ -254,6 +255,18 @@ async function generateOfferPackage(id){
     timeline:[{date:new Date().toISOString(),type:'offer_submitted',from:'buyer',summary:`Offer drafted: ${$(oPrice)} · Lisa ${lisaPct}% · EMD ${$(emd)}`,price:oPrice,commission_pct:lisaPct}]
   };
 
+  // Duplicate prevention: check for existing active deal on this property
+  const existingDeal=deals.find(x=>x.property_id===p.id&&!DEAD_STATUSES.includes(x.status));
+  if(existingDeal){
+    if(!confirm(`An active deal already exists for this property (${(DEAL_STAGES[existingDeal.status]||{}).label||existingDeal.status}).\n\nOK = Open existing deal\nCancel = Create new offer anyway`)){
+      // User wants new offer, continue
+    } else {
+      // User wants existing deal — navigate to it
+      closeOffer();document.getElementById('detailModal').style.display='none';openDeal(existingDeal.id);
+      return;
+    }
+  }
+
   const output=document.getElementById("offerOutput_"+id);
   output.innerHTML=`<div style="text-align:center;padding:16px"><div style="width:28px;height:28px;border:3px solid rgba(34,197,94,0.2);border-top-color:#22c55e;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto"></div><div style="color:#22c55e;font-size:12px;font-weight:700;margin-top:8px">Saving deal...</div></div>`;
 
@@ -324,28 +337,22 @@ Licensed Nevada Realtor`;
     <div style="padding:16px;border-radius:14px;background:rgba(34,197,94,0.04);border:1px solid rgba(34,197,94,0.15);animation:fadeUp .3s ease">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div style="font-size:10px;color:#22c55e;font-weight:800;letter-spacing:3px">✅ OFFER PACKAGE READY</div>
-        ${dealId?`<span style="font-size:9px;color:#64748b">Deal saved</span>`:`<span style="font-size:9px;color:#f59e0b">⚠️ Deal save pending — add 'deals' table to Supabase</span>`}
+        ${dealId?`<span style="font-size:9px;color:#64748b">Deal saved</span>`:`<span style="font-size:9px;color:#f59e0b">⚠️ Deal save pending</span>`}
       </div>
 
       <div style="display:flex;flex-direction:column;gap:8px">
-        ${agentEmail?`<div style="display:flex;gap:8px">
-          <a href="${gmailUrl}" target="_blank" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:14px;border-radius:12px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;font-size:13px;font-weight:700;text-decoration:none;min-height:48px">✉️ Gmail</a>
-          <a href="${outlookUrl}" target="_blank" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:14px;border-radius:12px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#818cf8;font-size:13px;font-weight:700;text-decoration:none;min-height:48px">📧 Outlook</a>
-        </div>`:'<div style="padding:10px;text-align:center;font-size:12px;color:#64748b">No agent email — add above to enable email</div>'}
+        ${dealId?`<button onclick="closeOffer();document.getElementById('detailModal').style.display='none';openDeal('${dealId}')" class="btn" style="width:100%;padding:14px;font-size:14px;background:rgba(34,197,94,0.9);color:#0a0a0a;font-weight:800">🤝 View Deal →</button>`:''}
 
-        <button onclick="openRPABuilder('${p.id}')" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(224,201,127,0.2),rgba(212,175,55,0.1));border:1px solid rgba(224,201,127,0.4);color:#e0c97f;font-weight:800">📄 Generate GLVAR RPA →</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button onclick="navigator.clipboard.writeText(\`${summary.replace(/`/g,"'").replace(/\\/g,"\\\\")}\`).then(()=>{this.textContent='✓ Copied!';this.style.color='#22c55e';setTimeout(()=>{this.textContent='📋 Copy Summary';this.style.color='#f1f5f9'},2000)})" class="btn" style="padding:12px;font-size:12px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#f1f5f9">📋 Copy Summary</button>
+          ${agentEmail?`<a href="${gmailUrl}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:12px;border-radius:12px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;font-size:12px;font-weight:700;text-decoration:none">✉️ Email Agent</a>`:`<button disabled class="btn" style="padding:12px;font-size:12px;background:transparent;border:1px solid rgba(255,255,255,0.04);color:#475569">✉️ No Email</button>`}
+        </div>
 
-        <button onclick="navigator.clipboard.writeText(\`${summary.replace(/`/g,"'").replace(/\\/g,"\\\\")}\`).then(()=>{this.textContent='✓ Copied!';this.style.color='#22c55e';setTimeout(()=>{this.textContent='📋 Copy Offer Summary';this.style.color='#f1f5f9'},2000)})" class="btn" style="width:100%;padding:12px;font-size:13px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#f1f5f9">📋 Copy Offer Summary</button>
-
-        <button onclick="const t=\`📝 SOVEREIGN HOUSE OFFER\\n\\n${p.address}\\nOffer: ${$(oPrice)} (${disc}% below ${$(p.list_price)})\\nEMD: ${$(emd)} · COE: ${coe}d · Inspect: ${inspect}d\\nLisa Commission: ${lisaPct}%\\nProjected Profit: ${$(projProfit)}\\n\\n${terms?'Terms: '+terms:''}\`;if(navigator.share){navigator.share({text:t})}else{navigator.clipboard.writeText(t).then(()=>alert('Copied!'))}" class="btn" style="width:100%;padding:12px;font-size:13px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#f1f5f9">📤 Share / Text Lisa</button>
+        <button onclick="openRPABuilder('${p.id}')" class="btn" style="width:100%;padding:12px;font-size:13px;background:linear-gradient(135deg,rgba(224,201,127,0.12),rgba(212,175,55,0.06));border:1px solid rgba(224,201,127,0.25);color:#e0c97f;font-weight:800">📄 Generate GLVAR RPA</button>
       </div>
 
-      <div style="margin-top:12px;padding:12px;border-radius:10px;background:rgba(0,0,0,0.2);font-size:11px;color:#94a3b8;line-height:1.8">
-        <div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:1px;margin-bottom:6px">NEXT STEPS</div>
-        <div>1. Click "Generate GLVAR RPA" → fills 11-page RPA with offer terms</div>
-        <div>2. Review filled PDF → Download</div>
-        <div>3. Lisa signs and sends to listing agent</div>
-        <div>4. Send cover email (Gmail/Outlook above)</div>
+      <div style="margin-top:10px;padding:10px;border-radius:8px;background:rgba(0,0,0,0.2);font-size:10px;color:#64748b;line-height:1.7">
+        Next: Generate RPA → Lisa signs → Send to listing agent
       </div>
     </div>`;
 }

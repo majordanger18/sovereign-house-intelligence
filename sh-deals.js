@@ -131,7 +131,8 @@ async function openDeal(dealId){
     <div style="margin-bottom:16px;padding-right:40px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px">DEAL TRACKER</div>
-        ${dealBadge(d.status)}
+        <span id="deal_statusBadge">${dealBadge(d.status)}</span>
+        <button onclick="deleteDeal('${d.id}')" style="margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.06);color:#ef4444;font-size:9px;font-weight:700;cursor:pointer">🗑 Delete</button>
       </div>
       <div style="font-size:18px;font-weight:800;margin-top:2px">${esc(d.address)}</div>
       <div style="font-size:11px;color:#64748b;margin-top:2px">${d.community?esc(d.community)+' · ':''}${d.zip_code||''} · MLS# ${d.mls_number||'?'}</div>
@@ -155,10 +156,10 @@ async function openDeal(dealId){
     <!-- PIPELINE STATUS UPDATE -->
     ${!isDead?`<div style="margin-bottom:16px">
       <div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:8px">UPDATE STATUS</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <div id="deal_statusBtns" style="display:flex;gap:6px;flex-wrap:wrap">
         ${stages.map(([k,v])=>`<button onclick="updateDealStatus('${d.id}','${k}')" style="padding:6px 12px;border-radius:8px;border:1px solid ${d.status===k?v.color+'60':' rgba(255,255,255,0.06)'};background:${d.status===k?v.color+'15':'rgba(255,255,255,0.02)'};color:${d.status===k?v.color:'#64748b'};font-size:10px;font-weight:700;cursor:pointer;min-height:36px;transition:all .15s">${v.icon} ${v.label}</button>`).join('')}
       </div>
-      <div style="display:flex;gap:6px;margin-top:8px">
+      <div id="deal_killBtns" style="display:flex;gap:6px;margin-top:8px">
         <button onclick="killDeal('${d.id}','rejected')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.04);color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;min-height:36px">❌ Rejected</button>
         <button onclick="killDeal('${d.id}','withdrawn')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(100,116,139,0.2);background:rgba(100,116,139,0.04);color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer;min-height:36px">🚫 Withdrawn</button>
         <button onclick="killDeal('${d.id}','expired')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(100,116,139,0.2);background:rgba(100,116,139,0.04);color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer;min-height:36px">⏰ Expired</button>
@@ -248,16 +249,55 @@ async function openDeal(dealId){
 }
 
 // ═══ DEAL ACTIONS ═══
+async function deleteDeal(dealId){
+  if(!confirm("Delete this deal permanently? This cannot be undone."))return;
+  try{
+    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'DELETE',headers:HD});
+    deals=deals.filter(x=>x.id!==dealId);
+    closeDeal();
+    renderDashboard();
+  }catch(e){console.error("Delete deal failed:",e);}
+}
+
+function renderStatusButtons(d){
+  const stages=Object.entries(DEAL_STAGES).filter(([k])=>!DEAD_STATUSES.includes(k));
+  return stages.map(([k,v])=>`<button onclick="updateDealStatus('${d.id}','${k}')" style="padding:6px 12px;border-radius:8px;border:1px solid ${d.status===k?v.color+'60':' rgba(255,255,255,0.06)'};background:${d.status===k?v.color+'15':'rgba(255,255,255,0.02)'};color:${d.status===k?v.color:'#64748b'};font-size:10px;font-weight:700;cursor:pointer;min-height:36px;transition:all .15s">${v.icon} ${v.label}</button>`).join('');
+}
+
+function renderTimelineEntry(e){
+  const typeColors={offer_submitted:'#3b82f6',counter_received:'#f59e0b',counter_sent:'#a855f7',accepted:'#22c55e',rejected:'#ef4444',expired:'#64748b',note:'#94a3b8',status_change:'#06b6d4'};
+  const tc=typeColors[e.type]||'#64748b';
+  return`<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+    <div style="flex-shrink:0;width:8px;height:8px;border-radius:50%;background:${tc};margin-top:4px"></div>
+    <div style="flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:11px;font-weight:700;color:${tc}">${(e.type||'').replace(/_/g,' ').toUpperCase()}${e.from?' · '+e.from.toUpperCase():''}</div>
+        <div style="font-size:9px;color:#475569">${e.date?new Date(e.date).toLocaleDateString():''}</div>
+      </div>
+      <div style="font-size:12px;color:#e2e8f0;margin-top:2px">${esc(e.summary||'')}</div>
+      ${e.price?`<div style="font-size:11px;color:#94a3b8;margin-top:2px">Price: ${$(e.price)}${e.commission_pct!=null?' · Commission: '+e.commission_pct+'%':''}</div>`:''}
+      ${e.terms?`<div style="font-size:10px;color:#64748b;margin-top:2px">${esc(e.terms)}</div>`:''}
+    </div>
+  </div>`;
+}
+
 async function updateDealStatus(dealId,newStatus){
   const d=deals.find(x=>x.id===dealId);if(!d)return;
   const oldStatus=d.status;
   const tl=Array.isArray(d.timeline)?[...d.timeline]:[];
-  tl.push({date:new Date().toISOString(),type:'status_change',from:'system',summary:`Status: ${(DEAL_STAGES[oldStatus]||{}).label||oldStatus} → ${(DEAL_STAGES[newStatus]||{}).label||newStatus}`});
+  const newEntry={date:new Date().toISOString(),type:'status_change',from:'system',summary:`Status: ${(DEAL_STAGES[oldStatus]||{}).label||oldStatus} → ${(DEAL_STAGES[newStatus]||{}).label||newStatus}`};
+  tl.push(newEntry);
 
   try{
     await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:newStatus,timeline:tl})});
     d.status=newStatus;d.timeline=tl;
-    openDeal(dealId);
+    // Surgical DOM update instead of full openDeal() re-render
+    const badge=document.getElementById("deal_statusBadge");
+    if(badge)badge.innerHTML=dealBadge(newStatus);
+    const btns=document.getElementById("deal_statusBtns");
+    if(btns)btns.innerHTML=renderStatusButtons(d);
+    const timeline=document.getElementById("dealTimeline");
+    if(timeline)timeline.insertAdjacentHTML("afterbegin",renderTimelineEntry(newEntry));
     renderDashboard();
   }catch(e){console.error("Status update failed:",e);}
 }

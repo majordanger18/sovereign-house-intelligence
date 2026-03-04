@@ -209,10 +209,19 @@ function buildDealData(form) {
   // Parse additional terms into lines
   let terms = (form.additional_terms||"").split("\n").filter(s=>s.trim());
 
-  // Parse respond date
+  // Convert YYYY-MM-DD → MM/DD/YYYY for PDF, also handle existing M/D/YYYY
+  function fromISODate(s) {
+    if (!s) return s;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${parseInt(s.slice(5,7))}/${parseInt(s.slice(8,10))}/${s.slice(0,4)}`;
+    return s;
+  }
+  const coeForPdf = fromISODate(form.coe_date) || form.coe_date || "";
+
+  // Parse respond date (handle YYYY-MM-DD or M/D/YYYY)
   let rMonth="",rDay="",rYear="",rTime="",isPM=true;
   if (form.respond_by_date) {
-    const p = form.respond_by_date.replace(/-/g,"/").split("/");
+    let rStr = fromISODate(form.respond_by_date);
+    const p = rStr.replace(/-/g,"/").split("/");
     if (p.length===3) { try { rMonth=MONTHS[parseInt(p[0])]; rDay=String(parseInt(p[1])); rYear=p[2]; } catch(e){} }
   }
   if (form.respond_by_time) {
@@ -254,7 +263,7 @@ function buildDealData(form) {
     cash_purchase_days:"", sale_contingent_x:"",
     personal_property_1:"",personal_property_2:"",personal_property_3:"",
     escrow_company: form.escrow_company||"", escrow_officer: form.escrow_officer||"",
-    coe_date: form.coe_date||"",
+    coe_date: coeForPdf||"",
     due_diligence_is_x: form.due_diligence?"X":"", due_diligence_not_x: form.due_diligence?"":"X",
     due_diligence_days: form.due_diligence_days||"15",
     buyer_initials_8c: form.buyer_initials||"",
@@ -615,11 +624,22 @@ function set(key, val) {
   if (key === "purchase_price" && val) {
     STATE.form.loan_amount = val;
     const pp = parseFloat(val.replace(/,/g,""));
-    if (!isNaN(pp)) STATE.form.balance_down_payment = String(Math.round(pp * 0.10));
+    if (!isNaN(pp)) {
+      STATE.form.balance_down_payment = String(Math.round(pp * 0.10));
+      // Update related inputs directly without re-render
+      const loanEl = document.querySelector('input[oninput*="loan_amount"]');
+      if (loanEl) loanEl.value = val;
+      const balEl = document.querySelector('input[oninput*="balance_down_payment"]');
+      if (balEl) balEl.value = STATE.form.balance_down_payment;
+    }
   }
+  updateFooter();
+}
+function setStructural(key, val) {
+  STATE.form[key] = val;
   render();
 }
-function setInsp(key,val) { STATE.form.inspections[key]=val; render(); }
+function setInsp(key,val) { STATE.form.inspections[key]=val; }
 function toggleSection(n) { STATE.openSections[n]=!STATE.openSections[n]; render(); }
 
 async function generatePDF() {
@@ -652,6 +672,18 @@ function isValid() {
 // ══════════════════════════════════════════════════════════════════════════════
 // RENDER
 // ══════════════════════════════════════════════════════════════════════════════
+function updateFooter() {
+  const f = STATE.form;
+  const pp = parseFloat((f.purchase_price||"0").replace(/,/g,""));
+  const footer = document.querySelector('.footer');
+  if (!footer) return;
+  footer.innerHTML = `
+    <span>Price: <span class="val ${pp?"gold":"empty"}">$${pp?pp.toLocaleString():"—"}</span></span>
+    <span>EMD: <span class="val">$${parseInt(f.emd_amount||0).toLocaleString()}</span></span>
+    <span>COE: <span class="val ${f.coe_date?"":"empty"}">${f.coe_date||"—"}</span></span>
+    <span>Respond: <span class="val ${f.respond_by_date?"":"empty"}">${f.respond_by_date||"—"}</span></span>`;
+}
+
 function makeField(label, key, width, cls, type) {
   const val = STATE.form[key]||"";
   const w = width ? `width:${width}px` : "width:100%";
@@ -659,6 +691,10 @@ function makeField(label, key, width, cls, type) {
   if (type === "textarea") {
     return `<div class="field" style="${w}"><label>${label}</label>
       <textarea ${inputCls} rows="5" onchange="set('${key}',this.value)">${val}</textarea></div>`;
+  }
+  if (type === "date") {
+    return `<div class="field" style="${w}"><label>${label}</label>
+      <input type="date" ${inputCls} value="${val.replace(/"/g,'&quot;')}" onchange="set('${key}',this.value)"></div>`;
   }
   return `<div class="field" style="${w}"><label>${label}</label>
     <input ${inputCls} value="${val.replace(/"/g,'&quot;')}" oninput="set('${key}',this.value)"></div>`;
@@ -668,13 +704,14 @@ function makeSelect(label, key, options, width) {
   const val = STATE.form[key]||"";
   const w = width ? `width:${width}px` : "";
   const opts = options.map(([v,l])=>`<option value="${v}" ${v===val?"selected":""}>${l}</option>`).join("");
-  return `<div class="field" style="${w}"><label>${label}</label><select onchange="set('${key}',this.value)">${opts}</select></div>`;
+  const setter = key==="loan_type" ? "setStructural" : "set";
+  return `<div class="field" style="${w}"><label>${label}</label><select onchange="${setter}('${key}',this.value)">${opts}</select></div>`;
 }
 
 function makeToggle(label, key) {
   const on = STATE.form[key];
   return `<label class="toggle" style="color:${on?"#e0c97f":"#888"}">
-    <div class="toggle-track ${on?"on":"off"}" onclick="set('${key}',!STATE.form['${key}'])">
+    <div class="toggle-track ${on?"on":"off"}" onclick="setStructural('${key}',!STATE.form['${key}'])">
       <div class="toggle-thumb"></div>
     </div>${label}</label>`;
 }
@@ -770,7 +807,7 @@ function render() {
 
   const s3 = section(3, "Dates & Contingencies", `
     <div class="row">
-      ${makeField("Close of Escrow (COE)","coe_date",150,"date-input")}
+      ${makeField("Close of Escrow (COE)","coe_date",150,"date-input","date")}
       ${makeField("Escrow Company","escrow_company",200)}
       ${makeField("Escrow Officer","escrow_officer",180)}
     </div>
@@ -828,7 +865,7 @@ function render() {
   const s7 = section(7, "Response Deadline & Terms", `
     <div class="note">Seller must respond by:</div>
     <div class="row">
-      ${makeField("Date (MM/DD/YYYY)","respond_by_date",180,"date-input")}
+      ${makeField("Response Deadline","respond_by_date",180,"date-input","date")}
       ${makeField("Time","respond_by_time",120)}
     </div>
     <div style="margin-top:8px">${makeField("Addenda Attached","addenda_line1",null)}</div>
@@ -876,12 +913,22 @@ document.addEventListener("DOMContentLoaded", function(){
   if (params.has("prefill")) {
     try {
       const data = JSON.parse(decodeURIComponent(params.get("prefill")));
+      // Helper: convert M/D/YYYY or MM/DD/YYYY to YYYY-MM-DD for date inputs
+      function toISODate(s) {
+        if (!s) return s;
+        const p = s.replace(/-/g,"/").split("/");
+        if (p.length===3 && p[0].length<=2) {
+          return `${p[2]}-${p[0].padStart(2,"0")}-${p[1].padStart(2,"0")}`;
+        }
+        return s;
+      }
+      const dateFields = ["coe_date","respond_by_date"];
       // Merge prefill data into form state
       for (const [key, val] of Object.entries(data)) {
         if (key === "inspections" && typeof val === "object") {
           Object.assign(STATE.form.inspections, val);
         } else if (key in STATE.form) {
-          STATE.form[key] = val;
+          STATE.form[key] = dateFields.includes(key) ? toISODate(val) : val;
         }
       }
       // Auto-calc loan amount and balance from purchase price

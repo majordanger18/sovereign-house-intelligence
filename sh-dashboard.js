@@ -83,7 +83,7 @@ function renderDashboard(){
   const activeDeals=deals.filter(d=>!["closed","rejected","withdrawn","expired"].includes(d.status));
   const deadDeals=deals.filter(d=>["closed","rejected","withdrawn","expired"].includes(d.status));
   const queuedCount=activeProps.filter(p=>!analysisMap[p.id]).length;
-  const fD=[["all",`All (${st.total})`],["deals",`🤝 Deals (${activeDeals.length})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["watched",`★ Watch (${st.watched})`],["queued",`Queued (${queuedCount})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${props.filter(p=>isPend(p)).length})`]];
+  const fD=[["deals",`🤝 Deals (${activeDeals.length})`],["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["watched",`★ Watch (${st.watched})`],["queued",`Queued (${queuedCount})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${props.filter(p=>isPend(p)).length})`]];
   document.getElementById("filtersArea").innerHTML=fD.map(([v,l])=>{
     const isDeals=v==="deals";
     const hasActive=isDeals&&activeDeals.length>0;
