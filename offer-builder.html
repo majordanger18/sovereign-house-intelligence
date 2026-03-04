@@ -559,14 +559,6 @@ async function fillRPA(formState) {
     let pos = raw.length;
     for (const chunk of chunks) { result.set(chunk, pos); pos += chunk.length; }
 
-    window._rpaDebug = {
-      saveMethod: 'raw-incremental',
-      size: result.length,
-      pages: pageObjs.length,
-      newObjs: xrefEntries.length,
-      pgDebug: 'scanned:' + objNums.length + ' total:' + Object.keys(objs).length + ' pages:' + pageObjs.length + ' streams:' + Object.keys(streams).length,
-    };
-
     return result;
   } catch(e) {
     throw new Error("[" + step + "] " + e.message);
@@ -638,35 +630,11 @@ async function generatePDF() {
     const blob = new Blob([bytes], {type:'application/pdf'});
     if (STATE.pdfUrl) URL.revokeObjectURL(STATE.pdfUrl);
     STATE.pdfUrl = URL.createObjectURL(blob);
-    STATE.debugInfo = window._rpaDebug || {};
-    STATE.rpaError = null;
     STATE.view = "preview";
   } catch(e) {
-    // Show error inline, not as alert
-    STATE.rpaError = e.message;
-    STATE.debugInfo = { saveMethod: 'ERROR', error: e.message };
-    STATE.pdfSize = 0;
-    // Fall back to raw template so user can still see the form
-    const raw = getRawTemplate();
-    const blob = new Blob([raw], {type:'application/pdf'});
-    if (STATE.pdfUrl) URL.revokeObjectURL(STATE.pdfUrl);
-    STATE.pdfUrl = URL.createObjectURL(blob);
-    STATE.view = "preview";
     console.error("RPA generation error:", e);
   }
   STATE.generating = false; render();
-}
-
-// Diagnostic: show raw template PDF with zero modification
-function testRawTemplate() {
-  const raw = getRawTemplate();
-  const blob = new Blob([raw], {type:'application/pdf'});
-  if (STATE.pdfUrl) URL.revokeObjectURL(STATE.pdfUrl);
-  STATE.pdfUrl = URL.createObjectURL(blob);
-  STATE.pdfSize = raw.length;
-  STATE.debugInfo = { saveMethod:"RAW-TEMPLATE", size:raw.length, header:String.fromCharCode(...raw.slice(0,8)) };
-  STATE.view = "preview";
-  render();
 }
 
 function downloadPDF() {
@@ -755,13 +723,6 @@ function render() {
           <span>✓ RPA Generated — ${f.property_address.split(",")[0]} — $${pp.toLocaleString()} — ${STATE.pdfSize ? Math.round(STATE.pdfSize/1024)+'KB' : '?'}</span>
           <span style="font-size:11px;color:#5a8a5a">Review below, then download</span>
         </div>
-        ${STATE.rpaError ? `<div style="background:#2e1a1a;border:1px solid #f44;border-radius:8px;padding:10px;margin:8px 0;font-family:monospace;font-size:12px;color:#f88;word-break:break-all">
-          ERROR: ${STATE.rpaError}<br><span style="color:#888;font-size:10px">Showing raw template as fallback. Text overlay failed.</span>
-        </div>` : ''}
-        ${STATE.debugInfo ? `<div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:10px;margin:8px 0;font-family:monospace;font-size:11px;color:#8be;word-break:break-all">
-          DEBUG: method=${STATE.debugInfo.saveMethod} | size=${STATE.debugInfo.size || STATE.pdfSize} | pages=${STATE.debugInfo.pages || '?'} | newObjs=${STATE.debugInfo.newObjs || '?'}<br>
-          PAGES: ${STATE.debugInfo.pgDebug || 'n/a'}
-        </div>` : ''}
         <iframe src="${STATE.pdfUrl}" class="preview-frame"></iframe>
       </div>`;
     return;
@@ -895,7 +856,6 @@ function render() {
         <button class="btn btn-primary" ${!valid||STATE.generating?"disabled":""} onclick="generatePDF()">
           ${STATE.generating ? "⏳ Generating..." : "⚡ Generate RPA"}
         </button>
-        <button class="btn btn-outline" onclick="testRawTemplate()" style="font-size:11px">🔍 Test Template</button>
       </div>
     </div>
     <div class="container">
