@@ -255,26 +255,25 @@ async function generateOfferPackage(id){
     timeline:[{date:new Date().toISOString(),type:'offer_submitted',from:'buyer',summary:`Offer drafted: ${$(oPrice)} · Lisa ${lisaPct}% · EMD ${$(emd)}`,price:oPrice,commission_pct:lisaPct}]
   };
 
-  // Duplicate prevention: check for existing active deal on this property
+  // Check for existing active deal — update it instead of creating a duplicate
   const existingDeal=deals.find(x=>x.property_id===p.id&&!DEAD_STATUSES.includes(x.status));
-  if(existingDeal){
-    if(!confirm(`An active deal already exists for this property (${(DEAL_STAGES[existingDeal.status]||{}).label||existingDeal.status}).\n\nOK = Open existing deal\nCancel = Create new offer anyway`)){
-      // User wants new offer, continue
-    } else {
-      // User wants existing deal — navigate to it
-      closeOffer();document.getElementById('detailModal').style.display='none';openDeal(existingDeal.id);
-      return;
-    }
-  }
 
   const output=document.getElementById("offerOutput_"+id);
-  output.innerHTML=`<div style="text-align:center;padding:16px"><div style="width:28px;height:28px;border:3px solid rgba(34,197,94,0.2);border-top-color:#22c55e;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto"></div><div style="color:#22c55e;font-size:12px;font-weight:700;margin-top:8px">Saving deal...</div></div>`;
+  output.innerHTML=`<div style="text-align:center;padding:16px"><div style="width:28px;height:28px;border:3px solid rgba(34,197,94,0.2);border-top-color:#22c55e;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto"></div><div style="color:#22c55e;font-size:12px;font-weight:700;margin-top:8px">${existingDeal?'Updating deal...':'Saving deal...'}</div></div>`;
 
   let dealId=null;
   try{
-    const resp=await fetch(`${SB}/rest/v1/deals`,{method:"POST",headers:{...HD,Prefer:"return=representation"},body:JSON.stringify(dealPayload)});
-    if(resp.ok){const data=await resp.json();dealId=data[0]?.id||null;
-      // Reload deals for pipeline tab
+    let resp;
+    if(existingDeal){
+      // Update existing deal with new offer terms
+      dealPayload.timeline=[...( Array.isArray(existingDeal.timeline)?existingDeal.timeline:[]),...dealPayload.timeline];
+      resp=await fetch(`${SB}/rest/v1/deals?id=eq.${existingDeal.id}`,{method:"PATCH",headers:{...HD,Prefer:"return=representation"},body:JSON.stringify(dealPayload)});
+      if(resp.ok){dealId=existingDeal.id;}
+    } else {
+      resp=await fetch(`${SB}/rest/v1/deals`,{method:"POST",headers:{...HD,Prefer:"return=representation"},body:JSON.stringify(dealPayload)});
+      if(resp.ok){const data=await resp.json();dealId=data[0]?.id||null;}
+    }
+    if(resp.ok){
       try{const dd=await sb("deals?order=updated_at.desc");deals=Array.isArray(dd)?dd:[];renderDashboard();}catch(e){}
     }
     else{const err=await resp.text();console.error("Deal save failed:",err);}

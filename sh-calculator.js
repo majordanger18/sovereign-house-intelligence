@@ -396,20 +396,29 @@ async function doSaveCalc(){
   const cashIn=downPay+totalReno*(1-drawPct/100)+loanFees;
   const cashROI2=cashIn>0?parseFloat(((profit/cashIn)*100).toFixed(1)):0;
 
+  const payload={
+    property_id:calcProp.id,mls_number:calcProp.mls_number,address:calcProp.address,
+    arv,purchase_price:pur,rehab_budget:rehab,additional_costs:addl,
+    ltv,interest_rate:rate,points:pts,origination:orig,closing_buy_flat:closeBuyFlat,reno_draw_pct:drawPct,
+    loan_amount:totalLoan,down_payment:downPay,loan_fees:loanFees,
+    hold_months:holdMo,tax_annual:taxAnn,insurance_monthly:ins,hoa_monthly:hoa,utilities_monthly:util,
+    monthly_hold:monthlyH,hold_cost:totalHold,
+    buyer_agent_pct:bagent,closing_sell_flat:closeSellFlat,staging,title_insurance:title,hoa_transfer:hoaxfer,misc_buffer:misc,
+    total_sell_costs:totalSell,
+    lisa_commission_pct:lisaCommPct2,lisa_commission_amt:lisaCommAmt2,
+    total_cost:totalCost,net_profit:profit,roi,
+    cash_required:cashIn,cash_roi:cashROI2,service_fee:svcfee
+  };
+
   try{
-    const resp=await fetch(`${SB}/rest/v1/calc_history`,{method:"POST",headers:{...HD,Prefer:"return=representation"},body:JSON.stringify({
-      property_id:calcProp.id,mls_number:calcProp.mls_number,address:calcProp.address,
-      arv,purchase_price:pur,rehab_budget:rehab,additional_costs:addl,
-      ltv,interest_rate:rate,points:pts,origination:orig,closing_buy_flat:closeBuyFlat,reno_draw_pct:drawPct,
-      loan_amount:totalLoan,down_payment:downPay,loan_fees:loanFees,
-      hold_months:holdMo,tax_annual:taxAnn,insurance_monthly:ins,hoa_monthly:hoa,utilities_monthly:util,
-      monthly_hold:monthlyH,hold_cost:totalHold,
-      buyer_agent_pct:bagent,closing_sell_flat:closeSellFlat,staging,title_insurance:title,hoa_transfer:hoaxfer,misc_buffer:misc,
-      total_sell_costs:totalSell,
-      lisa_commission_pct:lisaCommPct2,lisa_commission_amt:lisaCommAmt2,
-      total_cost:totalCost,net_profit:profit,roi,
-      cash_required:cashIn,cash_roi:cashROI2
-    })});
+    // Check for existing calc_history for this property — update instead of creating duplicates
+    const existing=calcHistory.find(h=>h.property_id===calcProp.id)||null;
+    let resp;
+    if(existing){
+      resp=await fetch(`${SB}/rest/v1/calc_history?id=eq.${existing.id}`,{method:"PATCH",headers:{...HD,Prefer:"return=representation"},body:JSON.stringify(payload)});
+    } else {
+      resp=await fetch(`${SB}/rest/v1/calc_history`,{method:"POST",headers:{...HD,Prefer:"return=representation"},body:JSON.stringify(payload)});
+    }
     if(!resp.ok){
       const errText=await resp.text();
       console.error("Save failed:",resp.status,errText);
