@@ -219,6 +219,7 @@ async function openDeal(dealId){
       <div id="deal_statusBtns" style="display:flex;gap:6px;flex-wrap:wrap">
         ${stages.map(([k,v])=>`<button onclick="updateDealStatus('${d.id}','${k}')" style="padding:6px 12px;border-radius:8px;border:1px solid ${d.status===k?v.color+'60':' rgba(255,255,255,0.06)'};background:${d.status===k?v.color+'15':'rgba(255,255,255,0.02)'};color:${d.status===k?v.color:'#64748b'};font-size:10px;font-weight:700;cursor:pointer;min-height:36px;transition:all .15s">${v.icon} ${v.label}</button>`).join('')}
       </div>
+      <button onclick="updateDealStatus('${d.id}','closed')" style="width:100%;margin-top:10px;padding:12px;border-radius:10px;border:1px solid rgba(212,175,55,0.4);background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(16,185,129,0.08));color:#d4af37;font-size:13px;font-weight:800;cursor:pointer;min-height:44px">🏆 Deal Won — Close & Start Project</button>
       <div id="deal_killBtns" style="display:flex;gap:6px;margin-top:8px">
         <button onclick="killDeal('${d.id}','rejected')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.04);color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;min-height:36px">❌ Rejected</button>
         <button onclick="killDeal('${d.id}','withdrawn')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(100,116,139,0.2);background:rgba(100,116,139,0.04);color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer;min-height:36px">🚫 Withdrawn</button>
