@@ -720,7 +720,7 @@ async function sendForSignature() {
     const listingAgentLastName = spaceIdx > 0 ? agentFull.substring(spaceIdx + 1) : "";
     const res = await fetch("https://majordomain.app.n8n.cloud/webhook/rpa-sign", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({
         pdfBase64,
         address: STATE.form.property_address || "",
