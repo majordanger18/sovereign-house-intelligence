@@ -322,8 +322,7 @@ function buildDealData(form) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PDF FILL ENGINE — Incremental Update approach
-// Keeps original template bytes untouched, appends text overlay as PDF incremental update.
+// PDF FILL ENGINE — Raw incremental update (no pdf-lib for serialization)
 // ══════════════════════════════════════════════════════════════════════════════
 function getRawTemplate() {
   const binaryStr = atob(BLANK_RPA_B64);
@@ -332,57 +331,56 @@ function getRawTemplate() {
   return pdfBytes;
 }
 
+// Scan raw PDF text for all objects (skipping stream data)
+function scanPdfObjects(rawStr) {
+  const objs = {};
+  const re = /(\d+)\s+(\d+)\s+obj\b/g;
+  let m;
+  while ((m = re.exec(rawStr)) !== null) {
+    const objNum = parseInt(m[1]), genNum = parseInt(m[2]);
+    const bodyStart = m.index + m[0].length;
+    // Find endobj, but skip past any stream content
+    let endPos;
+    const streamIdx = rawStr.indexOf('stream', bodyStart);
+    const endobjIdx = rawStr.indexOf('endobj', bodyStart);
+    if (endobjIdx < 0) continue;
+    if (streamIdx >= 0 && streamIdx < endobjIdx) {
+      const endstreamIdx = rawStr.indexOf('endstream', streamIdx + 6);
+      endPos = endstreamIdx >= 0 ? rawStr.indexOf('endobj', endstreamIdx) : endobjIdx;
+    } else {
+      endPos = endobjIdx;
+    }
+    if (endPos < 0) continue;
+    objs[objNum] = { genNum, body: rawStr.substring(bodyStart, endPos).trim() };
+    re.lastIndex = endPos + 6;
+  }
+  return objs;
+}
+
 async function fillRPA(formState) {
   let step = "INIT";
   try {
     step = "DECODE";
-    const { PDFDocument, PDFName, PDFArray, PDFRef } = PDFLib;
     const dealData = buildDealData(formState);
     const raw = getRawTemplate();
+    const rawStr = new TextDecoder('latin1').decode(raw);
 
-    step = "PARSE";
-    const pdf = await PDFDocument.load(raw, { ignoreEncryption: true, updateMetadata: false });
+    step = "SCAN";
+    // Parse raw PDF — no pdf-lib at all
+    const objs = scanPdfObjects(rawStr);
+    const objNums = Object.keys(objs).map(Number);
 
-    // embedFont triggers lazy initialization in pdf-lib's context
-    const font = await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
-
-    // Collect pages with their refs and dicts — with diagnostics
-    const _pgDebug = [];
-    function collectPages(ref) {
-      try {
-        const node = pdf.context.lookup(ref);
-        if (!node || typeof node.get !== 'function') {
-          _pgDebug.push('lookup-fail:' + String(ref));
-          return [];
-        }
-        const type = node.get(PDFName.of('Type'));
-        const typeStr = type ? type.toString() : 'none';
-        if (typeStr === '/Page') return [{ ref, dict: node }];
-        if (typeStr === '/Pages') {
-          const kids = node.get(PDFName.of('Kids'));
-          if (!kids || typeof kids.size !== 'function') {
-            _pgDebug.push('no-kids:' + typeStr);
-            return [];
-          }
-          _pgDebug.push('Pages-kids:' + kids.size());
-          const result = [];
-          for (let i = 0; i < kids.size(); i++) result.push(...collectPages(kids.get(i)));
-          return result;
-        }
-        _pgDebug.push('unknown-type:' + typeStr);
-        return [];
-      } catch(e) {
-        _pgDebug.push('error:' + e.message);
-        return [];
+    // Find page objects: /Type /Page but NOT /Type /Pages
+    const pageObjs = [];
+    for (const n of objNums) {
+      const b = objs[n].body;
+      if (b.match(/\/Type\s*\/Page\b/) && !b.match(/\/Type\s*\/Pages\b/)) {
+        pageObjs.push({ objNum: n, genNum: objs[n].genNum, body: b });
       }
     }
-    const pagesRef = pdf.catalog.get(PDFName.of('Pages'));
-    _pgDebug.push('pagesRef:' + String(pagesRef));
-    const pages = collectPages(pagesRef);
-    _pgDebug.push('total:' + pages.length);
+    pageObjs.sort((a, b) => a.objNum - b.objNum);
 
     step = "MAP";
-    // Group text by page
     const byPage = {};
     for (const [pg, x, yTop, key, fontSize, maxChars] of FIELD_MAP) {
       if (!byPage[pg]) byPage[pg] = [];
@@ -390,32 +388,26 @@ async function fillRPA(formState) {
       if (val) byPage[pg].push({ x, y: PAGE_H - yTop, text: val, size: fontSize });
     }
 
-    step = "XREF";
-    // Parse trailer info from raw bytes for incremental update
-    const tail = new TextDecoder('latin1').decode(raw.slice(-500));
+    step = "TRAILER";
+    const tail = rawStr.slice(-500);
     const xrefMatch = tail.match(/startxref\s+(\d+)/);
     const prevXref = xrefMatch ? parseInt(xrefMatch[1]) : 0;
-    const sizeMatch = tail.match(/\/Size\s+(\d+)/);
     const rootMatch = tail.match(/\/Root\s+(\d+)\s+(\d+)\s+R/);
     const rootObjNum = rootMatch ? parseInt(rootMatch[1]) : 0;
     const rootGenNum = rootMatch ? parseInt(rootMatch[2]) : 0;
-
-    // Find highest object number
+    const sizeMatch = tail.match(/\/Size\s+(\d+)/);
     let maxObj = sizeMatch ? parseInt(sizeMatch[1]) : 0;
-    for (const [ref] of pdf.context.enumerateIndirectObjects()) {
-      if (ref.objectNumber >= maxObj) maxObj = ref.objectNumber + 1;
-    }
+    for (const n of objNums) { if (n >= maxObj) maxObj = n + 1; }
 
     step = "BUILD";
-    // Assign new object numbers
     let nextObj = maxObj;
     const fontObjNum = nextObj++;
 
-    // Build content streams per page
+    // Content streams per page
     const streams = {};
     for (const [pgStr, fields] of Object.entries(byPage)) {
       const pgIdx = parseInt(pgStr) - 1;
-      if (pgIdx < 0 || pgIdx >= pages.length) continue;
+      if (pgIdx < 0 || pgIdx >= pageObjs.length || fields.length === 0) continue;
       let sc = 'q\n';
       for (const f of fields) {
         const t = f.text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
@@ -426,126 +418,124 @@ async function fillRPA(formState) {
     }
 
     step = "MODIFY";
-    // Modify page dicts in pdf-lib's context (for serialization only)
-    const fontRef = PDFRef.of(fontObjNum, 0);
-    const modifiedObjects = new Map(); // objNum -> { gen, obj }
+    // Modify page dict TEXT to add our content stream + font
+    const modifiedPageStrs = {}; // objNum -> modified body string
+    const modifiedFontDicts = {}; // objNum -> modified body string (for ref'd Font dicts)
+    const modifiedResDicts = {}; // objNum -> modified body string (for ref'd Resources dicts)
+    const fontRefStr = fontObjNum + ' 0 R';
 
     for (const [pgIdxStr, stream] of Object.entries(streams)) {
       const pgIdx = parseInt(pgIdxStr);
-      const page = pages[pgIdx];
-      const pageDict = page.dict;
+      const page = pageObjs[pgIdx];
+      let body = page.body;
+      const csRefStr = stream.objNum + ' 0 R';
 
-      // Add /F_SH font ref to Resources/Font
-      let res = pageDict.get(PDFName.of('Resources'));
-      let resRef = (res instanceof PDFRef) ? res : null;
-      if (resRef) res = pdf.context.lookup(resRef);
+      // --- Modify /Contents to include our content stream ---
+      const cArr = body.match(/\/Contents\s*\[([^\]]*)\]/);
+      const cSingle = body.match(/\/Contents\s+(\d+\s+\d+\s+R)/);
+      if (cArr) {
+        body = body.replace(/\/Contents\s*\[([^\]]*)\]/, '/Contents [$1 ' + csRefStr + ']');
+      } else if (cSingle) {
+        body = body.replace(/\/Contents\s+(\d+\s+\d+\s+R)/, '/Contents [$1 ' + csRefStr + ']');
+      } else {
+        // No Contents — add one
+        body = body.replace(/>>(\s*)$/, '/Contents ' + csRefStr + ' >>$1');
+      }
 
-      // If no Resources on page, check parent (inherited)
-      if (!res) {
-        const parentRef = pageDict.get(PDFName.of('Parent'));
-        if (parentRef) {
-          const parent = pdf.context.lookup(parentRef);
-          if (parent) {
-            let pRes = parent.get(PDFName.of('Resources'));
-            if (pRes instanceof PDFRef) { resRef = pRes; pRes = pdf.context.lookup(pRes); }
-            if (pRes) res = pRes;
+      // --- Add /F_SH to font resources ---
+      // Check if Resources is inline or a ref
+      const resRefM = body.match(/\/Resources\s+(\d+)\s+(\d+)\s+R/);
+      if (resRefM) {
+        // Resources is a ref — modify that object
+        const resObjNum = parseInt(resRefM[1]);
+        const resObj = objs[resObjNum];
+        if (resObj && !modifiedResDicts[resObjNum]) {
+          let resBody = resObj.body;
+          const fontRefInRes = resBody.match(/\/Font\s+(\d+)\s+(\d+)\s+R/);
+          const fontInlineInRes = resBody.match(/\/Font\s*<</);
+          if (fontRefInRes) {
+            // Font is also a ref — modify that object
+            const fObjNum = parseInt(fontRefInRes[1]);
+            const fObj = objs[fObjNum];
+            if (fObj && !modifiedFontDicts[fObjNum]) {
+              let fBody = fObj.body;
+              fBody = fBody.replace(/<</, '<< /F_SH ' + fontRefStr);
+              modifiedFontDicts[fObjNum] = { genNum: fObj.genNum, body: fBody };
+            }
+          } else if (fontInlineInRes) {
+            resBody = resBody.replace(/\/Font\s*<</, '/Font << /F_SH ' + fontRefStr);
+            modifiedResDicts[resObjNum] = { genNum: resObj.genNum, body: resBody };
+          } else {
+            // No Font dict in Resources — add one
+            resBody = resBody.replace(/<</, '<< /Font << /F_SH ' + fontRefStr + ' >>');
+            modifiedResDicts[resObjNum] = { genNum: resObj.genNum, body: resBody };
           }
         }
-      }
-      if (!res) { res = pdf.context.obj({}); pageDict.set(PDFName.of('Resources'), res); resRef = null; }
-
-      let fd = res.get(PDFName.of('Font'));
-      let fdRef = (fd instanceof PDFRef) ? fd : null;
-      if (fdRef) fd = pdf.context.lookup(fdRef);
-      if (!fd) { fd = pdf.context.obj({}); res.set(PDFName.of('Font'), fd); fdRef = null; }
-
-      fd.set(PDFName.of('F_SH'), fontRef);
-
-      // Add content stream ref to Contents
-      const csRef = PDFRef.of(stream.objNum, 0);
-      const contents = pageDict.get(PDFName.of('Contents'));
-      if (contents instanceof PDFArray) {
-        contents.push(csRef);
-      } else if (contents) {
-        pageDict.set(PDFName.of('Contents'), pdf.context.obj([contents, csRef]));
+      } else if (body.match(/\/Font\s*<</)) {
+        // Inline Font dict in inline Resources
+        body = body.replace(/\/Font\s*<</, '/Font << /F_SH ' + fontRefStr);
+      } else if (body.match(/\/Resources\s*<</)) {
+        // Inline Resources but no Font dict — add Font dict
+        body = body.replace(/\/Resources\s*<</, '/Resources << /Font << /F_SH ' + fontRefStr + ' >>');
       } else {
-        pageDict.set(PDFName.of('Contents'), csRef);
+        // No Resources at all — add inline Resources with Font
+        body = body.replace(/>>(\s*)$/, '/Resources << /Font << /F_SH ' + fontRefStr + ' >> >> >>$1');
       }
 
-      // Track modified objects
-      modifiedObjects.set(page.ref.objectNumber, { gen: page.ref.generationNumber, obj: pageDict });
-      if (resRef) modifiedObjects.set(resRef.objectNumber, { gen: resRef.generationNumber, obj: res });
-      if (fdRef) modifiedObjects.set(fdRef.objectNumber, { gen: fdRef.generationNumber, obj: fd });
+      modifiedPageStrs[page.objNum] = { genNum: page.genNum, body };
     }
 
     step = "WRITE";
-    // Build incremental update: append new/modified objects + xref + trailer
     const te = new TextEncoder();
     const chunks = [];
     const xrefEntries = [];
     let offset = raw.length;
 
-    // Separator after original %%EOF
     chunks.push(te.encode('\n'));
     offset += 1;
 
-    // New object: Helvetica font dictionary
+    // Font object
     xrefEntries.push({ objNum: fontObjNum, gen: 0, offset });
     const fontStr = fontObjNum + ' 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n';
     const fontBytes = te.encode(fontStr);
     chunks.push(fontBytes);
     offset += fontBytes.length;
 
-    // New objects: content streams
+    // Content streams
     for (const stream of Object.values(streams)) {
       xrefEntries.push({ objNum: stream.objNum, gen: 0, offset });
-      const contentBytes = te.encode(stream.content);
-      const hdr = stream.objNum + ' 0 obj\n<< /Length ' + contentBytes.length + ' >>\nstream\n';
-      const ftr = '\nendstream\nendobj\n';
-      const hdrB = te.encode(hdr);
-      const ftrB = te.encode(ftr);
-      chunks.push(hdrB, contentBytes, ftrB);
-      offset += hdrB.length + contentBytes.length + ftrB.length;
+      const cb = te.encode(stream.content);
+      const hdr = te.encode(stream.objNum + ' 0 obj\n<< /Length ' + cb.length + ' >>\nstream\n');
+      const ftr = te.encode('\nendstream\nendobj\n');
+      chunks.push(hdr, cb, ftr);
+      offset += hdr.length + cb.length + ftr.length;
     }
 
-    // Custom PDF serializer — avoids depending on internal pdf-lib methods
-    function pdfS(o) {
-      if (!o) return 'null';
-      if (typeof o.objectNumber === 'number') return o.objectNumber + ' ' + (o.generationNumber || 0) + ' R';
-      var s = o.toString ? o.toString() : '';
-      if (s.startsWith('/')) return s; // PDFName
-      if (s.match(/^\d+-\d+$/)) { var p=s.split('-'); return p[0]+' '+p[1]+' R'; } // PDFRef fallback
-      if (typeof o.entries === 'function') {
-        var parts = [];
-        for (var e of o.entries()) { if(e[1]!==undefined) parts.push(pdfS(e[0])+' '+pdfS(e[1])); }
-        return '<<\n'+parts.join('\n')+'\n>>';
-      }
-      if (typeof o.size === 'function' && typeof o.get === 'function') {
-        var items = [];
-        for (var i=0;i<o.size();i++) items.push(pdfS(o.get(i)));
-        return '[ '+items.join(' ')+' ]';
-      }
-      return s;
+    // Modified page objects
+    for (const [objNumStr, { genNum, body }] of Object.entries(modifiedPageStrs)) {
+      const objNum = parseInt(objNumStr);
+      xrefEntries.push({ objNum, gen: genNum, offset });
+      const objBytes = te.encode(objNum + ' ' + genNum + ' obj\n' + body + '\nendobj\n');
+      chunks.push(objBytes);
+      offset += objBytes.length;
     }
 
-    // Modified objects: page dicts, resources, font dicts
-    for (const [objNum, { gen, obj }] of modifiedObjects) {
-      xrefEntries.push({ objNum, gen: gen || 0, offset });
-      const hdr = objNum + ' ' + (gen || 0) + ' obj\n';
-      const hdrB = te.encode(hdr);
-      let dictBuf;
-      try {
-        const dictSize = obj.sizeInBytes();
-        dictBuf = new Uint8Array(dictSize);
-        obj.copyBytesInto(dictBuf, 0);
-      } catch(serErr) {
-        // Fallback: use custom serializer
-        dictBuf = te.encode(pdfS(obj));
-      }
-      const ftr = '\nendobj\n';
-      const ftrB = te.encode(ftr);
-      chunks.push(hdrB, dictBuf, ftrB);
-      offset += hdrB.length + dictBuf.length + ftrB.length;
+    // Modified Resources dicts (if any were refs)
+    for (const [objNumStr, { genNum, body }] of Object.entries(modifiedResDicts)) {
+      const objNum = parseInt(objNumStr);
+      xrefEntries.push({ objNum, gen: genNum, offset });
+      const objBytes = te.encode(objNum + ' ' + genNum + ' obj\n' + body + '\nendobj\n');
+      chunks.push(objBytes);
+      offset += objBytes.length;
+    }
+
+    // Modified Font dicts (if any were refs)
+    for (const [objNumStr, { genNum, body }] of Object.entries(modifiedFontDicts)) {
+      const objNum = parseInt(objNumStr);
+      xrefEntries.push({ objNum, gen: genNum, offset });
+      const objBytes = te.encode(objNum + ' ' + genNum + ' obj\n' + body + '\nendobj\n');
+      chunks.push(objBytes);
+      offset += objBytes.length;
     }
 
     // Xref table
@@ -564,22 +554,19 @@ async function fillRPA(formState) {
     trailerStr += ' >>\nstartxref\n' + xrefOffset + '\n%%EOF\n';
     chunks.push(te.encode(trailerStr));
 
-    // Concatenate original + incremental update
+    // Concatenate
     const totalSize = raw.length + chunks.reduce((s, c) => s + c.length, 0);
     const result = new Uint8Array(totalSize);
     result.set(raw, 0);
     let pos = raw.length;
-    for (const chunk of chunks) {
-      result.set(chunk, pos);
-      pos += chunk.length;
-    }
+    for (const chunk of chunks) { result.set(chunk, pos); pos += chunk.length; }
 
     window._rpaDebug = {
-      saveMethod: 'incremental-update',
+      saveMethod: 'raw-incremental',
       size: result.length,
-      pages: pages.length,
+      pages: pageObjs.length,
       newObjs: xrefEntries.length,
-      pgDebug: _pgDebug.join(' | '),
+      pgDebug: 'scanned:' + objNums.length + ' pages:' + pageObjs.length + ' streams:' + Object.keys(streams).length,
     };
 
     return result;
