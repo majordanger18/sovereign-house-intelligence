@@ -702,13 +702,18 @@ function downloadPDF() {
   a.href = STATE.pdfUrl; a.download = `SH_RPA_${addr}.pdf`; a.click();
 }
 
+let isSending = false;
 async function sendForSignature() {
+  if (isSending) return;
   const btn = document.getElementById("signBtn");
   if (!btn || !STATE.pdfUrl) return;
+  isSending = true;
   btn.disabled = true; btn.textContent = "⏳ Sending...";
   try {
-    const bytes = await fillRPA(STATE.form);
-    const pdfBase64 = btoa(String.fromCharCode(...bytes));
+    const bytes = STATE.pdfBytes || await fillRPA(STATE.form);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const pdfBase64 = btoa(binary);
     const agentFull = (STATE.form.listing_agent_name || "").trim();
     const spaceIdx = agentFull.indexOf(" ");
     const listingAgentFirstName = spaceIdx > 0 ? agentFull.substring(0, spaceIdx) : agentFull;
@@ -728,11 +733,13 @@ async function sendForSignature() {
     if (!res.ok) throw new Error("HTTP " + res.status);
     btn.textContent = "✓ Sent! Check your email to sign.";
     btn.style.background = "rgba(34,197,94,0.15)"; btn.style.borderColor = "rgba(34,197,94,0.4)"; btn.style.color = "#22c55e";
+    isSending = false;
   } catch (e) {
     console.error("[RPA] Send for signature error:", e);
     btn.textContent = "✗ Send failed — try again";
     btn.style.background = "rgba(239,68,68,0.15)"; btn.style.borderColor = "rgba(239,68,68,0.4)"; btn.style.color = "#ef4444";
     btn.disabled = false;
+    isSending = false;
   }
 }
 
