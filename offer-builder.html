@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sovereign House — Offer Builder</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -594,6 +596,10 @@ async function fillRPA(formState) {
 const STATE = {
   view: "form", // "form" | "preview"
   pdfUrl: null,
+  pdfBytes: null,
+  pdfDoc: null,
+  pdfPageNum: 1,
+  pdfPageCount: 0,
   generating: false,
   form: {
     buyer_name: "Sovereign House LLC",
@@ -675,9 +681,13 @@ async function generatePDF() {
     });
     const bytes = await fillRPA(STATE.form);
     STATE.pdfSize = bytes ? bytes.length : 0;
+    STATE.pdfBytes = bytes;
     const blob = new Blob([bytes], {type:'application/pdf'});
     if (STATE.pdfUrl) URL.revokeObjectURL(STATE.pdfUrl);
     STATE.pdfUrl = URL.createObjectURL(blob);
+    STATE.pdfDoc = await pdfjsLib.getDocument({data: bytes.slice()}).promise;
+    STATE.pdfPageCount = STATE.pdfDoc.numPages;
+    STATE.pdfPageNum = 1;
     STATE.view = "preview";
   } catch(e) {
     console.error("RPA generation error:", e);
@@ -691,6 +701,61 @@ function downloadPDF() {
   const a = document.createElement("a");
   a.href = STATE.pdfUrl; a.download = `SH_RPA_${addr}.pdf`; a.click();
 }
+
+async function sendForSignature() {
+  const btn = document.getElementById("signBtn");
+  if (!btn || !STATE.pdfUrl) return;
+  btn.disabled = true; btn.textContent = "⏳ Sending...";
+  try {
+    const bytes = await fillRPA(STATE.form);
+    const pdfBase64 = btoa(String.fromCharCode(...bytes));
+    const agentFull = (STATE.form.listing_agent_name || "").trim();
+    const spaceIdx = agentFull.indexOf(" ");
+    const listingAgentFirstName = spaceIdx > 0 ? agentFull.substring(0, spaceIdx) : agentFull;
+    const listingAgentLastName = spaceIdx > 0 ? agentFull.substring(spaceIdx + 1) : "";
+    const res = await fetch("https://majordomain.app.n8n.cloud/webhook/rpa-sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pdfBase64,
+        address: STATE.form.property_address || "",
+        offerPrice: STATE.form.purchase_price || "",
+        listingAgentFirstName,
+        listingAgentLastName,
+        listingAgentEmail: STATE.form.listing_agent_email || ""
+      })
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    btn.textContent = "✓ Sent! Check your email to sign.";
+    btn.style.background = "rgba(34,197,94,0.15)"; btn.style.borderColor = "rgba(34,197,94,0.4)"; btn.style.color = "#22c55e";
+  } catch (e) {
+    console.error("[RPA] Send for signature error:", e);
+    btn.textContent = "✗ Send failed — try again";
+    btn.style.background = "rgba(239,68,68,0.15)"; btn.style.borderColor = "rgba(239,68,68,0.4)"; btn.style.color = "#ef4444";
+    btn.disabled = false;
+  }
+}
+
+async function renderPdfPage() {
+  if (!STATE.pdfDoc) return;
+  const canvas = document.getElementById("pdfCanvas");
+  if (!canvas) return;
+  const page = await STATE.pdfDoc.getPage(STATE.pdfPageNum);
+  const scale = (canvas.parentElement.clientWidth - 2) / page.getViewport({scale:1}).width;
+  const viewport = page.getViewport({scale});
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  await page.render({canvasContext: canvas.getContext("2d"), viewport}).promise;
+  const label = document.getElementById("pdfPageLabel");
+  if (label) label.textContent = `Page ${STATE.pdfPageNum} of ${STATE.pdfPageCount}`;
+  const prevBtn = document.getElementById("pdfPrev");
+  const nextBtn = document.getElementById("pdfNext");
+  if (prevBtn) prevBtn.disabled = STATE.pdfPageNum <= 1;
+  if (nextBtn) nextBtn.disabled = STATE.pdfPageNum >= STATE.pdfPageCount;
+}
+
+function pdfPrevPage() { if (STATE.pdfPageNum > 1) { STATE.pdfPageNum--; renderPdfPage(); } }
+function pdfNextPage() { if (STATE.pdfPageNum < STATE.pdfPageCount) { STATE.pdfPageNum++; renderPdfPage(); } }
 
 function isValid() {
   const pp = parseFloat((STATE.form.purchase_price||"0").replace(/,/g,""));
@@ -782,6 +847,7 @@ function render() {
         <div style="display:flex;gap:10px">
           <button class="btn btn-outline" onclick="STATE.view='form';render()">◀ Form</button>
           <button class="btn btn-primary" onclick="downloadPDF()">⬇ Download PDF</button>
+          <button id="signBtn" class="btn btn-primary" onclick="sendForSignature()" style="background:rgba(212,175,55,0.15);border-color:rgba(212,175,55,0.4);color:#d4af37">✍ Send for Signature</button>
           <button class="btn btn-outline" onclick="window.close();if(!window.closed)window.location.href='index.html'">← Dashboard</button>
         </div>
       </div>
@@ -790,8 +856,16 @@ function render() {
           <span>✓ RPA Generated — ${f.property_address.split(",")[0]} — $${pp.toLocaleString()} — ${STATE.pdfSize ? Math.round(STATE.pdfSize/1024)+'KB' : '?'}</span>
           <span style="font-size:11px;color:#5a8a5a">Review below, then download</span>
         </div>
-        <iframe src="${STATE.pdfUrl}" class="preview-frame"></iframe>
+        <div style="display:flex;align-items:center;justify-content:center;gap:16px;padding:10px 0">
+          <button id="pdfPrev" class="btn btn-outline" onclick="pdfPrevPage()" style="min-width:44px;padding:6px 14px">◀ Prev</button>
+          <span id="pdfPageLabel" style="font-size:13px;font-weight:600;color:#94a3b8;min-width:100px;text-align:center">Page 1 of ${STATE.pdfPageCount}</span>
+          <button id="pdfNext" class="btn btn-outline" onclick="pdfNextPage()" style="min-width:44px;padding:6px 14px">Next ▶</button>
+        </div>
+        <div style="overflow:auto;border:1px solid #2a2a2a;border-radius:6px;background:#222;height:calc(100vh - 210px);text-align:center">
+          <canvas id="pdfCanvas" style="display:inline-block;max-width:100%"></canvas>
+        </div>
       </div>`;
+    setTimeout(renderPdfPage, 0);
     return;
   }
 
