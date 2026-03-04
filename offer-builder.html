@@ -710,10 +710,13 @@ async function sendForSignature() {
   isSending = true;
   btn.disabled = true; btn.textContent = "⏳ Sending...";
   try {
-    const bytes = await fillRPA(STATE.form);
-    if (!bytes || !bytes.length) throw new Error("PDF generation returned empty bytes");
-    let binary = "";
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const pdfBytes = await fillRPA(STATE.form);
+    if (!pdfBytes || !pdfBytes.length) throw new Error("PDF generation returned empty bytes");
+    let binary = '';
+    const bytes = new Uint8Array(pdfBytes);
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
     const pdfBase64 = btoa(binary);
     console.log("[RPA] pdfBase64 length:", pdfBase64.length);
     const agentFull = (STATE.form.listing_agent_name || "").trim();
