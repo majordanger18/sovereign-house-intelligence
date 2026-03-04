@@ -487,18 +487,44 @@ async function fillRPA(formState) {
       offset += hdrB.length + contentBytes.length + ftrB.length;
     }
 
+    // Custom PDF serializer — avoids depending on internal pdf-lib methods
+    function pdfS(o) {
+      if (!o) return 'null';
+      if (typeof o.objectNumber === 'number') return o.objectNumber + ' ' + (o.generationNumber || 0) + ' R';
+      var s = o.toString ? o.toString() : '';
+      if (s.startsWith('/')) return s; // PDFName
+      if (s.match(/^\d+-\d+$/)) { var p=s.split('-'); return p[0]+' '+p[1]+' R'; } // PDFRef fallback
+      if (typeof o.entries === 'function') {
+        var parts = [];
+        for (var e of o.entries()) { if(e[1]!==undefined) parts.push(pdfS(e[0])+' '+pdfS(e[1])); }
+        return '<<\n'+parts.join('\n')+'\n>>';
+      }
+      if (typeof o.size === 'function' && typeof o.get === 'function') {
+        var items = [];
+        for (var i=0;i<o.size();i++) items.push(pdfS(o.get(i)));
+        return '[ '+items.join(' ')+' ]';
+      }
+      return s;
+    }
+
     // Modified objects: page dicts, resources, font dicts
     for (const [objNum, { gen, obj }] of modifiedObjects) {
       xrefEntries.push({ objNum, gen: gen || 0, offset });
       const hdr = objNum + ' ' + (gen || 0) + ' obj\n';
       const hdrB = te.encode(hdr);
-      const dictSize = obj.sizeInBytes();
-      const dictBuf = new Uint8Array(dictSize);
-      obj.copyBytesInto(dictBuf, 0);
+      let dictBuf;
+      try {
+        const dictSize = obj.sizeInBytes();
+        dictBuf = new Uint8Array(dictSize);
+        obj.copyBytesInto(dictBuf, 0);
+      } catch(serErr) {
+        // Fallback: use custom serializer
+        dictBuf = te.encode(pdfS(obj));
+      }
       const ftr = '\nendobj\n';
       const ftrB = te.encode(ftr);
       chunks.push(hdrB, dictBuf, ftrB);
-      offset += hdrB.length + dictSize + ftrB.length;
+      offset += hdrB.length + dictBuf.length + ftrB.length;
     }
 
     // Xref table
@@ -608,10 +634,20 @@ async function generatePDF() {
     if (STATE.pdfUrl) URL.revokeObjectURL(STATE.pdfUrl);
     STATE.pdfUrl = URL.createObjectURL(blob);
     STATE.debugInfo = window._rpaDebug || {};
+    STATE.rpaError = null;
     STATE.view = "preview";
   } catch(e) {
-    alert("RPA error: " + e.message);
-    console.error(e);
+    // Show error inline, not as alert
+    STATE.rpaError = e.message;
+    STATE.debugInfo = { saveMethod: 'ERROR', error: e.message };
+    STATE.pdfSize = 0;
+    // Fall back to raw template so user can still see the form
+    const raw = getRawTemplate();
+    const blob = new Blob([raw], {type:'application/pdf'});
+    if (STATE.pdfUrl) URL.revokeObjectURL(STATE.pdfUrl);
+    STATE.pdfUrl = URL.createObjectURL(blob);
+    STATE.view = "preview";
+    console.error("RPA generation error:", e);
   }
   STATE.generating = false; render();
 }
@@ -714,8 +750,11 @@ function render() {
           <span>✓ RPA Generated — ${f.property_address.split(",")[0]} — $${pp.toLocaleString()} — ${STATE.pdfSize ? Math.round(STATE.pdfSize/1024)+'KB' : '?'}</span>
           <span style="font-size:11px;color:#5a8a5a">Review below, then download</span>
         </div>
+        ${STATE.rpaError ? `<div style="background:#2e1a1a;border:1px solid #f44;border-radius:8px;padding:10px;margin:8px 0;font-family:monospace;font-size:12px;color:#f88;word-break:break-all">
+          ERROR: ${STATE.rpaError}<br><span style="color:#888;font-size:10px">Showing raw template as fallback. Text overlay failed.</span>
+        </div>` : ''}
         ${STATE.debugInfo ? `<div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:10px;margin:8px 0;font-family:monospace;font-size:11px;color:#8be;word-break:break-all">
-          DEBUG: method=${STATE.debugInfo.saveMethod} | size=${STATE.debugInfo.size} | pages=${STATE.debugInfo.pages || '?'} | newObjs=${STATE.debugInfo.newObjs || '?'} | header=${STATE.debugInfo.header || '?'}
+          DEBUG: method=${STATE.debugInfo.saveMethod} | size=${STATE.debugInfo.size || STATE.pdfSize} | pages=${STATE.debugInfo.pages || '?'} | newObjs=${STATE.debugInfo.newObjs || '?'}
         </div>` : ''}
         <iframe src="${STATE.pdfUrl}" class="preview-frame"></iframe>
       </div>`;
