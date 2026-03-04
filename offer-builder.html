@@ -83,8 +83,8 @@ const FIELD_MAP = [
   [1,205,364,"addl_deposit_will_x",8,1],[1,274,364,"addl_deposit_will_not_x",8,1],
   [1,60,401,"loan_amount",10,10],[1,132,417,"loan_conv_x",8,1],[1,200,417,"loan_fha_x",8,1],
   [1,233,417,"loan_va_x",8,1],[1,261,417,"loan_other_x",8,1],[1,370,419,"loan_other_specify",9,30],
-  [1,60,453,"assume_loan_amount",10,10],[1,127,464,"assume_conv_x",8,1],
-  [1,194,464,"assume_fha_x",8,1],[1,227,464,"assume_va_x",8,1],[1,255,464,"assume_other_x",8,1],
+  [1,60,453,"assume_loan_amount",10,10],[1,132,464,"assume_conv_x",8,1],
+  [1,200,464,"assume_fha_x",8,1],[1,233,464,"assume_va_x",8,1],[1,261,464,"assume_other_x",8,1],
   [1,370,464,"assume_other_specify",9,30],[1,162,487,"loan_fixed_x",8,1],
   [1,301,487,"loan_adjustable_x",8,1],[1,60,528,"promissory_amount",10,10],
   [1,60,570,"balance_down_payment",10,10],[1,60,604,"total_purchase_price",10,10],
@@ -246,14 +246,22 @@ function buildDealData(form) {
     emd_escrow_x: form.emd_account==="escrow"?"X":"",
     emd_buyer_broker_x: form.emd_account==="buyer_broker"?"X":"",
     emd_seller_broker_x: form.emd_account==="seller_broker"?"X":"",
-    addl_deposit_amount:"", addl_deposit_date:"",
-    addl_deposit_will_x:"", addl_deposit_will_not_x:"",
+    addl_deposit_amount: form.addl_deposit_amount ? dollars(parseFloat(form.addl_deposit_amount.replace(/,/g,""))||0) : "",
+    addl_deposit_date: form.addl_deposit_date||"",
+    addl_deposit_will_x: form.addl_deposit_will==="will"?"X":"",
+    addl_deposit_will_not_x: form.addl_deposit_will==="will_not"&&form.addl_deposit_amount?"X":"",
     loan_amount: dollars(loan),
     loan_conv_x: loanType==="conventional"?"X":"", loan_fha_x: loanType==="fha"?"X":"",
     loan_va_x: loanType==="va"?"X":"", loan_other_x: loanType==="other"?"X":"",
     loan_other_specify: loanType==="other"?(form.loan_other_specify||""):"",
-    assume_loan_amount:"",assume_conv_x:"",assume_fha_x:"",assume_va_x:"",assume_other_x:"",assume_other_specify:"",
-    loan_fixed_x:"",loan_adjustable_x:"",promissory_amount:"",
+    assume_loan_amount: form.assume_loan_amount ? dollars(parseFloat(form.assume_loan_amount.replace(/,/g,""))||0) : "",
+    assume_conv_x: form.assume_loan_type==="conventional"?"X":"",
+    assume_fha_x: form.assume_loan_type==="fha"?"X":"",
+    assume_va_x: form.assume_loan_type==="va"?"X":"",
+    assume_other_x: form.assume_loan_type==="other"?"X":"",
+    assume_other_specify: form.assume_loan_type==="other"?(form.assume_other_specify||""):"",
+    loan_fixed_x:"",loan_adjustable_x:"",
+    promissory_amount: form.promissory_amount ? dollars(parseFloat(form.promissory_amount.replace(/,/g,""))||0) : "",
     balance_down_payment: dollars(balance), total_purchase_price: dollars(price),
     buyer_name_footer: buyerName, property_address_footer: propAddr,
     buyer_broker_pct: form.buyer_broker_pct||"0", buyer_broker_flat:"",
@@ -591,6 +599,9 @@ const STATE = {
     emd_amount: "10000", emd_type: "wire", emd_deposit_days: "1", emd_account: "escrow",
     loan_type: "other", loan_other_specify: "Hard Money (Kiavi)",
     loan_amount: "", balance_down_payment: "",
+    addl_deposit_amount: "", addl_deposit_date: "", addl_deposit_will: "will_not",
+    assume_loan_amount: "", assume_loan_type: "", assume_other_specify: "",
+    promissory_amount: "",
     buyer_broker_pct: "0",
     loan_app_days: "5", appraisal_days: "21", loan_contingency_days: "21",
     escrow_company: "Nevada Title Company", escrow_officer: "",
@@ -708,7 +719,7 @@ function makeSelect(label, key, options, width) {
   const val = STATE.form[key]||"";
   const w = width ? `width:${width}px` : "";
   const opts = options.map(([v,l])=>`<option value="${v}" ${v===val?"selected":""}>${l}</option>`).join("");
-  const setter = key==="loan_type" ? "setStructural" : "set";
+  const setter = (key==="loan_type"||key==="assume_loan_type") ? "setStructural" : "set";
   return `<div class="field" style="${w}"><label>${label}</label><select onchange="${setter}('${key}',this.value)">${opts}</select></div>`;
 }
 
@@ -800,11 +811,29 @@ function render() {
       ${makeField("Deposit Days","emd_deposit_days",80)}
       ${makeSelect("EMD Account","emd_account",[["escrow","Escrow Holder"],["buyer_broker","Buyer Broker"],["seller_broker","Seller Broker"]],140)}
     </div>
+    <div class="note" style="margin-top:6px">B. Additional Deposit</div>
+    <div class="row">
+      ${makeField("Additional Deposit ($)","addl_deposit_amount",140)}
+      ${makeField("Deposit Date","addl_deposit_date",130)}
+      ${makeSelect("Will / Will Not","addl_deposit_will",[["will","Will"],["will_not","Will Not"]],120)}
+    </div>
+    <div class="note" style="margin-top:6px">C. New Loan</div>
     <div class="row">
       ${makeField("Loan Amount ($)","loan_amount",140)}
       ${makeSelect("Loan Type","loan_type",[["conventional","Conventional"],["fha","FHA"],["va","VA"],["other","Other"]],130)}
       ${f.loan_type==="other" ? makeField("Specify","loan_other_specify",180) : ""}
     </div>
+    <div class="note" style="margin-top:6px">D. Assumption of Existing Loan</div>
+    <div class="row">
+      ${makeField("Assume Loan ($)","assume_loan_amount",140)}
+      ${makeSelect("Type","assume_loan_type",[["","None"],["conventional","Conv"],["fha","FHA"],["va","VA"],["other","Other"]],110)}
+      ${f.assume_loan_type==="other" ? makeField("Specify","assume_other_specify",160) : ""}
+    </div>
+    <div class="note" style="margin-top:6px">E. Seller Financing</div>
+    <div class="row">
+      ${makeField("Promissory Note ($)","promissory_amount",140)}
+    </div>
+    <div class="note" style="margin-top:6px">F. Balance</div>
     <div class="row">
       ${makeField("Balance / Down Payment ($)","balance_down_payment",160)}
       ${makeField("Broker Comp %","buyer_broker_pct",80)}
