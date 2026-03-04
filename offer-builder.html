@@ -83,9 +83,9 @@ const FIELD_MAP = [
   [1,205,364,"addl_deposit_will_x",8,1],[1,274,364,"addl_deposit_will_not_x",8,1],
   [1,60,401,"loan_amount",10,10],[1,132,417,"loan_conv_x",8,1],[1,200,417,"loan_fha_x",8,1],
   [1,233,417,"loan_va_x",8,1],[1,261,417,"loan_other_x",8,1],[1,370,419,"loan_other_specify",9,30],
-  [1,60,453,"assume_loan_amount",10,10],[1,132,464,"assume_conv_x",8,1],
-  [1,200,464,"assume_fha_x",8,1],[1,233,464,"assume_va_x",8,1],[1,261,464,"assume_other_x",8,1],
-  [1,370,464,"assume_other_specify",9,30],[1,162,487,"loan_fixed_x",8,1],
+  [1,60,446,"assume_loan_amount",10,10],[1,132,462,"assume_conv_x",8,1],
+  [1,200,462,"assume_fha_x",8,1],[1,233,462,"assume_va_x",8,1],[1,261,462,"assume_other_x",8,1],
+  [1,370,462,"assume_other_specify",9,30],[1,162,487,"loan_fixed_x",8,1],
   [1,301,487,"loan_adjustable_x",8,1],[1,60,528,"promissory_amount",10,10],
   [1,60,570,"balance_down_payment",10,10],[1,60,604,"total_purchase_price",10,10],
   [1,150,709,"buyer_name_footer",7,50],[1,150,727,"property_address_footer",7,50],
@@ -405,6 +405,7 @@ async function fillRPA(formState) {
       const val = (dealData[key] || "").toString().substring(0, maxChars);
       if (val) byPage[pg].push({ x, y: PAGE_H - yTop, text: val, size: fontSize });
     }
+    console.log("[RPA] Fields per page:", Object.fromEntries(Object.entries(byPage).map(([k,v])=>[k,v.length])));
 
     step = "TRAILER";
     const tail = rawStr.slice(-2000);
@@ -663,6 +664,14 @@ function toggleSection(n) { STATE.openSections[n]=!STATE.openSections[n]; render
 async function generatePDF() {
   STATE.generating = true; render();
   try {
+    console.log("[RPA] B/D/E values:", {
+      addl_deposit_amount: STATE.form.addl_deposit_amount,
+      addl_deposit_date: STATE.form.addl_deposit_date,
+      addl_deposit_will: STATE.form.addl_deposit_will,
+      assume_loan_amount: STATE.form.assume_loan_amount,
+      assume_loan_type: STATE.form.assume_loan_type,
+      promissory_amount: STATE.form.promissory_amount,
+    });
     const bytes = await fillRPA(STATE.form);
     STATE.pdfSize = bytes ? bytes.length : 0;
     const blob = new Blob([bytes], {type:'application/pdf'});
@@ -702,20 +711,21 @@ function updateFooter() {
     <span>Respond: <span class="val ${f.respond_by_date?"":"empty"}">${f.respond_by_date||"—"}</span></span>`;
 }
 
-function makeField(label, key, width, cls, type) {
+function makeField(label, key, width, cls, type, placeholder) {
   const val = STATE.form[key]||"";
   const w = width ? `width:${width}px` : "width:100%";
   const inputCls = cls ? `class="${cls}"` : "";
+  const ph = placeholder ? ` placeholder="${placeholder}"` : "";
   if (type === "textarea") {
     return `<div class="field" style="${w}"><label>${label}</label>
-      <textarea ${inputCls} rows="5" onchange="set('${key}',this.value)">${val}</textarea></div>`;
+      <textarea ${inputCls} rows="5" onchange="set('${key}',this.value)"${ph}>${val}</textarea></div>`;
   }
   if (type === "date") {
     return `<div class="field" style="${w}"><label>${label}</label>
-      <input type="date" ${inputCls} value="${val.replace(/"/g,'&quot;')}" onchange="set('${key}',this.value)"></div>`;
+      <input type="date" ${inputCls} value="${val.replace(/"/g,'&quot;')}" onchange="set('${key}',this.value)"${ph}></div>`;
   }
   return `<div class="field" style="${w}"><label>${label}</label>
-    <input ${inputCls} value="${val.replace(/"/g,'&quot;')}" oninput="set('${key}',this.value)"></div>`;
+    <input ${inputCls} value="${val.replace(/"/g,'&quot;')}" oninput="set('${key}',this.value)"${ph}></div>`;
 }
 
 function makeSelect(label, key, options, width) {
@@ -816,7 +826,7 @@ function render() {
     </div>
     <div class="note" style="margin-top:6px">B. Additional Deposit</div>
     <div class="row">
-      ${makeField("Additional Deposit ($)","addl_deposit_amount",140)}
+      ${makeField("Additional Deposit ($)","addl_deposit_amount",140,"","","e.g. 5000")}
       ${makeField("Deposit Date","addl_deposit_date",130,"date-input","date")}
       ${makeSelect("Will / Will Not","addl_deposit_will",[["will","Will"],["will_not","Will Not"]],120)}
     </div>
@@ -828,13 +838,13 @@ function render() {
     </div>
     <div class="note" style="margin-top:6px">D. Assumption of Existing Loan</div>
     <div class="row">
-      ${makeField("Assume Loan ($)","assume_loan_amount",140)}
+      ${makeField("Assume Loan ($)","assume_loan_amount",140,"","","e.g. 200000")}
       ${makeSelect("Type","assume_loan_type",[["","None"],["conventional","Conv"],["fha","FHA"],["va","VA"],["other","Other"]],110)}
       ${f.assume_loan_type==="other" ? makeField("Specify","assume_other_specify",160) : ""}
     </div>
     <div class="note" style="margin-top:6px">E. Seller Financing</div>
     <div class="row">
-      ${makeField("Promissory Note ($)","promissory_amount",140)}
+      ${makeField("Promissory Note ($)","promissory_amount",140,"","","e.g. 50000")}
     </div>
     <div class="note" style="margin-top:6px">F. Balance</div>
     <div class="row">
