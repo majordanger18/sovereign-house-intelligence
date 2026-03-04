@@ -331,6 +331,64 @@ function getRawTemplate() {
   return pdfBytes;
 }
 
+// Decompress FlateDecode stream data
+async function inflate(data) {
+  for (const fmt of ['deflate', 'deflate-raw']) {
+    try {
+      const ds = new DecompressionStream(fmt);
+      const w = ds.writable.getWriter(); w.write(data); w.close();
+      const r = ds.readable.getReader();
+      const ch = []; while (true) { const {done,value}=await r.read(); if(done)break; ch.push(value); }
+      let t=0; for(const c of ch) t+=c.length;
+      const out=new Uint8Array(t); let o=0; for(const c of ch){out.set(c,o);o+=c.length;} return out;
+    } catch(e) { continue; }
+  }
+  throw new Error('inflate failed');
+}
+
+// Extract objects from compressed ObjStm streams
+async function extractObjStm(objs, raw, rawStr) {
+  const objNums = Object.keys(objs).map(Number);
+  let extracted = 0;
+  for (const n of objNums) {
+    const b = objs[n].body;
+    if (!b.match(/\/Type\s*\/ObjStm/)) continue;
+    const nMatch = b.match(/\/N\s+(\d+)/), firstMatch = b.match(/\/First\s+(\d+)/);
+    if (!nMatch || !firstMatch) continue;
+    const numO = parseInt(nMatch[1]), firstOff = parseInt(firstMatch[1]);
+
+    // Find stream data in raw bytes
+    let mIdx = rawStr.indexOf(n + ' ' + objs[n].genNum + ' obj');
+    if (mIdx < 0) mIdx = rawStr.indexOf(n + ' 0 obj');
+    if (mIdx < 0) continue;
+    const sIdx = rawStr.indexOf('stream', mIdx);
+    if (sIdx < 0) continue;
+    let dStart = sIdx + 6;
+    if (raw[dStart] === 0x0D) dStart++;
+    if (raw[dStart] === 0x0A) dStart++;
+
+    const lenMatch = b.match(/\/Length\s+(\d+)/);
+    const dEnd = lenMatch ? dStart + parseInt(lenMatch[1]) : rawStr.indexOf('endstream', dStart);
+    if (dEnd <= dStart) continue;
+    const streamData = raw.slice(dStart, dEnd);
+
+    let dec;
+    try { dec = b.includes('/FlateDecode') ? await inflate(streamData) : streamData; } catch(e) { continue; }
+    const text = new TextDecoder('latin1').decode(dec);
+
+    const hdr = text.substring(0, firstOff).trim().split(/\s+/).map(Number);
+    for (let i = 0; i < numO; i++) {
+      const oNum = hdr[i*2], oOff = hdr[i*2+1];
+      if (isNaN(oNum) || isNaN(oOff)) continue;
+      const start = firstOff + oOff;
+      const end = (i+1 < numO) ? firstOff + hdr[(i+1)*2+1] : text.length;
+      objs[oNum] = { genNum: 0, body: text.substring(start, end).trim() };
+      extracted++;
+    }
+  }
+  return extracted;
+}
+
 // Scan raw PDF text for all objects (skipping stream data)
 function scanPdfObjects(rawStr) {
   const objs = {};
@@ -380,6 +438,19 @@ async function fillRPA(formState) {
     }
     pageObjs.sort((a, b) => a.objNum - b.objNum);
 
+    // If no pages found in top-level objects, decompress ObjStm
+    if (pageObjs.length === 0) {
+      step = "OBJSTM";
+      const extracted = await extractObjStm(objs, raw, rawStr);
+      for (const n of Object.keys(objs).map(Number)) {
+        const b = objs[n].body;
+        if (b.match(/\/Type\s*\/Page\b/) && !b.match(/\/Type\s*\/Pages\b/)) {
+          pageObjs.push({ objNum: n, genNum: objs[n].genNum, body: b });
+        }
+      }
+      pageObjs.sort((a, b) => a.objNum - b.objNum);
+    }
+
     step = "MAP";
     const byPage = {};
     for (const [pg, x, yTop, key, fontSize, maxChars] of FIELD_MAP) {
@@ -389,7 +460,7 @@ async function fillRPA(formState) {
     }
 
     step = "TRAILER";
-    const tail = rawStr.slice(-500);
+    const tail = rawStr.slice(-2000);
     const xrefMatch = tail.match(/startxref\s+(\d+)/);
     const prevXref = xrefMatch ? parseInt(xrefMatch[1]) : 0;
     const rootMatch = tail.match(/\/Root\s+(\d+)\s+(\d+)\s+R/);
@@ -397,7 +468,7 @@ async function fillRPA(formState) {
     const rootGenNum = rootMatch ? parseInt(rootMatch[2]) : 0;
     const sizeMatch = tail.match(/\/Size\s+(\d+)/);
     let maxObj = sizeMatch ? parseInt(sizeMatch[1]) : 0;
-    for (const n of objNums) { if (n >= maxObj) maxObj = n + 1; }
+    for (const n of Object.keys(objs).map(Number)) { if (n >= maxObj) maxObj = n + 1; }
 
     step = "BUILD";
     let nextObj = maxObj;
@@ -566,7 +637,7 @@ async function fillRPA(formState) {
       size: result.length,
       pages: pageObjs.length,
       newObjs: xrefEntries.length,
-      pgDebug: 'scanned:' + objNums.length + ' pages:' + pageObjs.length + ' streams:' + Object.keys(streams).length,
+      pgDebug: 'scanned:' + objNums.length + ' total:' + Object.keys(objs).length + ' pages:' + pageObjs.length + ' streams:' + Object.keys(streams).length,
     };
 
     return result;
