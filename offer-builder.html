@@ -718,19 +718,20 @@ async function sendForSignature() {
     const spaceIdx = agentFull.indexOf(" ");
     const listingAgentFirstName = spaceIdx > 0 ? agentFull.substring(0, spaceIdx) : agentFull;
     const listingAgentLastName = spaceIdx > 0 ? agentFull.substring(spaceIdx + 1) : "";
-    const res = await fetch("https://majordomain.app.n8n.cloud/webhook/rpa-sign", {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        pdfBase64,
-        address: STATE.form.property_address || "",
-        offerPrice: STATE.form.purchase_price || "",
-        listingAgentFirstName,
-        listingAgentLastName,
-        listingAgentEmail: STATE.form.listing_agent_email || ""
-      })
+    const payload = {
+      pdfBase64,
+      address: STATE.form.property_address || "",
+      offerPrice: STATE.form.purchase_price || "",
+      listingAgentFirstName,
+      listingAgentLastName,
+      listingAgentEmail: STATE.form.listing_agent_email || ""
+    };
+    await fetch('https://majordomain.app.n8n.cloud/webhook/rpa-sign', {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
     btn.textContent = "✓ Sent! Check your email to sign.";
     btn.style.background = "rgba(34,197,94,0.15)"; btn.style.borderColor = "rgba(34,197,94,0.4)"; btn.style.color = "#22c55e";
     isSending = false;
