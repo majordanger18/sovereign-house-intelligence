@@ -755,8 +755,9 @@ function render() {
       <div class="header">
         <div><div class="brand">Sovereign House</div><div class="title">Offer Builder</div></div>
         <div style="display:flex;gap:10px">
-          <button class="btn btn-outline" onclick="STATE.view='form';render()">◀ Back to Form</button>
+          <button class="btn btn-outline" onclick="STATE.view='form';render()">◀ Form</button>
           <button class="btn btn-primary" onclick="downloadPDF()">⬇ Download PDF</button>
+          <button class="btn btn-outline" onclick="window.close();if(!window.closed)window.location.href='index.html'">← Dashboard</button>
         </div>
       </div>
       <div style="padding:16px">
@@ -894,6 +895,7 @@ function render() {
     <div class="header">
       <div><div class="brand">Sovereign House</div><div class="title">Offer Builder</div></div>
       <div style="display:flex;gap:10px">
+        <button class="btn btn-outline" onclick="window.close();if(!window.closed)window.location.href='index.html'">← Back</button>
         <button class="btn btn-primary" ${!valid||STATE.generating?"disabled":""} onclick="generatePDF()">
           ${STATE.generating ? "⏳ Generating..." : "⚡ Generate RPA"}
         </button>

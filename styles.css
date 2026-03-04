@@ -14,7 +14,7 @@ input[type="range"]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;b
 @media(min-width:768px){.sheet{border-radius:20px;margin:40px auto;max-width:680px}}
 .handle{width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:8px auto 16px}
 @media(min-width:768px){.handle{display:none}}
-.close-x{position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:none;color:#94a3b8;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10}
+.close-x{position:absolute;top:12px;right:12px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.08);border:none;color:#e2e8f0;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10}
 .btn{display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;border-radius:12px;font-weight:700;min-height:48px;transition:transform .1s}
 .btn:active{transform:scale(0.97)}
 .tag{display:inline-flex;align-items:center;gap:3px;padding:4px 10px;border-radius:8px;font-size:11px;font-weight:650;white-space:nowrap}
