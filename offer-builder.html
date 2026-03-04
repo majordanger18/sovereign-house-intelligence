@@ -341,24 +341,45 @@ async function fillRPA(formState) {
     const raw = getRawTemplate();
 
     step = "PARSE";
-    // Use pdf-lib ONLY for parsing structure — we will NOT use save()
     const pdf = await PDFDocument.load(raw, { ignoreEncryption: true, updateMetadata: false });
 
-    // Collect pages with their refs and dicts
+    // embedFont triggers lazy initialization in pdf-lib's context
+    const font = await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
+
+    // Collect pages with their refs and dicts — with diagnostics
+    const _pgDebug = [];
     function collectPages(ref) {
       try {
         const node = pdf.context.lookup(ref);
-        if (!node || typeof node.get !== 'function') return [];
+        if (!node || typeof node.get !== 'function') {
+          _pgDebug.push('lookup-fail:' + String(ref));
+          return [];
+        }
         const type = node.get(PDFName.of('Type'));
-        if (type && type.toString() === '/Page') return [{ ref, dict: node }];
-        const kids = node.get(PDFName.of('Kids'));
-        if (!kids || typeof kids.size !== 'function') return [];
-        const result = [];
-        for (let i = 0; i < kids.size(); i++) result.push(...collectPages(kids.get(i)));
-        return result;
-      } catch(e) { return []; }
+        const typeStr = type ? type.toString() : 'none';
+        if (typeStr === '/Page') return [{ ref, dict: node }];
+        if (typeStr === '/Pages') {
+          const kids = node.get(PDFName.of('Kids'));
+          if (!kids || typeof kids.size !== 'function') {
+            _pgDebug.push('no-kids:' + typeStr);
+            return [];
+          }
+          _pgDebug.push('Pages-kids:' + kids.size());
+          const result = [];
+          for (let i = 0; i < kids.size(); i++) result.push(...collectPages(kids.get(i)));
+          return result;
+        }
+        _pgDebug.push('unknown-type:' + typeStr);
+        return [];
+      } catch(e) {
+        _pgDebug.push('error:' + e.message);
+        return [];
+      }
     }
-    const pages = collectPages(pdf.catalog.get(PDFName.of('Pages')));
+    const pagesRef = pdf.catalog.get(PDFName.of('Pages'));
+    _pgDebug.push('pagesRef:' + String(pagesRef));
+    const pages = collectPages(pagesRef);
+    _pgDebug.push('total:' + pages.length);
 
     step = "MAP";
     // Group text by page
@@ -558,8 +579,7 @@ async function fillRPA(formState) {
       size: result.length,
       pages: pages.length,
       newObjs: xrefEntries.length,
-      prevXref,
-      header: String.fromCharCode(...result.slice(0, 8)),
+      pgDebug: _pgDebug.join(' | '),
     };
 
     return result;
@@ -754,7 +774,8 @@ function render() {
           ERROR: ${STATE.rpaError}<br><span style="color:#888;font-size:10px">Showing raw template as fallback. Text overlay failed.</span>
         </div>` : ''}
         ${STATE.debugInfo ? `<div style="background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:10px;margin:8px 0;font-family:monospace;font-size:11px;color:#8be;word-break:break-all">
-          DEBUG: method=${STATE.debugInfo.saveMethod} | size=${STATE.debugInfo.size || STATE.pdfSize} | pages=${STATE.debugInfo.pages || '?'} | newObjs=${STATE.debugInfo.newObjs || '?'}
+          DEBUG: method=${STATE.debugInfo.saveMethod} | size=${STATE.debugInfo.size || STATE.pdfSize} | pages=${STATE.debugInfo.pages || '?'} | newObjs=${STATE.debugInfo.newObjs || '?'}<br>
+          PAGES: ${STATE.debugInfo.pgDebug || 'n/a'}
         </div>` : ''}
         <iframe src="${STATE.pdfUrl}" class="preview-frame"></iframe>
       </div>`;
