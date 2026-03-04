@@ -350,15 +350,20 @@ async function updateDealStatus(dealId,newStatus){
   tl.push(newEntry);
 
   try{
-    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:newStatus,timeline:tl})});
-    d.status=newStatus;d.timeline=tl;
-    // Surgical DOM update instead of full openDeal() re-render
-    const badge=document.getElementById("deal_statusBadge");
-    if(badge)badge.innerHTML=dealBadge(newStatus);
-    const btns=document.getElementById("deal_statusBtns");
-    if(btns)btns.innerHTML=renderStatusButtons(d);
-    const timeline=document.getElementById("dealTimeline");
-    if(timeline)timeline.insertAdjacentHTML("afterbegin",renderTimelineEntry(newEntry));
+    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:newStatus,timeline:tl,kill_reason:null})});
+    d.status=newStatus;d.timeline=tl;d.kill_reason=null;
+    // Full re-render if transitioning from dead status (layout changes entirely)
+    if(DEAD_STATUSES.includes(oldStatus)){
+      openDeal(dealId);
+    } else {
+      // Surgical DOM update for active→active transitions
+      const badge=document.getElementById("deal_statusBadge");
+      if(badge)badge.innerHTML=dealBadge(newStatus);
+      const btns=document.getElementById("deal_statusBtns");
+      if(btns)btns.innerHTML=renderStatusButtons(d);
+      const timeline=document.getElementById("dealTimeline");
+      if(timeline)timeline.insertAdjacentHTML("afterbegin",renderTimelineEntry(newEntry));
+    }
     renderDashboard();
   }catch(e){console.error("Status update failed:",e);}
 }
