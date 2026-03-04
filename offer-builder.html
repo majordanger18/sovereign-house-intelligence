@@ -232,8 +232,11 @@ function buildDealData(form) {
   const insp = form.inspections || {};
   const di = "BUYER";
 
+  const offerDateForPdf = fromISODate(form.offer_date) || form.offer_date || "";
+  const addlDateForPdf = fromISODate(form.addl_deposit_date) || form.addl_deposit_date || "";
+
   const data = {
-    date: form.offer_date||"", buyer_name: buyerName,
+    date: offerDateForPdf, buyer_name: buyerName,
     property_address_full: propAddr,
     city: form.city||"Las Vegas", county: form.county||"Clark",
     zip_code: form.zip_code||"", apn: form.apn||"",
@@ -247,7 +250,7 @@ function buildDealData(form) {
     emd_buyer_broker_x: form.emd_account==="buyer_broker"?"X":"",
     emd_seller_broker_x: form.emd_account==="seller_broker"?"X":"",
     addl_deposit_amount: form.addl_deposit_amount ? dollars(parseFloat(form.addl_deposit_amount.replace(/,/g,""))||0) : "",
-    addl_deposit_date: form.addl_deposit_date||"",
+    addl_deposit_date: addlDateForPdf,
     addl_deposit_will_x: form.addl_deposit_will==="will"?"X":"",
     addl_deposit_will_not_x: form.addl_deposit_will==="will_not"&&form.addl_deposit_amount?"X":"",
     loan_amount: dollars(loan),
@@ -316,7 +319,7 @@ function buildDealData(form) {
     respond_time:rTime,
     respond_am_x:(!isPM&&rTime)?"X":"", respond_pm_x:(isPM&&rTime)?"X":"",
     respond_month:rMonth, respond_day:rDay, respond_year:rYear,
-    buyer1_printed_name:buyerName, buyer1_sign_date:form.offer_date||"",
+    buyer1_printed_name:buyerName, buyer1_sign_date:offerDateForPdf,
     buyer1_sign_time:rTime,
     buyer1_am_x:(!isPM&&rTime)?"X":"", buyer1_pm_x:(isPM&&rTime)?"X":"",
     buyer2_printed_name:"",buyer2_sign_date:"",buyer2_sign_time:"",buyer2_am_x:"",buyer2_pm_x:"",
@@ -592,7 +595,7 @@ const STATE = {
   generating: false,
   form: {
     buyer_name: "Sovereign House LLC",
-    offer_date: new Date().toLocaleDateString("en-US",{month:"2-digit",day:"2-digit",year:"numeric"}),
+    offer_date: new Date().toISOString().slice(0,10),
     property_address: "", city: "Las Vegas", county: "Clark",
     zip_code: "", apn: "", purchase_price: "",
     occupy: false,
@@ -607,7 +610,7 @@ const STATE = {
     escrow_company: "Nevada Title Company", escrow_officer: "",
     coe_date: "", due_diligence: true, due_diligence_days: "15",
     walkthrough_days: "5", hpp: "waive", possession: "coe",
-    pre_1978: false, buyer_initials: "SH",
+    pre_1978: false, buyer_initials: "",
     fee_escrow:"50/50",fee_lenders_title:"BUYER",fee_owners_title:"SELLER",fee_rptt:"SELLER",fee_appraisal:"BUYER",
     cic_demand:"SELLER",cic_capital:"SELLER",cic_final_insp:"SELLER",cic_transfer:"SELLER",
     disc_srpd: true,
@@ -795,7 +798,7 @@ function render() {
     </div>
     <div class="row">
       ${makeField("Purchase Price ($)","purchase_price",160,"price-input")}
-      ${makeField("Offer Date","offer_date",130)}
+      ${makeField("Offer Date","offer_date",130,"date-input","date")}
       ${makeField("Buyer Name","buyer_name",220)}
     </div>
     <div class="row">
@@ -814,7 +817,7 @@ function render() {
     <div class="note" style="margin-top:6px">B. Additional Deposit</div>
     <div class="row">
       ${makeField("Additional Deposit ($)","addl_deposit_amount",140)}
-      ${makeField("Deposit Date","addl_deposit_date",130)}
+      ${makeField("Deposit Date","addl_deposit_date",130,"date-input","date")}
       ${makeSelect("Will / Will Not","addl_deposit_will",[["will","Will"],["will_not","Will Not"]],120)}
     </div>
     <div class="note" style="margin-top:6px">C. New Loan</div>
@@ -918,7 +921,7 @@ function render() {
       ${makeField("City/State/ZIP","buyers_city_state_zip",160)}
     </div>
     <div style="margin-top:4px">${makeToggle("Licensee has interest in principal","licensee_interest")}</div>
-    ${f.licensee_interest ? `<div class="row">${makeField("Relationship","licensee_relationship",300)}${makeField("Buyer Initials","buyer_initials",80)}</div>` : ""}`);
+    ${f.licensee_interest ? `<div class="row">${makeField("Relationship","licensee_relationship",300)}</div>` : ""}`);
 
   app.innerHTML = `
     <div class="header">
@@ -957,7 +960,7 @@ document.addEventListener("DOMContentLoaded", function(){
         }
         return s;
       }
-      const dateFields = ["coe_date","respond_by_date"];
+      const dateFields = ["coe_date","respond_by_date","offer_date","addl_deposit_date"];
       // Merge prefill data into form state
       for (const [key, val] of Object.entries(data)) {
         if (key === "inspections" && typeof val === "object") {
