@@ -2,7 +2,7 @@
 // ═══ DATA ═══
 async function loadData(){
   try{
-    const[p,w,a,ua,d]=await Promise.all([sb("properties?status=neq.Closed&order=sovereign_score.desc"),sb("watchlist?status=eq.Watching"),sb("alerts?is_read=eq.false&order=created_at.desc&limit=50"),sb("underwriting_analyses?select=property_id,verdict,profit_target,roi_target,max_offer_price,max_offer_raw,max_offer_tier,max_offer_flag,max_offer_discount_pct,list_price,created_at&order=created_at.desc"),sb("deals?order=updated_at.desc")]);
+    const[p,w,a,ua,d]=await Promise.all([sb("properties?status=neq.Closed&listing_status=neq.Gone&order=sovereign_score.desc"),sb("watchlist?status=eq.Watching"),sb("alerts?is_read=eq.false&order=created_at.desc&limit=50"),sb("underwriting_analyses?select=property_id,verdict,profit_target,roi_target,max_offer_price,max_offer_raw,max_offer_tier,max_offer_flag,max_offer_discount_pct,list_price,created_at&order=created_at.desc"),sb("deals?order=updated_at.desc")]);
     props=Array.isArray(p)?p:[];
     deals=Array.isArray(d)?d:[];
     const wm={},ws=new Set();
@@ -36,7 +36,7 @@ async function checkHealth(){
 }
 
 function renderDashboard(){
-  const activeProps=props.filter(p=>!isPend(p));
+  const activeProps=props.filter(p=>!isPend(p)&&p.listing_status!=='Gone');
   const st={total:activeProps.length,hot:activeProps.filter(p=>(p.sovereign_score||0)>=60).length,watched:watchIds.size,
     reduced:activeProps.filter(p=>p.original_list_price&&p.list_price<p.original_list_price).length,
     pool:activeProps.filter(p=>p.pool).length,
@@ -111,6 +111,7 @@ function renderList(){
   const sortBy=document.getElementById("sortBox").value;
   let list=[...props];
   list=list.filter(p=>{
+    if(p.listing_status==='Gone')return false;
     if(view==="pending"){if(!isPend(p))return false;if(q)return(p.address||"").toLowerCase().includes(q)||(p.mls_number||"").toLowerCase().includes(q)||(p.zip_code||"").includes(q);return true;}
     if(view!=="pending"&&view!=="go"&&view!=="maybe"&&isPend(p))return false;
     if(view==="watched"&&!watchIds.has(p.id))return false;
