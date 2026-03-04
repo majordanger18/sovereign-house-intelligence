@@ -18,6 +18,39 @@ const DEAL_STAGES={
   expired:{label:"Expired",color:"#64748b",icon:"⏰"}
 };
 const DEAD_STATUSES=["closed","rejected","withdrawn","expired"];
+const LOST_STATUSES=["rejected","withdrawn","expired"];
+
+function fireConfetti(){
+  const canvas=document.createElement("canvas");
+  canvas.style.cssText="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:99999";
+  document.body.appendChild(canvas);
+  const ctx=canvas.getContext("2d");
+  canvas.width=window.innerWidth;canvas.height=window.innerHeight;
+  const colors=["#d4af37","#22c55e","#3b82f6","#f59e0b","#a855f7","#ef4444","#e0c97f","#10b981"];
+  const pieces=[];
+  for(let i=0;i<150;i++){
+    pieces.push({x:canvas.width*Math.random(),y:canvas.height*-0.2*Math.random(),w:6+Math.random()*6,h:4+Math.random()*4,color:colors[Math.floor(Math.random()*colors.length)],vx:(Math.random()-0.5)*8,vy:2+Math.random()*4,rot:Math.random()*360,vr:(Math.random()-0.5)*12,life:1});
+  }
+  let frame=0;
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    let alive=false;
+    pieces.forEach(p=>{
+      if(p.life<=0)return;
+      alive=true;
+      p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.rot+=p.vr;
+      if(frame>60)p.life-=0.015;
+      ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot*Math.PI/180);
+      ctx.globalAlpha=Math.max(0,p.life);
+      ctx.fillStyle=p.color;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+      ctx.restore();
+    });
+    frame++;
+    if(alive&&frame<300)requestAnimationFrame(draw);
+    else canvas.remove();
+  }
+  draw();
+}
 
 function dealBadge(status){
   const s=DEAL_STAGES[status]||{label:status,color:"#64748b",icon:"?"};
@@ -26,7 +59,8 @@ function dealBadge(status){
 
 function renderDeals(){
   const active=deals.filter(d=>!DEAD_STATUSES.includes(d.status));
-  const dead=deals.filter(d=>DEAD_STATUSES.includes(d.status));
+  const won=deals.filter(d=>d.status==="closed");
+  const lost=deals.filter(d=>LOST_STATUSES.includes(d.status));
 
   if(!deals.length){
     document.getElementById("countLabel").textContent="0 deals";
@@ -34,7 +68,7 @@ function renderDeals(){
     return;
   }
 
-  document.getElementById("countLabel").textContent=`${active.length} active · ${dead.length} closed/dead`;
+  document.getElementById("countLabel").textContent=`${active.length} active${won.length?' · '+won.length+' won':''}${lost.length?' · '+lost.length+' dead':''}`;
 
   let html='';
 
@@ -91,10 +125,36 @@ function renderDeals(){
     }).join('');
   }
 
-  // ── DEAD DEALS ──
-  if(dead.length){
-    html+=`<div style="grid-column:1/-1;margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06)"><div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:2px;margin-bottom:8px">CLOSED / DEAD (${dead.length})</div></div>`;
-    html+=dead.map(d=>{
+  // ── WON DEALS (Projects) ──
+  if(won.length){
+    html+=`<div style="grid-column:1/-1;margin-top:16px;padding-top:16px;border-top:1px solid rgba(212,175,55,0.15)"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:8px">🏆 WON — ACTIVE PROJECTS (${won.length})</div></div>`;
+    html+=won.map(d=>{
+      const finalPrice=d.accepted_price||d.offer_price||0;
+      const profit=d.projected_profit_target||0;
+      return`<div class="card" onclick="openDeal('${d.id}')" style="border-left:3px solid #d4af37;background:linear-gradient(135deg,rgba(212,175,55,0.06),rgba(16,185,129,0.04));border:1px solid rgba(212,175,55,0.15)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:800;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🏆 ${esc(d.address)}</div>
+            <div style="font-size:10px;color:#64748b;margin-top:2px">${d.community?esc(d.community)+' · ':''}${d.zip_code||''}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:14px;font-weight:800;color:#d4af37">${$k(finalPrice)}</div>
+            <div style="font-size:10px;color:#22c55e;font-weight:700">${$k(profit)} profit</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+          <span style="font-size:9px;color:#d4af37;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.2);padding:2px 8px;border-radius:6px;font-weight:800">DEAL WON</span>
+          ${d.coe_date?`<span style="font-size:9px;color:#94a3b8">COE ${new Date(d.coe_date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>`:''}
+          ${d.accepted_commission_pct!=null?`<span style="font-size:9px;color:#d4af37">Lisa ${d.accepted_commission_pct}%</span>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── LOST DEALS ──
+  if(lost.length){
+    html+=`<div style="grid-column:1/-1;margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06)"><div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:2px;margin-bottom:8px">DEAD (${lost.length})</div></div>`;
+    html+=lost.map(d=>{
       return`<div class="card" onclick="openDeal('${d.id}')" style="opacity:0.5;border-left:3px solid ${(DEAL_STAGES[d.status]||{}).color||'#64748b'}">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div style="flex:1;min-width:0">
@@ -299,6 +359,8 @@ async function updateDealStatus(dealId,newStatus){
     const timeline=document.getElementById("dealTimeline");
     if(timeline)timeline.insertAdjacentHTML("afterbegin",renderTimelineEntry(newEntry));
     renderDashboard();
+    // Celebrate a won deal!
+    if(newStatus==="closed")fireConfetti();
   }catch(e){console.error("Status update failed:",e);}
 }
 
