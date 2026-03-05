@@ -192,7 +192,6 @@ async function openDeal(dealId){
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px">DEAL TRACKER</div>
         <span id="deal_statusBadge">${dealBadge(d.status)}</span>
-        <button onclick="deleteDeal('${d.id}')" style="margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.06);color:#ef4444;font-size:9px;font-weight:700;cursor:pointer">🗑 Delete</button>
       </div>
       <div style="font-size:18px;font-weight:800;margin-top:2px">${esc(d.address)}</div>
       <div style="font-size:11px;color:#64748b;margin-top:2px">${d.community?esc(d.community)+' · ':''}${d.zip_code||''} · MLS# ${d.mls_number||'?'}</div>
@@ -302,6 +301,11 @@ async function openDeal(dealId){
     <div style="display:flex;gap:6px;margin-bottom:16px">
       <input id="deal_note" class="cinput" placeholder="Add a note to timeline..." style="flex:1;font-size:12px;min-height:40px"/>
       <button onclick="addDealNote('${d.id}')" class="btn" style="padding:8px 14px;font-size:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;font-weight:700;white-space:nowrap">+ Note</button>
+    </div>
+
+    <!-- DELETE DEAL -->
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid rgba(239,68,68,0.12)">
+      <button onclick="deleteDeal('${d.id}')" style="width:100%;padding:10px;border-radius:10px;border:1px solid rgba(239,68,68,0.2);background:transparent;color:#ef4444;font-size:12px;font-weight:700;cursor:pointer">Delete Deal</button>
     </div>
 
   </div>`;
