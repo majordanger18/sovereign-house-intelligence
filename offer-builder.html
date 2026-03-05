@@ -1238,6 +1238,9 @@ document.addEventListener("DOMContentLoaded", function(){
       for (const [key, val] of Object.entries(data)) {
         if (key === "inspections" && typeof val === "object") {
           Object.assign(STATE.form.inspections, val);
+        } else if (key === "parcel_number" && !data.apn) {
+          // Map parcel_number → apn if apn wasn't explicitly provided
+          STATE.form.apn = val;
         } else if (key in STATE.form) {
           STATE.form[key] = dateFields.includes(key) ? toISODate(val) : val;
         }

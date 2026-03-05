@@ -70,6 +70,8 @@ function openRPABuilder(id){
 
 function openRPAFromDeal(dealId){
   const d=deals.find(x=>x.id===dealId);if(!d)return;
+  // Look up the original property to get parcel_number (deals don't store it)
+  const prop=props.find(x=>x.id===d.property_id);
   const oPrice=d.accepted_price||d.offer_price||0;
   const emd=d.emd_amount||Math.round(oPrice*0.01);
   const coeDays=d.close_of_escrow_days||30;
@@ -82,7 +84,7 @@ function openRPAFromDeal(dealId){
 
   const rpaData={
     property_address:(d.address||"")+", "+(d.city||"Las Vegas")+", NV "+(d.zip_code||""),
-    city:d.city||"Las Vegas", county:"Clark", zip_code:d.zip_code||"", apn:d.parcel_number||d.apn||"",
+    city:d.city||"Las Vegas", county:"Clark", zip_code:d.zip_code||"", apn:prop?.parcel_number||d.parcel_number||d.apn||"",
     purchase_price:String(oPrice),
     offer_date:new Date().toLocaleDateString("en-US",{month:"2-digit",day:"2-digit",year:"numeric"}),
     buyer_name:"Sovereign House LLC", occupy:false,
