@@ -698,58 +698,7 @@ async function fillRPA(formState) {
     let pos = raw.length;
     for (const chunk of chunks) { result.set(chunk, pos); pos += chunk.length; }
 
-    // --- INKLESS SIGNATURE TAGS ---
-    step = "INKLESS";
-    const inklessTags = [
-      { page: 1, x: 430, y: 707, tag: '\\i1\\' },
-      { page: 1, x: 468, y: 707, tag: '\\i2\\' },
-      { page: 2, x: 430, y: 739, tag: '\\i1\\' },
-      { page: 2, x: 468, y: 739, tag: '\\i2\\' },
-      { page: 3, x: 430, y: 739, tag: '\\i1\\' },
-      { page: 3, x: 468, y: 739, tag: '\\i2\\' },
-      { page: 4, x: 300, y: 130, tag: '\\i1\\' },
-      { page: 4, x: 343, y: 130, tag: '\\i2\\' },
-      { page: 4, x: 430, y: 739, tag: '\\i1\\' },
-      { page: 4, x: 468, y: 739, tag: '\\i2\\' },
-      { page: 5, x: 430, y: 739, tag: '\\i1\\' },
-      { page: 5, x: 468, y: 739, tag: '\\i2\\' },
-      { page: 6, x: 430, y: 739, tag: '\\i1\\' },
-      { page: 6, x: 468, y: 739, tag: '\\i2\\' },
-      { page: 7, x: 210, y: 82, tag: '\\i1\\' },
-      { page: 7, x: 248, y: 83, tag: '\\i2\\' },
-      { page: 7, x: 430, y: 739, tag: '\\i1\\' },
-      { page: 7, x: 468, y: 739, tag: '\\i2\\' },
-      { page: 8, x: 430, y: 739, tag: '\\i1\\' },
-      { page: 8, x: 468, y: 739, tag: '\\i2\\' },
-      { page: 9, x: 430, y: 739, tag: '\\i1\\' },
-      { page: 9, x: 468, y: 739, tag: '\\i2\\' },
-      { page: 10, x: 70, y: 324, tag: '\\s1\\' },
-      { page: 10, x: 340, y: 324, tag: '\\d1\\' },
-      { page: 10, x: 70, y: 370, tag: '\\s2\\' },
-      { page: 10, x: 340, y: 370, tag: '\\d2\\' },
-      { page: 10, x: 430, y: 739, tag: '\\i1\\' },
-      { page: 10, x: 468, y: 739, tag: '\\i2\\' },
-      { page: 11, x: 430, y: 739, tag: '\\i1\\' },
-      { page: 11, x: 468, y: 739, tag: '\\i2\\' },
-    ];
-    const pdfDoc = await PDFLib.PDFDocument.load(result);
-    const tagFont = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
-    const allPages = pdfDoc.getPages();
-    for (const t of inklessTags) {
-      const pg = allPages[t.page - 1];
-      const pageHeight = pg.getHeight();
-      pg.drawText(t.tag, {
-        x: t.x,
-        y: pageHeight - t.y,
-        size: 2,
-        font: tagFont,
-        color: PDFLib.rgb(1, 1, 1),
-      });
-    }
-    const finalBytes = await pdfDoc.save();
-    // --- END INKLESS TAGS ---
-
-    return new Uint8Array(finalBytes);
+    return result;
   } catch(e) {
     throw new Error("[" + step + "] " + e.message);
   }
