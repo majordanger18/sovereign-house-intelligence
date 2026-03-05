@@ -111,7 +111,9 @@ const FIELD_MAP = [
   [1,255,464,"assume_other_x",8,1],
   [1,370,464,"assume_other_specify",9,30],
   [1,162,487,"loan_fixed_x",8,1],
+  [1,220,487,"loan_fixed_years",9,6],
   [1,301,487,"loan_adjustable_x",8,1],
+  [1,380,487,"loan_adjustable_years",9,6],
   [1,63,535,"promissory_amount",10,10],
   [1,63,569,"balance_down_payment",10,10],
   [1,63,603,"total_purchase_price",10,10],
@@ -139,29 +141,29 @@ const FIELD_MAP = [
   [3,480,361,"due_diligence_days",10,4],
   [3,150,741,"buyer_name_footer",7,50],
   [3,150,759,"property_address_footer",7,50],
-  // Page 4
+  // Page 4 (first inspection column x shifted left 4pts)
   [4,387,294,"insp_termite",8,8],
   [4,553,294,"insp_soil",8,8],
-  [4,237,295,"insp_home",8,8],
-  [4,238,307,"insp_pool",8,8],
+  [4,233,295,"insp_home",8,8],
+  [4,234,307,"insp_pool",8,8],
   [4,553,307,"insp_survey",8,8],
   [4,387,308,"insp_pest",8,8],
-  [4,238,319,"insp_roof",8,8],
+  [4,234,319,"insp_roof",8,8],
   [4,388,319,"insp_septic_lid",8,8],
   [4,553,319,"insp_fungal",8,8],
   [4,388,330,"insp_septic_pump",8,8],
   [4,553,331,"insp_air_quality",8,8],
-  [4,237,332,"insp_hvac",8,8],
+  [4,233,332,"insp_hvac",8,8],
   [4,388,343,"insp_septic_insp",8,8],
-  [4,238,345,"insp_electrical",8,8],
+  [4,234,345,"insp_electrical",8,8],
   [4,552,345,"insp_radon",8,8],
-  [4,238,365,"insp_plumbing",8,8],
+  [4,234,365,"insp_plumbing",8,8],
   [4,554,365,"insp_lead_paint_test",8,8],
   [4,387,366,"insp_well",8,8],
-  [4,237,386,"insp_structural",8,8],
+  [4,233,386,"insp_structural",8,8],
   [4,387,387,"insp_water_quality",8,8],
   [4,554,387,"insp_elevator",8,8],
-  [4,237,410,"insp_chimney",8,8],
+  [4,233,410,"insp_chimney",8,8],
   [4,387,411,"insp_water_quantity",8,8],
   [4,553,411,"insp_other",8,8],
   [4,520,669,"fee_owners_title",8,8],
@@ -379,7 +381,7 @@ function buildDealData(form) {
     assume_va_x: form.assume_loan_type==="va"?"X":"",
     assume_other_x: form.assume_loan_type==="other"?"X":"",
     assume_other_specify: form.assume_loan_type==="other"?(form.assume_other_specify||""):"",
-    loan_fixed_x:"",loan_adjustable_x:"",
+    loan_fixed_x:"",loan_fixed_years:"N/A",loan_adjustable_x:"",loan_adjustable_years:"N/A",
     promissory_amount: form.promissory_amount ? dollars(parseFloat(form.promissory_amount.replace(/,/g,""))||0) : "",
     balance_down_payment: dollars(balance), total_purchase_price: dollars(price),
     buyer_name_footer: buyerName, property_address_footer: propAddr,
@@ -438,7 +440,7 @@ function buildDealData(form) {
     buyer1_printed_name:buyerName, buyer1_sign_date:offerDateForPdf,
     buyer1_sign_time:rTime,
     buyer1_am_x:(!isPM&&rTime)?"X":"", buyer1_pm_x:(isPM&&rTime)?"X":"",
-    buyer2_printed_name:"",buyer2_sign_date:"",buyer2_sign_time:"",buyer2_am_x:"",buyer2_pm_x:"",
+    buyer2_printed_name:form.buyer2_printed_name||"",buyer2_sign_date:form.buyer2_sign_date||offerDateForPdf,buyer2_sign_time:form.buyer2_sign_time||rTime,buyer2_am_x:(!isPM&&rTime)?"X":"",buyer2_pm_x:(isPM&&rTime)?"X":"",
     sellers_broker_name:form.listing_broker_name||form.listing_company||"",
     sellers_agent_name:form.listing_agent_name||"",
     sellers_company_name:form.listing_company||"",
@@ -805,6 +807,7 @@ const STATE = {
     buyers_email:"Lisa@lisaahunt.com", buyers_city_state_zip:"Las Vegas, NV",
     licensee_interest: true, licensee_relationship: "Managing Partner of Buyer entity",
     buyers_agent_license:"",buyers_broker_license:"",buyers_office_address:"",
+    buyer2_printed_name: "Lisa A. Hunt", buyer2_sign_date: "", buyer2_sign_time: "",
   },
   openSections: {1:true,2:true,3:true},
 };
@@ -1185,6 +1188,14 @@ function render() {
     <div style="margin-top:4px">${makeToggle("Licensee has interest in principal","licensee_interest")}</div>
     ${f.licensee_interest ? `<div class="row">${makeField("Relationship","licensee_relationship",300)}</div>` : ""}`);
 
+  const s9 = section(9, "Buyer Signatures", `
+    <div class="note">Buyer 1 (King J) — auto-filled from Buyer Name above</div>
+    <div class="row">
+      ${makeField("Buyer 2 Printed Name","buyer2_printed_name",200)}
+      ${makeField("Buyer 2 Sign Date","buyer2_sign_date",140,"","input")}
+      ${makeField("Buyer 2 Sign Time","buyer2_sign_time",120)}
+    </div>`);
+
   app.innerHTML = `
     <div class="header">
       <div><div class="brand">Sovereign House</div><div class="title">Offer Builder</div></div>
@@ -1197,7 +1208,7 @@ function render() {
     </div>
     <div class="container">
       ${validationBar}
-      ${s1}${s2}${s3}${s4}${s5}${s6}${s7}${s8}
+      ${s1}${s2}${s3}${s4}${s5}${s6}${s7}${s8}${s9}
     </div>
     <div class="footer">
       <span>Price: <span class="val ${pp?"gold":"empty"}">$${pp?pp.toLocaleString():"—"}</span></span>
