@@ -853,9 +853,8 @@ async function sendForSignature() {
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload)
     });
-    btn.textContent = "✓ Sent! Check your email to sign.";
+    btn.textContent = "Sent ✓";
     btn.style.background = "rgba(34,197,94,0.15)"; btn.style.borderColor = "rgba(34,197,94,0.4)"; btn.style.color = "#22c55e";
-    isSending = false;
   } catch (e) {
     console.error("[RPA] Send for signature error:", e);
     btn.textContent = "✗ Send failed — try again";
