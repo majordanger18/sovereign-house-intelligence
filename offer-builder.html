@@ -410,6 +410,42 @@ async function fillRPA(formState) {
     }
     console.log("[RPA] Fields per page:", Object.fromEntries(Object.entries(byPage).map(([k,v])=>[k,v.length])));
 
+    // --- INKLESS SIGNATURE TAGS (white text — invisible but parseable) ---
+    const inklessTags = [
+      { page: 1, x: 500, y: 745, tag: '\\s1\\' },
+      { page: 1, x: 530, y: 745, tag: '\\i1\\' },
+      { page: 1, x: 500, y: 755, tag: '\\i2\\' },
+      { page: 2, x: 500, y: 745, tag: '\\i1\\' },
+      { page: 2, x: 500, y: 755, tag: '\\i2\\' },
+      { page: 3, x: 500, y: 745, tag: '\\i1\\' },
+      { page: 3, x: 500, y: 755, tag: '\\i2\\' },
+      { page: 4, x: 500, y: 745, tag: '\\i1\\' },
+      { page: 4, x: 500, y: 755, tag: '\\i2\\' },
+      { page: 5, x: 500, y: 745, tag: '\\i1\\' },
+      { page: 5, x: 500, y: 755, tag: '\\i2\\' },
+      { page: 6, x: 500, y: 745, tag: '\\i1\\' },
+      { page: 6, x: 500, y: 755, tag: '\\i2\\' },
+      { page: 7, x: 500, y: 745, tag: '\\i1\\' },
+      { page: 7, x: 500, y: 755, tag: '\\i2\\' },
+      { page: 8, x: 500, y: 745, tag: '\\i1\\' },
+      { page: 8, x: 500, y: 755, tag: '\\i2\\' },
+      { page: 9, x: 500, y: 745, tag: '\\i1\\' },
+      { page: 9, x: 500, y: 755, tag: '\\i2\\' },
+      { page: 10, x: 70, y: 310, tag: '\\s1\\' },
+      { page: 10, x: 340, y: 310, tag: '\\d1\\' },
+      { page: 10, x: 70, y: 356, tag: '\\s2\\' },
+      { page: 10, x: 340, y: 356, tag: '\\d2\\' },
+    ];
+    const inklessByPage = {};
+    for (const t of inklessTags) {
+      if (!inklessByPage[t.page]) inklessByPage[t.page] = [];
+      inklessByPage[t.page].push(t);
+    }
+    for (const pg of Object.keys(inklessByPage)) {
+      if (!byPage[pg]) byPage[pg] = [];
+    }
+    // --- END INKLESS TAG DEFINITIONS ---
+
     step = "TRAILER";
     const tail = rawStr.slice(-2000);
     const xrefMatch = tail.match(/startxref\s+(\d+)/);
@@ -429,11 +465,21 @@ async function fillRPA(formState) {
     const streams = {};
     for (const [pgStr, fields] of Object.entries(byPage)) {
       const pgIdx = parseInt(pgStr) - 1;
-      if (pgIdx < 0 || pgIdx >= pageObjs.length || fields.length === 0) continue;
+      const hasInkless = !!inklessByPage[pgStr];
+      if (pgIdx < 0 || pgIdx >= pageObjs.length || (fields.length === 0 && !hasInkless)) continue;
       let sc = 'q\n';
       for (const f of fields) {
         const t = f.text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
         sc += 'BT /F_SH ' + f.size + ' Tf 1 0 0 1 ' + f.x + ' ' + f.y + ' Tm (' + t + ') Tj ET\n';
+      }
+      // Inkless signature tags — white text (invisible but parseable)
+      if (hasInkless) {
+        sc += '1 1 1 rg\n';
+        for (const t of inklessByPage[pgStr]) {
+          const tt = t.tag.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+          sc += 'BT /F_SH 2 Tf 1 0 0 1 ' + t.x + ' ' + (PAGE_H - t.y) + ' Tm (' + tt + ') Tj ET\n';
+        }
+        sc += '0 0 0 rg\n';
       }
       sc += 'Q\n';
       streams[pgIdx] = { objNum: nextObj++, content: sc };
