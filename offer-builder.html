@@ -324,8 +324,7 @@ function buildDealData(form) {
   const propAddr = form.property_address || "";
   const loanType = (form.loan_type||"other").toLowerCase();
 
-  // Parse additional terms into lines
-  let terms = (form.additional_terms||"").split("\n").filter(s=>s.trim());
+  const mlsNum = form.mls_number || "";
 
   // Convert YYYY-MM-DD → MM/DD/YYYY for PDF, also handle existing M/D/YYYY
   function fromISODate(s) {
@@ -348,7 +347,6 @@ function buildDealData(form) {
   }
 
   const insp = form.inspections || {};
-  const di = "BUYER";
 
   const offerDateForPdf = fromISODate(form.offer_date) || form.offer_date || "";
   const addlDateForPdf = fromISODate(form.addl_deposit_date) || form.addl_deposit_date || "";
@@ -356,13 +354,13 @@ function buildDealData(form) {
   const data = {
     date: offerDateForPdf, buyer_name: buyerName,
     property_address_full: propAddr,
-    city: form.city||"Las Vegas", county: form.county||"Clark",
+    city: form.city||"Las Vegas", county: "CLARK",
     zip_code: form.zip_code||"", apn: form.apn||"",
     purchase_price: dollars(price), purchase_price_written: numberToWords(price),
     occupy_does_x: form.occupy ? "X" : "", occupy_not_x: form.occupy ? "" : "X",
     emd_amount: dollars(emd),
     emd_check_x: form.emd_type==="check"?"X":"", emd_wire_x: form.emd_type==="wire"?"X":"",
-    emd_other_x: form.emd_type==="other"?"X":"",
+    emd_other_x: "N/A",
     emd_deposit_days: form.emd_deposit_days||"2",
     emd_escrow_x: form.emd_account==="escrow"?"X":"",
     emd_buyer_broker_x: form.emd_account==="buyer_broker"?"X":"",
@@ -374,7 +372,7 @@ function buildDealData(form) {
     loan_amount: loan ? dollars(loan) : "0.00",
     loan_conv_x: loanType==="conventional"?"X":"", loan_fha_x: loanType==="fha"?"X":"",
     loan_va_x: loanType==="va"?"X":"", loan_other_x: loanType==="other"?"X":"",
-    loan_other_specify: loanType==="other"?(form.loan_other_specify||""):"",
+    loan_other_specify: "HARD MONEY LOAN",
     assume_loan_amount: form.assume_loan_amount ? dollars(parseFloat(form.assume_loan_amount.replace(/,/g,""))||0) : "0.00",
     assume_conv_x: form.assume_loan_type==="conventional"?"X":"",
     assume_fha_x: form.assume_loan_type==="fha"?"X":"",
@@ -385,25 +383,25 @@ function buildDealData(form) {
     promissory_amount: form.promissory_amount ? dollars(parseFloat(form.promissory_amount.replace(/,/g,""))||0) : "0.00",
     balance_down_payment: dollars(balance), total_purchase_price: dollars(price),
     buyer_name_footer: buyerName, property_address_footer: propAddr,
-    buyer_broker_pct: form.buyer_broker_pct||"3", buyer_broker_flat:"N/A",
+    buyer_broker_pct: form.buyer_broker_pct||"2.5", buyer_broker_flat:"N/A",
     loan_app_days: form.loan_app_days||"N/A",
     appraisal_days: form.appraisal_days||"N/A",
     loan_contingency_days: form.loan_contingency_days||"-",
     cash_purchase_days:"1", sale_contingent_x:"",
-    personal_property_1:"PER MLS# ALL EXISTING APPLIANCES",personal_property_2:"",personal_property_3:"",
+    personal_property_1:"PER MLS #" + mlsNum + " ALL EXISTING APPLIANCES",personal_property_2:"",personal_property_3:"",
     escrow_company: form.escrow_company||"", escrow_officer: form.escrow_officer||"",
     coe_date: coeForPdf||"",
     due_diligence_is_x: form.due_diligence?"X":"", due_diligence_not_x: form.due_diligence?"":"X",
     due_diligence_days: form.due_diligence_days||"12",
     buyer_initials_8c: form.buyer_initials||"",
-    insp_home:insp.home||di, insp_termite:insp.termite||di, insp_soil:insp.soil||"N/A",
-    insp_pool:insp.pool||di, insp_pest:insp.pest||di, insp_survey:insp.survey||"",
-    insp_roof:insp.roof||di, insp_septic_lid:insp.septic_lid||"", insp_fungal:insp.fungal||"",
-    insp_hvac:insp.hvac||di, insp_septic_pump:insp.septic_pump||"", insp_air_quality:insp.air_quality||"",
-    insp_electrical:insp.electrical||di, insp_septic_insp:insp.septic_insp||"", insp_radon:insp.radon||"",
-    insp_plumbing:insp.plumbing||di, insp_well:insp.well||"", insp_lead_paint_test:insp.lead_paint_test||"",
-    insp_structural:insp.structural||di, insp_water_quality:insp.water_quality||"", insp_elevator:insp.elevator||"",
-    insp_chimney:insp.chimney||"N/A", insp_water_quantity:insp.water_quantity||"", insp_other:insp.other||"",
+    insp_home:insp.home||"Buyer", insp_termite:insp.termite||"Waived", insp_soil:insp.soil||"Waived",
+    insp_pool:insp.pool||"Buyer", insp_pest:insp.pest||"Waived", insp_survey:insp.survey||"Waived",
+    insp_roof:insp.roof||"Waived", insp_septic_lid:insp.septic_lid||"N/A", insp_fungal:insp.fungal||"Waived",
+    insp_hvac:insp.hvac||"Buyer", insp_septic_pump:insp.septic_pump||"N/A", insp_air_quality:insp.air_quality||"Waived",
+    insp_electrical:insp.electrical||"Waived", insp_septic_insp:insp.septic_insp||"N/A", insp_radon:insp.radon||"Waived",
+    insp_plumbing:insp.plumbing||"Waived", insp_well:insp.well||"N/A", insp_lead_paint_test:insp.lead_paint_test||"N/A",
+    insp_structural:insp.structural||"Waived", insp_water_quality:insp.water_quality||"Waived", insp_elevator:insp.elevator||"N/A",
+    insp_chimney:insp.chimney||"Waived", insp_water_quantity:insp.water_quantity||"Waived", insp_other:insp.other||"N/A",
     fee_escrow:form.fee_escrow||"50/50", fee_lenders_title:form.fee_lenders_title||"N/A",
     fee_owners_title:form.fee_owners_title||"Seller",
     fee_rptt:form.fee_rptt||"Seller", fee_appraisal:form.fee_appraisal||"N/A", fee_other:"N/A",
@@ -417,18 +415,18 @@ function buildDealData(form) {
     disc_smart_home_x:"",disc_solar_x:"",disc_other_x:"",disc_other_text:"",
     walkthrough_days:form.walkthrough_days||"3",
     possession_coe_x:form.possession==="coe"?"X":"",
-    possession_other_date:form.possession!=="coe"?(form.possession_other_date||""):"",
+    possession_other_date:"N/A",
     buyer_initials_med:form.buyer_initials||"",
     addenda_line1:form.addenda_line1||"",addenda_line2:form.addenda_line2||"",
-    buyers_broker_name:form.buyers_broker_name||"GAVIN ERNSTONE",
-    buyers_agent_name:form.buyers_agent_name||"LISA A. HUNT",
-    buyers_company_name:form.buyers_company_name||"SIMPLY VEGAS",
-    buyers_agent_license:form.buyers_agent_license||"BS.0146321",
-    buyers_broker_license:form.buyers_broker_license||"B.100642",
-    buyers_office_address:form.buyers_office_address||"3042 S. DURANGO DR",
-    buyers_phone:form.buyers_phone||"702-685-3000",
-    buyers_city_state_zip:form.buyers_city_state_zip||"LAS VEGAS NV 89117",
-    buyers_fax:"702-685-3600",buyers_email:form.buyers_email||"LISA@LISAAHUNT.COM",
+    buyers_broker_name:"GAVIN ERNSTONE",
+    buyers_agent_name:"Lisa A. Hunt",
+    buyers_company_name:"SIMPLY VEGAS",
+    buyers_agent_license:"BS.0146321",
+    buyers_broker_license:"B.100642",
+    buyers_office_address:"3042 S Durango Drive",
+    buyers_phone:"7026853000",
+    buyers_city_state_zip:"Las Vegas  NV  89117",
+    buyers_fax:"7026853600",buyers_email:"Lisa@lisaahunt.com",
     licensee_does_not_x:"",
     licensee_does_x:form.licensee_interest?"X":"",
     licensee_principal_x:"",
@@ -437,13 +435,13 @@ function buildDealData(form) {
     respond_time:rTime,
     respond_am_x:(!isPM&&rTime)?"X":"", respond_pm_x:(isPM&&rTime)?"X":"",
     respond_month:rMonth, respond_day:rDay, respond_year:rYear,
-    buyer1_printed_name:buyerName, buyer1_sign_date:offerDateForPdf,
+    buyer1_printed_name:"SOVEREIGN HOUSE LLC", buyer1_sign_date:offerDateForPdf,
     buyer1_sign_time:rTime,
     buyer1_am_x:(!isPM&&rTime)?"X":"", buyer1_pm_x:(isPM&&rTime)?"X":"",
-    buyer2_printed_name:form.buyer2_printed_name||"",buyer2_sign_date:form.buyer2_sign_date||offerDateForPdf,buyer2_sign_time:form.buyer2_sign_time||rTime,buyer2_am_x:(!isPM&&rTime)?"X":"",buyer2_pm_x:(isPM&&rTime)?"X":"",
-    sellers_broker_name:form.listing_broker_name||form.listing_company||"",
+    buyer2_printed_name:"SOVEREIGN HOUSE LLC",buyer2_sign_date:offerDateForPdf,buyer2_sign_time:rTime,buyer2_am_x:(!isPM&&rTime)?"X":"",buyer2_pm_x:(isPM&&rTime)?"X":"",
+    sellers_broker_name:form.listing_broker_name||"",
     sellers_agent_name:form.listing_agent_name||"",
-    sellers_company_name:form.listing_company||"",
+    sellers_company_name:form.list_office_name||form.listing_company||"",
     sellers_agent_license:"",sellers_broker_license:"",sellers_office_address:"",
     sellers_phone:form.listing_agent_phone||"",sellers_city_state_zip:"",
     sellers_fax:"",sellers_email:form.listing_agent_email||"",
@@ -453,6 +451,29 @@ function buildDealData(form) {
     acceptance_x:"",counter_offer_x:"",
     seller1_printed_name:"",seller1_sign_date:"",seller1_sign_time:"",seller1_am_x:"",seller1_pm_x:"",
   };
+  // Build additional terms with dynamic COE date line and word wrapping
+  let rawTerms = (form.additional_terms||"").split("\n").filter(s=>s.trim());
+  // Replace first line with dynamic COE date if it starts with the placeholder
+  if (rawTerms.length > 0 && rawTerms[0].startsWith("- CLOSE OF ESCROW")) {
+    rawTerms[0] = "- CLOSE OF ESCROW TO BE ON OR BEFORE " + (coeForPdf || "") + ".";
+  } else {
+    rawTerms.unshift("- CLOSE OF ESCROW TO BE ON OR BEFORE " + (coeForPdf || "") + ".");
+  }
+  // Word-wrap lines exceeding 95 chars
+  let terms = [];
+  for (const line of rawTerms) {
+    if (line.length <= 95) { terms.push(line); }
+    else {
+      let rem = line;
+      while (rem.length > 95) {
+        let brk = rem.lastIndexOf(' ', 95);
+        if (brk <= 0) brk = 95;
+        terms.push(rem.substring(0, brk));
+        rem = rem.substring(brk).trimStart();
+      }
+      if (rem) terms.push(rem);
+    }
+  }
   for (let i=0;i<10;i++) data["additional_terms_"+(i+1)] = terms[i] || "";
   return data;
 }
@@ -772,8 +793,8 @@ const STATE = {
   form: {
     buyer_name: "Sovereign House LLC",
     offer_date: new Date().toISOString().slice(0,10),
-    property_address: "", city: "Las Vegas", county: "Clark",
-    zip_code: "", apn: "", purchase_price: "",
+    property_address: "", city: "Las Vegas", county: "CLARK",
+    zip_code: "", apn: "", purchase_price: "", mls_number: "",
     occupy: false,
     emd_amount: "10000", emd_type: "wire", emd_deposit_days: "2", emd_account: "escrow",
     loan_type: "other", loan_other_specify: "HARD MONEY LOAN",
@@ -781,7 +802,7 @@ const STATE = {
     addl_deposit_amount: "0", addl_deposit_date: "", addl_deposit_will: "will_not",
     assume_loan_amount: "0", assume_loan_type: "", assume_other_specify: "N/A",
     promissory_amount: "0",
-    buyer_broker_pct: "3",
+    buyer_broker_pct: "2.5",
     loan_app_days: "N/A", appraisal_days: "N/A", loan_contingency_days: "-",
     escrow_company: "Nevada Title Company", escrow_officer: "",
     coe_date: "", due_diligence: true, due_diligence_days: "12",
@@ -803,13 +824,12 @@ const STATE = {
     addenda_line1: "Proof of Funds Addendum", addenda_line2: "",
     respond_by_date: "", respond_by_time: "6:00 PM",
     listing_agent_name: "", listing_company: "", listing_broker_name: "",
-    listing_agent_phone: "", listing_agent_email: "",
-    buyers_broker_name:"GAVIN ERNSTONE", buyers_agent_name:"LISA A. HUNT",
-    buyers_company_name:"SIMPLY VEGAS", buyers_phone:"702-685-3000",
-    buyers_email:"LISA@LISAAHUNT.COM", buyers_city_state_zip:"LAS VEGAS NV 89117",
+    listing_agent_phone: "", listing_agent_email: "", list_office_name: "",
+    buyers_broker_name:"GAVIN ERNSTONE", buyers_agent_name:"Lisa A. Hunt",
+    buyers_company_name:"SIMPLY VEGAS", buyers_phone:"7026853000",
+    buyers_email:"Lisa@lisaahunt.com", buyers_city_state_zip:"Las Vegas  NV  89117",
     licensee_interest: true, licensee_relationship: "LISA HUNT IS A MEMBER OF SOVEREIGN HOUSE LLC",
-    buyers_agent_license:"BS.0146321",buyers_broker_license:"B.100642",buyers_office_address:"3042 S. DURANGO DR",
-    buyer2_printed_name: "Lisa A. Hunt", buyer2_sign_date: "", buyer2_sign_time: "",
+    buyers_agent_license:"BS.0146321",buyers_broker_license:"B.100642",buyers_office_address:"3042 S Durango Drive",
   },
   openSections: {1:true,2:true,3:true},
 };
@@ -1190,12 +1210,7 @@ function render() {
     ${f.licensee_interest ? `<div class="row">${makeField("Relationship","licensee_relationship",300)}</div>` : ""}`);
 
   const s9 = section(9, "Buyer Signatures", `
-    <div class="note">Buyer 1 (King J) — auto-filled from Buyer Name above</div>
-    <div class="row">
-      ${makeField("Buyer 2 Printed Name","buyer2_printed_name",200)}
-      ${makeField("Buyer 2 Sign Date","buyer2_sign_date",140,"","input")}
-      ${makeField("Buyer 2 Sign Time","buyer2_sign_time",120)}
-    </div>`);
+    <div class="note">Both Buyer 1 and Buyer 2 are hardcoded to SOVEREIGN HOUSE LLC. Signatures and dates handled by Inkless.</div>`);
 
   app.innerHTML = `
     <div class="header">

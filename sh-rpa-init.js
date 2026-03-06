@@ -25,9 +25,11 @@ function openRPABuilder(id){
   const rpaData={
     property_address:p.address+", "+p.city+", NV "+p.zip_code,
     city:p.city||"Las Vegas",
-    county:"Clark",
+    county:"CLARK",
     zip_code:p.zip_code||"",
     apn:p.parcel_number||p.apn||"",
+    mls_number:p.mls_number||"",
+    list_office_name:p.listing_office||p.list_office_name||"",
     purchase_price:String(oPrice),
     offer_date:new Date().toLocaleDateString("en-US",{month:"2-digit",day:"2-digit",year:"numeric"}),
     buyer_name:"Sovereign House LLC",
@@ -84,7 +86,9 @@ function openRPAFromDeal(dealId){
 
   const rpaData={
     property_address:(d.address||"")+", "+(d.city||"Las Vegas")+", NV "+(d.zip_code||""),
-    city:d.city||"Las Vegas", county:"Clark", zip_code:d.zip_code||"", apn:prop?.parcel_number||d.parcel_number||d.apn||"",
+    city:d.city||"Las Vegas", county:"CLARK", zip_code:d.zip_code||"", apn:prop?.parcel_number||d.parcel_number||d.apn||"",
+    mls_number:d.mls_number||prop?.mls_number||"",
+    list_office_name:d.listing_agent_brokerage||prop?.listing_office||"",
     purchase_price:String(oPrice),
     offer_date:new Date().toLocaleDateString("en-US",{month:"2-digit",day:"2-digit",year:"numeric"}),
     buyer_name:"Sovereign House LLC", occupy:false,
