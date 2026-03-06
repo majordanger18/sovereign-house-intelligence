@@ -88,7 +88,7 @@ const FIELD_MAP = [
   [1,331,191,"occupy_not_x",8,1],
   [1,63,282,"emd_amount",10,10],
   [1,129,292,"emd_check_x",8,1],
-  [1,310,292,"emd_other_x",8,1],
+  [1,310,292,"emd_other_x",8,1],[1,328,292,"emd_other_text",8,4],
   [1,196,293,"emd_wire_x",8,1],
   [1,328,304,"emd_deposit_days",10,4],
   [1,392,316,"emd_buyer_broker_x",8,1],
@@ -204,6 +204,8 @@ const FIELD_MAP = [
   [6,150,741,"buyer_name_footer",7,50],
   [6,150,759,"property_address_footer",7,50],
   // Page 7
+  [7,162,131,"broker_comp_will_x",8,1],
+  [7,253,131,"broker_comp_will_not_x",8,1],
   [7,150,741,"buyer_name_footer",7,50],
   [7,150,759,"property_address_footer",7,50],
   // Page 8
@@ -360,7 +362,7 @@ function buildDealData(form) {
     occupy_does_x: form.occupy ? "X" : "", occupy_not_x: form.occupy ? "" : "X",
     emd_amount: dollars(emd),
     emd_check_x: form.emd_type==="check"?"X":"", emd_wire_x: form.emd_type==="wire"?"X":"",
-    emd_other_x: "N/A",
+    emd_other_x: "", emd_other_text: "N/A",
     emd_deposit_days: form.emd_deposit_days||"2",
     emd_escrow_x: form.emd_account==="escrow"?"X":"",
     emd_buyer_broker_x: form.emd_account==="buyer_broker"?"X":"",
@@ -417,6 +419,7 @@ function buildDealData(form) {
     possession_coe_x:form.possession==="coe"?"X":"",
     possession_other_date:"N/A",
     buyer_initials_med:form.buyer_initials||"",
+    broker_comp_will_x:"X",broker_comp_will_not_x:"",
     addenda_line1:form.addenda_line1||"",addenda_line2:form.addenda_line2||"",
     buyers_broker_name:"GAVIN ERNSTONE",
     buyers_agent_name:"Lisa A. Hunt",
@@ -439,7 +442,7 @@ function buildDealData(form) {
     buyer1_sign_time:rTime,
     buyer1_am_x:(!isPM&&rTime)?"X":"", buyer1_pm_x:(isPM&&rTime)?"X":"",
     buyer2_printed_name:"SOVEREIGN HOUSE LLC",buyer2_sign_date:offerDateForPdf,buyer2_sign_time:rTime,buyer2_am_x:(!isPM&&rTime)?"X":"",buyer2_pm_x:(isPM&&rTime)?"X":"",
-    sellers_broker_name:form.listing_broker_name||"",
+    sellers_broker_name:form.listing_broker_name||form.listing_agent_name||"",
     sellers_agent_name:form.listing_agent_name||"",
     sellers_company_name:form.list_office_name||form.listing_company||"",
     sellers_agent_license:"",sellers_broker_license:"",sellers_office_address:"",
@@ -821,7 +824,7 @@ const STATE = {
       lead_paint_test:"N/A",elevator:"N/A",other:"N/A",
     },
     additional_terms: "- CLOSE OF ESCROW TO BE ON OR BEFORE\n- BUYER IS OFFERING TO PURCHASE THE PROPERTY IN ITS PRESENT PHYSICAL CONDITION (\"AS-IS\"), AS\nOF THE EFFECTIVE DATE. BUYER DOES NOT ANTICIPATE REQUESTING REPAIRS OR CONCESSIONS.\n- THIS IS A HARD MONEY LOAN WHICH IS ESSENTIALLY CASH WITH NO LOAN CONTINGENCY.",
-    addenda_line1: "Proof of Funds Addendum", addenda_line2: "",
+    addenda_line1: "", addenda_line2: "",
     respond_by_date: "", respond_by_time: "6:00 PM",
     listing_agent_name: "", listing_company: "", listing_broker_name: "",
     listing_agent_phone: "", listing_agent_email: "", list_office_name: "",
@@ -1016,11 +1019,11 @@ function makeInspRow(label, key) {
   return `<div class="insp-row"><span>${label}</span>
     <select onchange="setInsp('${key}',this.value)">
       <option value="" ${!val?"selected":""}>—</option>
-      <option value="BUYER" ${val==="BUYER"?"selected":""}>BUYER</option>
-      <option value="SELLER" ${val==="SELLER"?"selected":""}>SELLER</option>
+      <option value="Buyer" ${val==="Buyer"?"selected":""}>Buyer</option>
+      <option value="Seller" ${val==="Seller"?"selected":""}>Seller</option>
       <option value="50/50" ${val==="50/50"?"selected":""}>50/50</option>
       <option value="N/A" ${val==="N/A"?"selected":""}>N/A</option>
-      <option value="WAIVED" ${val==="WAIVED"?"selected":""}>WAIVED</option>
+      <option value="Waived" ${val==="Waived"?"selected":""}>Waived</option>
     </select></div>`;
 }
 
@@ -1147,7 +1150,7 @@ function render() {
       ${makeSelect("Possession","possession",[["coe","At COE"],["other","Other Date"]],130)}
     </div>`);
 
-  const feeOpts = [["BUYER","BUYER"],["SELLER","SELLER"],["50/50","50/50"],["N/A","N/A"]];
+  const feeOpts = [["Buyer","Buyer"],["Seller","Seller"],["50/50","50/50"],["N/A","N/A"]];
   const s4 = section(4, "Fees & Prorations", `
     <div class="note">Title, Escrow & Appraisal Fees</div>
     <div class="row">
@@ -1159,10 +1162,10 @@ function render() {
     </div>
     <div class="note" style="margin-top:8px">CIC Expenses</div>
     <div class="row">
-      ${makeSelect("CIC Demand","cic_demand",[["SELLER","SELLER"],["BUYER","BUYER"],["50/50","50/50"],["N/A","N/A"]],120)}
-      ${makeSelect("CIC Capital","cic_capital",[["SELLER","SELLER"],["BUYER","BUYER"],["50/50","50/50"],["N/A","N/A"]],120)}
-      ${makeSelect("Final Insp","cic_final_insp",[["SELLER","SELLER"],["BUYER","BUYER"],["50/50","50/50"],["N/A","N/A"]],120)}
-      ${makeSelect("CIC Transfer","cic_transfer",[["SELLER","SELLER"],["BUYER","BUYER"],["50/50","50/50"],["N/A","N/A"]],120)}
+      ${makeSelect("CIC Demand","cic_demand",[["Seller","Seller"],["Buyer","Buyer"],["50/50","50/50"],["N/A","N/A"]],120)}
+      ${makeSelect("CIC Capital","cic_capital",[["Seller","Seller"],["Buyer","Buyer"],["50/50","50/50"],["N/A","N/A"]],120)}
+      ${makeSelect("Final Insp","cic_final_insp",[["Seller","Seller"],["Buyer","Buyer"],["50/50","50/50"],["N/A","N/A"]],120)}
+      ${makeSelect("CIC Transfer","cic_transfer",[["Seller","Seller"],["Buyer","Buyer"],["50/50","50/50"],["N/A","N/A"]],120)}
     </div>`);
 
   const s5 = section(5, "Inspections", `
@@ -1175,10 +1178,11 @@ function render() {
   const s6 = section(6, "Listing Agent / Seller's Broker", `
     <div class="row">
       ${makeField("Listing Agent Name","listing_agent_name",200)}
-      ${makeField("Listing Company","listing_company",200)}
+      ${makeField("Office Name","list_office_name",200)}
     </div>
     <div class="row">
-      ${makeField("Broker Name (if diff)","listing_broker_name",200)}
+      ${makeField("Listing Company","listing_company",160)}
+      ${makeField("Broker Name (if diff)","listing_broker_name",160)}
     </div>
     <div class="row">
       ${makeField("Phone","listing_agent_phone",160)}
@@ -1209,9 +1213,6 @@ function render() {
     <div style="margin-top:4px">${makeToggle("Licensee has interest in principal","licensee_interest")}</div>
     ${f.licensee_interest ? `<div class="row">${makeField("Relationship","licensee_relationship",300)}</div>` : ""}`);
 
-  const s9 = section(9, "Buyer Signatures", `
-    <div class="note">Both Buyer 1 and Buyer 2 are hardcoded to SOVEREIGN HOUSE LLC. Signatures and dates handled by Inkless.</div>`);
-
   app.innerHTML = `
     <div class="header">
       <div><div class="brand">Sovereign House</div><div class="title">Offer Builder</div></div>
@@ -1224,7 +1225,7 @@ function render() {
     </div>
     <div class="container">
       ${validationBar}
-      ${s1}${s2}${s3}${s4}${s5}${s6}${s7}${s8}${s9}
+      ${s1}${s2}${s3}${s4}${s5}${s6}${s7}${s8}
     </div>
     <div class="footer">
       <span>Price: <span class="val ${pp?"gold":"empty"}">$${pp?pp.toLocaleString():"—"}</span></span>
