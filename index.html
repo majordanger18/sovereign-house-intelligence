@@ -77,7 +77,7 @@
 <script src="sh-rpa-init.js"></script>
 <script>
 // Tap backdrop (outside sheet) to close modals
-[["detailModal","closeDetail"],["calcModal","closeCalc"],["alertModal","closeAlerts"],["offerModal","closeOffer"],["dealModal","closeDeal"]].forEach(([id,fn])=>{
+[["detailModal","closeDetail"],["alertModal","closeAlerts"],["offerModal","closeOffer"],["dealModal","closeDeal"]].forEach(([id,fn])=>{
   document.getElementById(id).addEventListener("click",function(e){
     if(e.target===this&&typeof window[fn]==="function")window[fn]();
   });
