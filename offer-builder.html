@@ -227,9 +227,9 @@ const FIELD_MAP = [
   [9,150,741,"buyer_name_footer",7,50],
   [9,150,759,"property_address_footer",7,50],
   // Page 10
-  [10,185,105,"buyers_broker_name",9,24],
+  [10,167,105,"buyers_broker_name",9,24],
   [10,404,105,"buyers_agent_name",9,30],
-  [10,185,117,"buyers_company_name",9,24],
+  [10,167,117,"buyers_company_name",9,24],
   [10,445,117,"buyers_agent_license",9,25],
   [10,215,128,"buyers_broker_license",9,16],
   [10,385,128,"buyers_office_address",9,30],
@@ -458,31 +458,16 @@ function buildDealData(form) {
     acceptance_x:"",counter_offer_x:"",
     seller1_printed_name:"",seller1_sign_date:"",seller1_sign_time:"",seller1_am_x:"",seller1_pm_x:"",
   };
-  // Build additional terms with dynamic COE date (28 days from offer date)
+  // Build additional terms from individual line fields
   const coeDateForTerms = coeForPdf || coe28Str || "";
-  let rawTerms = (form.additional_terms||"").split("\n").filter(s=>s.trim());
-  // Replace first line with dynamic COE date if it starts with the placeholder
-  if (rawTerms.length > 0 && rawTerms[0].startsWith("- CLOSE OF ESCROW")) {
-    rawTerms[0] = "- CLOSE OF ESCROW TO BE ON OR BEFORE " + coeDateForTerms + ".";
-  } else {
-    rawTerms.unshift("- CLOSE OF ESCROW TO BE ON OR BEFORE " + coeDateForTerms + ".");
-  }
-  // Word-wrap lines exceeding 95 chars
-  let terms = [];
-  for (const line of rawTerms) {
-    if (line.length <= 95) { terms.push(line); }
-    else {
-      let rem = line;
-      while (rem.length > 95) {
-        let brk = rem.lastIndexOf(' ', 95);
-        if (brk <= 0) brk = 95;
-        terms.push(rem.substring(0, brk));
-        rem = rem.substring(brk).trimStart();
-      }
-      if (rem) terms.push(rem);
+  for (let i=1;i<=10;i++) {
+    let line = form["additional_terms_"+i] || "";
+    // Inject dynamic COE date into line 1
+    if (i===1 && line.startsWith("- CLOSE OF ESCROW")) {
+      line = "- CLOSE OF ESCROW TO BE ON OR BEFORE " + coeDateForTerms + ".";
     }
+    data["additional_terms_"+i] = line;
   }
-  for (let i=0;i<10;i++) data["additional_terms_"+(i+1)] = terms[i] || "";
   return data;
 }
 
@@ -829,6 +814,13 @@ const STATE = {
       lead_paint_test:"N/A",elevator:"N/A",other:"N/A",
     },
     additional_terms: "- CLOSE OF ESCROW TO BE ON OR BEFORE\n- BUYER IS OFFERING TO PURCHASE THE PROPERTY IN ITS PRESENT PHYSICAL CONDITION\n(\"AS-IS\"), AS OF THE EFFECTIVE DATE. BUYER DOES NOT ANTICIPATE REQUESTING\nREPAIRS OR CONCESSIONS.\n- THIS IS A HARD MONEY LOAN WHICH IS ESSENTIALLY CASH WITH NO LOAN CONTINGENCY.",
+    additional_terms_1: "- CLOSE OF ESCROW TO BE ON OR BEFORE",
+    additional_terms_2: "- BUYER IS OFFERING TO PURCHASE THE PROPERTY IN ITS PRESENT PHYSICAL CONDITION",
+    additional_terms_3: "(\"AS-IS\"), AS OF THE EFFECTIVE DATE. BUYER DOES NOT ANTICIPATE REQUESTING",
+    additional_terms_4: "REPAIRS OR CONCESSIONS.",
+    additional_terms_5: "- THIS IS A HARD MONEY LOAN WHICH IS ESSENTIALLY CASH WITH NO LOAN CONTINGENCY.",
+    additional_terms_6: "", additional_terms_7: "", additional_terms_8: "",
+    additional_terms_9: "", additional_terms_10: "",
     addenda_line1: "", addenda_line2: "",
     respond_by_date: "", respond_by_time: "6:00 PM",
     listing_agent_name: "", listing_company: "", listing_broker_name: "",
@@ -1197,7 +1189,10 @@ function render() {
       ${makeField("Time","respond_by_time",120)}
     </div>
     <div style="margin-top:8px">${makeField("Addenda Attached","addenda_line1",null)}</div>
-    <div>${makeField("Additional Terms (one per line)","additional_terms",null,"","textarea")}</div>`);
+    <div class="note" style="margin-top:8px">Additional Terms (max 95 chars per line)</div>
+    ${[1,2,3,4,5,6,7,8,9,10].map(i=>
+      `<div>${makeField("Line "+i,"additional_terms_"+i,null)}</div>`
+    ).join("")}`);
 
   const s8 = section(8, "Buyer's Broker (Lisa / Simply Vegas)", `
     <div class="note">Pre-filled — edit only if different for this deal</div>
