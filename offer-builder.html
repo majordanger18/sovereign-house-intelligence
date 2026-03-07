@@ -242,6 +242,7 @@ const FIELD_MAP = [
   [10,137,208,"licensee_principal_x",8,1],
   [10,250,208,"licensee_family_x",8,1],
   [10,222,220,"licensee_relationship",9,45],
+  [10,222,232,"licensee_role",9,45],
   [10,210,254,"respond_am_x",8,1],
   [10,239,254,"respond_pm_x",8,1],
   [10,159,255,"respond_time",9,6],
@@ -439,6 +440,7 @@ function buildDealData(form) {
     licensee_principal_x:"",
     licensee_family_x:form.licensee_interest?"X":"",
     licensee_relationship:form.licensee_relationship||"LISA HUNT IS A MEMBER OF SOVEREIGN HOUSE LLC",
+    licensee_role:"Managing Partner of Sovereign House",
     respond_time:rTime,
     respond_am_x:(!isPM&&rTime)?"X":"", respond_pm_x:(isPM&&rTime)?"X":"",
     respond_month:rMonth, respond_day:rDay, respond_year:rYear,
@@ -446,9 +448,9 @@ function buildDealData(form) {
     buyer1_sign_time:rTime,
     buyer1_am_x:(!isPM&&rTime)?"X":"", buyer1_pm_x:(isPM&&rTime)?"X":"",
     buyer2_printed_name:"SOVEREIGN HOUSE LLC",buyer2_sign_date:offerDateForPdf,buyer2_sign_time:rTime,buyer2_am_x:(!isPM&&rTime)?"X":"",buyer2_pm_x:(isPM&&rTime)?"X":"",
-    sellers_broker_name:form.listing_agent_name||form.listing_broker_name||"",
+    sellers_broker_name:form.listing_agent_name||"",
     sellers_agent_name:form.listing_agent_name||"",
-    sellers_company_name:form.list_office_name||form.listing_company||"",
+    sellers_company_name:form.list_office_name||"",
     sellers_agent_license:"",sellers_broker_license:"",sellers_office_address:"",
     sellers_phone:form.listing_agent_phone||"",sellers_city_state_zip:"",
     sellers_fax:"",sellers_email:form.listing_agent_email||"",
@@ -1183,11 +1185,7 @@ function render() {
   const s6 = section(6, "Listing Agent / Seller's Broker", `
     <div class="row">
       ${makeField("Listing Agent Name","listing_agent_name",200)}
-      ${makeField("Office Name","list_office_name",200)}
-    </div>
-    <div class="row">
-      ${makeField("Listing Company","listing_company",160)}
-      ${makeField("Broker Name (if diff)","listing_broker_name",160)}
+      ${makeField("Listing Company","list_office_name",200)}
     </div>
     <div class="row">
       ${makeField("Phone","listing_agent_phone",160)}
