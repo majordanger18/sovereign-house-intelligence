@@ -1280,11 +1280,18 @@ document.addEventListener("DOMContentLoaded", function(){
       if (STATE.form.property_address) {
         STATE.form.property_address = STATE.form.property_address.split(",")[0].trim();
       }
-      // Pre-fill seller broker fields from listing agent data (only 4 fields we have)
+      // Pre-fill seller broker fields from listing agent / MLS data
       if (data.listing_agent_name && !STATE.form.sellers_agent_name) STATE.form.sellers_agent_name = data.listing_agent_name;
+      if (data.listing_agent_name && !STATE.form.sellers_broker_name) STATE.form.sellers_broker_name = data.listing_agent_name;
       if (data.list_office_name && !STATE.form.sellers_company_name) STATE.form.sellers_company_name = data.list_office_name;
       if (data.listing_agent_phone && !STATE.form.sellers_phone) STATE.form.sellers_phone = data.listing_agent_phone;
       if (data.listing_agent_email && !STATE.form.sellers_email) STATE.form.sellers_email = data.listing_agent_email;
+      if (data.list_agent_license && !STATE.form.sellers_agent_license) STATE.form.sellers_agent_license = data.list_agent_license;
+      if (data.list_broker_license && !STATE.form.sellers_broker_license) STATE.form.sellers_broker_license = data.list_broker_license;
+      if (data.list_office_address && !STATE.form.sellers_office_address) STATE.form.sellers_office_address = data.list_office_address;
+      if (data.list_office_city_state_zip && !STATE.form.sellers_city_state_zip) STATE.form.sellers_city_state_zip = data.list_office_city_state_zip;
+      if (data.list_office_phone && !STATE.form.sellers_phone) STATE.form.sellers_phone = data.list_office_phone;
+      if (data.list_office_fax && !STATE.form.sellers_fax) STATE.form.sellers_fax = data.list_office_fax;
       // Auto-calc loan amount and balance from purchase price
       if (data.purchase_price) {
         const pp = parseFloat(String(data.purchase_price).replace(/,/g,""));
