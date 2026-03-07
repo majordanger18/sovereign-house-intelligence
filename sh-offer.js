@@ -160,7 +160,8 @@ function updateOfferCalc(id){
   const totalLoan=loanAmt+renoFinanced;
   const loanPts=Math.round(totalLoan*(q.pts/100));
   const loanOrig=Math.round(totalLoan*(q.orig/100));
-  const totalLoanFees=loanPts+loanOrig+q.closeBuy+q.svcfee;
+  const proRateInt=Math.round(loanAmt*(q.rate/100)/12*(21/30));
+  const totalLoanFees=loanPts+loanOrig+q.closeBuy+q.svcfee+proRateInt;
 
   const intPrincipal=Math.round(oPrice*0.90 + 0.50*totalReno);
   const monthlyInterest=Math.round(intPrincipal*(q.rate/100)/12);

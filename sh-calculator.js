@@ -225,13 +225,17 @@ function updateCalc(){
   const loanPts=Math.round(totalLoan*(pts/100));
   const loanOrig=Math.round(totalLoan*(orig/100));
   const buyClosing=closeBuy;
-  const totalLoanFees=loanPts+loanOrig+buyClosing+svcfee;
+  // Pro-rated interest at closing: only purchase loan is disbursed, no rehab draws yet
+  // Assume 21 days remaining in month (conservative default — could be made dynamic with a date picker)
+  const proRateDays=21;
+  const proRateInterest=Math.round(loanAmt*(rate/100)/12*(proRateDays/30));
+  const totalLoanFees=loanPts+loanOrig+buyClosing+svcfee+proRateInterest;
   const downPayment=pur-loanAmt;
 
   document.getElementById("finSummary").innerHTML=`
     <div class="wb"><div class="wl">LOAN AMOUNT</div><div class="wv" style="color:#e2e8f0">${$(totalLoan)}</div></div>
     <div class="wb"><div class="wl">DOWN PAYMENT</div><div class="wv" style="color:#f59e0b">${$(downPayment)}</div></div>
-    <div class="wb"><div class="wl">TOTAL LOAN FEES</div><div class="wv" style="color:#f59e0b">${$(totalLoanFees)}</div><div class="sub" style="font-size:9px;color:#475569;margin-top:2px">${$(loanPts)} pts + ${$(loanOrig)} orig + ${$(buyClosing)} close + ${$(svcfee)} svc</div></div>`;
+    <div class="wb"><div class="wl">TOTAL LOAN FEES</div><div class="wv" style="color:#f59e0b">${$(totalLoanFees)}</div><div class="sub" style="font-size:9px;color:#475569;margin-top:2px">${$(loanPts)} pts + ${$(loanOrig)} orig + ${$(buyClosing)} close + ${$(svcfee)} svc + ${$(proRateInterest)} pro-rate int</div></div>`;
 
   // HOLDING — interest accrues on 90% purchase + midpoint rehab draw (50% of reno)
   const intPrincipal=Math.round(pur*0.90 + 0.50*totalReno);
@@ -384,7 +388,8 @@ async function doSaveCalc(){
   const totalReno=rehab+addl;
   const svcfee=gv("c_svcfee");
   const loanAmt=Math.round(pur*(ltv/100)),renoFin=Math.round(totalReno*(drawPct/100)),totalLoan=loanAmt+renoFin;
-  const loanFees=Math.round(totalLoan*(pts/100))+Math.round(totalLoan*(orig/100))+closeBuyFlat+svcfee;
+  const proRateInt=Math.round(loanAmt*(rate/100)/12*(21/30));
+  const loanFees=Math.round(totalLoan*(pts/100))+Math.round(totalLoan*(orig/100))+closeBuyFlat+svcfee+proRateInt;
   const intPrincipal2=Math.round(pur*0.90 + 0.50*totalReno);
   const monthlyH=Math.round(intPrincipal2*(rate/100)/12)+Math.round(taxAnn/12)+ins+hoa+util;
   const totalHold=monthlyH*holdMo;
