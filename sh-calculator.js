@@ -63,7 +63,7 @@ function renderCalc(saved){
       <div style="font-size:17px;font-weight:800;margin-top:2px">${esc(p.address)}</div>
       <div style="font-size:10px;color:#64748b;margin-top:1px">MLS# ${p.mls_number} · ${sqft.toLocaleString()}sf · Built ${p.year_built} · ${p.pool?"Pool":"No Pool"}</div>
       ${calcHistory.length>0?`<button onclick="toggleCalcHist()" style="margin-top:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:#64748b;font-size:10px;font-weight:700;cursor:pointer">📂 ${calcHistory.length} Past Run${calcHistory.length>1?"s":""}</button>`:""}
-      ${saved?`<div style="margin-top:6px;padding:4px 10px;border-radius:6px;background:rgba(34,197,94,0.08);display:inline-block;font-size:10px;color:#22c55e;font-weight:600">✓ Loaded from ${new Date(saved.created_at).toLocaleDateString()}</div>`:""}
+      ${saved?`<div style="margin-top:6px;padding:4px 10px;border-radius:6px;background:rgba(34,197,94,0.08);display:inline-block;font-size:10px;color:#22c55e;font-weight:600">✓ Loaded from ${new Date(saved.updated_at||saved.created_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"})}</div>`:""}
     </div>
     <div id="calcHistArea"></div>
 
@@ -340,7 +340,7 @@ function updateCalc(){
 function toggleCalcHist(){
   const a=document.getElementById("calcHistArea");
   if(a.innerHTML){a.innerHTML="";return;}
-  a.innerHTML=`<div style="margin-bottom:16px;padding:12px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:8px">PAST RUNS</div>${calcHistory.map((h,i)=>`<div onclick="loadCalcHist(${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;cursor:pointer;margin-bottom:4px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);min-height:44px"><div><div style="font-size:11px;color:#e2e8f0;font-weight:600">ARV ${$(h.arv)} · Purchase ${$(h.purchase_price)} · Rehab ${$(h.rehab_budget)}</div><div style="font-size:10px;color:#64748b">${new Date(h.created_at).toLocaleDateString()}</div></div><div style="text-align:right"><div style="font-size:14px;font-weight:800;color:${h.net_profit>0?"#22c55e":"#ef4444"}">${$(h.net_profit)}</div><div style="font-size:10px;color:#64748b">${h.roi}%</div></div></div>`).join("")}</div>`;
+  a.innerHTML=`<div style="margin-bottom:16px;padding:12px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:8px">PAST RUNS</div>${calcHistory.map((h,i)=>`<div onclick="loadCalcHist(${i})" style="display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;cursor:pointer;margin-bottom:4px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);min-height:44px"><div><div style="font-size:11px;color:#e2e8f0;font-weight:600">ARV ${$(h.arv)} · Purchase ${$(h.purchase_price)} · Rehab ${$(h.rehab_budget)}</div><div style="font-size:10px;color:#64748b">${new Date(h.updated_at||h.created_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"})}</div></div><div style="text-align:right"><div style="font-size:14px;font-weight:800;color:${h.net_profit>0?"#22c55e":"#ef4444"}">${$(h.net_profit)}</div><div style="font-size:10px;color:#64748b">${h.roi}%</div></div></div>`).join("")}</div>`;
 }
 
 function loadCalcHist(i){
