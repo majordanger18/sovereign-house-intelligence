@@ -88,7 +88,7 @@ const FIELD_MAP = [
   [1,331,191,"occupy_not_x",8,1],
   [1,63,282,"emd_amount",10,10],
   [1,129,292,"emd_check_x",8,1],
-  [1,310,292,"emd_other_x",8,1],[1,328,292,"emd_other_text",8,4],
+  [1,310,292,"emd_other_x",8,1],[1,334,292,"emd_other_text",8,4],
   [1,196,293,"emd_wire_x",8,1],
   [1,328,304,"emd_deposit_days",10,4],
   [1,392,316,"emd_buyer_broker_x",8,1],
@@ -204,7 +204,7 @@ const FIELD_MAP = [
   [6,150,741,"buyer_name_footer",7,50],
   [6,150,759,"property_address_footer",7,50],
   // Page 7
-  [7,162,131,"broker_comp_will_x",8,1],
+  [7,339,680,"broker_comp_will_x",8,1],
   [7,253,131,"broker_comp_will_not_x",8,1],
   [7,150,741,"buyer_name_footer",7,50],
   [7,150,759,"property_address_footer",7,50],
@@ -335,6 +335,10 @@ function buildDealData(form) {
     return s;
   }
   const coeForPdf = fromISODate(form.coe_date) || form.coe_date || "";
+  // Calculate COE date as 28 days from offer date (fallback if no COE entered)
+  const offerDateObj = form.offer_date ? new Date(form.offer_date) : new Date();
+  const coe28 = new Date(offerDateObj); coe28.setDate(coe28.getDate() + 28);
+  const coe28Str = (coe28.getMonth()+1) + "/" + coe28.getDate() + "/" + coe28.getFullYear().toString().slice(-2);
 
   // Parse respond date (handle YYYY-MM-DD or M/D/YYYY)
   let rMonth="",rDay="",rYear="",rTime="",isPM=true;
@@ -392,7 +396,7 @@ function buildDealData(form) {
     cash_purchase_days:"1", sale_contingent_x:"",
     personal_property_1:"PER MLS #" + mlsNum + " ALL EXISTING APPLIANCES",personal_property_2:"",personal_property_3:"",
     escrow_company: form.escrow_company||"", escrow_officer: form.escrow_officer||"",
-    coe_date: coeForPdf||"",
+    coe_date: coeForPdf||coe28Str||"",
     due_diligence_is_x: form.due_diligence?"X":"", due_diligence_not_x: form.due_diligence?"":"X",
     due_diligence_days: form.due_diligence_days||"12",
     buyer_initials_8c: form.buyer_initials||"",
@@ -442,7 +446,7 @@ function buildDealData(form) {
     buyer1_sign_time:rTime,
     buyer1_am_x:(!isPM&&rTime)?"X":"", buyer1_pm_x:(isPM&&rTime)?"X":"",
     buyer2_printed_name:"SOVEREIGN HOUSE LLC",buyer2_sign_date:offerDateForPdf,buyer2_sign_time:rTime,buyer2_am_x:(!isPM&&rTime)?"X":"",buyer2_pm_x:(isPM&&rTime)?"X":"",
-    sellers_broker_name:form.listing_broker_name||form.listing_agent_name||"",
+    sellers_broker_name:form.listing_agent_name||form.listing_broker_name||"",
     sellers_agent_name:form.listing_agent_name||"",
     sellers_company_name:form.list_office_name||form.listing_company||"",
     sellers_agent_license:"",sellers_broker_license:"",sellers_office_address:"",
@@ -454,13 +458,14 @@ function buildDealData(form) {
     acceptance_x:"",counter_offer_x:"",
     seller1_printed_name:"",seller1_sign_date:"",seller1_sign_time:"",seller1_am_x:"",seller1_pm_x:"",
   };
-  // Build additional terms with dynamic COE date line and word wrapping
+  // Build additional terms with dynamic COE date (28 days from offer date)
+  const coeDateForTerms = coeForPdf || coe28Str || "";
   let rawTerms = (form.additional_terms||"").split("\n").filter(s=>s.trim());
   // Replace first line with dynamic COE date if it starts with the placeholder
   if (rawTerms.length > 0 && rawTerms[0].startsWith("- CLOSE OF ESCROW")) {
-    rawTerms[0] = "- CLOSE OF ESCROW TO BE ON OR BEFORE " + (coeForPdf || "") + ".";
+    rawTerms[0] = "- CLOSE OF ESCROW TO BE ON OR BEFORE " + coeDateForTerms + ".";
   } else {
-    rawTerms.unshift("- CLOSE OF ESCROW TO BE ON OR BEFORE " + (coeForPdf || "") + ".");
+    rawTerms.unshift("- CLOSE OF ESCROW TO BE ON OR BEFORE " + coeDateForTerms + ".");
   }
   // Word-wrap lines exceeding 95 chars
   let terms = [];
@@ -823,7 +828,7 @@ const STATE = {
       fungal:"Waived",air_quality:"Waived",radon:"Waived",
       lead_paint_test:"N/A",elevator:"N/A",other:"N/A",
     },
-    additional_terms: "- CLOSE OF ESCROW TO BE ON OR BEFORE\n- BUYER IS OFFERING TO PURCHASE THE PROPERTY IN ITS PRESENT PHYSICAL CONDITION (\"AS-IS\"), AS\nOF THE EFFECTIVE DATE. BUYER DOES NOT ANTICIPATE REQUESTING REPAIRS OR CONCESSIONS.\n- THIS IS A HARD MONEY LOAN WHICH IS ESSENTIALLY CASH WITH NO LOAN CONTINGENCY.",
+    additional_terms: "- CLOSE OF ESCROW TO BE ON OR BEFORE\n- BUYER IS OFFERING TO PURCHASE THE PROPERTY IN ITS PRESENT PHYSICAL CONDITION\n(\"AS-IS\"), AS OF THE EFFECTIVE DATE. BUYER DOES NOT ANTICIPATE REQUESTING\nREPAIRS OR CONCESSIONS.\n- THIS IS A HARD MONEY LOAN WHICH IS ESSENTIALLY CASH WITH NO LOAN CONTINGENCY.",
     addenda_line1: "", addenda_line2: "",
     respond_by_date: "", respond_by_time: "6:00 PM",
     listing_agent_name: "", listing_company: "", listing_broker_name: "",
