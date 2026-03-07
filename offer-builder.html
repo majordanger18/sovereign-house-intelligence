@@ -323,7 +323,8 @@ function buildDealData(form) {
   const loan = parseFloat((form.loan_amount||form.purchase_price||"0").replace(/,/g,""));
   const balance = parseFloat((form.balance_down_payment||"0").replace(/,/g,""));
   const buyerName = form.buyer_name || "Sovereign House LLC";
-  const propAddr = form.property_address || "";
+  // Strip city/state/zip — keep only street address (before first comma)
+  const propAddr = (form.property_address || "").split(",")[0].trim();
   const loanType = (form.loan_type||"other").toLowerCase();
 
   const mlsNum = form.mls_number || "";
