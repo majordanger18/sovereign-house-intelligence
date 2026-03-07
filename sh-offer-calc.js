@@ -141,7 +141,8 @@ function exportPDF(){
   const loanAmt=Math.round(pur*(ltv/100)),renoFin=Math.round(totalReno*(drawPct/100)),totalLoan=loanAmt+renoFin;
   const loanPts=Math.round(totalLoan*(pts/100)),loanOrig=Math.round(totalLoan*(orig/100)),buyClose=closeBuyFlat;
   const totalLoanFees=loanPts+loanOrig+buyClose+svcfeePdf;
-  const monthlyInt=Math.round(totalLoan*(rate/100)/12),monthlyTax=Math.round(taxAnn/12);
+  const intPrincipal=Math.round(pur*0.90 + 0.50*totalReno);
+  const monthlyInt=Math.round(intPrincipal*(rate/100)/12),monthlyTax=Math.round(taxAnn/12);
   const monthlyTotal=monthlyInt+monthlyTax+ins+hoa+util;
   const totalHold=monthlyTotal*holdMo;
   const buyerComm=Math.round(arv*(bagent/100)),sellClose=closeSellFlat;
@@ -243,7 +244,8 @@ function shareAnalysis(){
   const totalReno=rehab+addl;
   const loanAmt=Math.round(pur*(ltv/100)),renoFin=Math.round(totalReno*(drawPct/100)),totalLoan=loanAmt+renoFin;
   const totalLoanFees=Math.round(totalLoan*(gv("c_pts")/100))+Math.round(totalLoan*(gv("c_orig")/100))+gv("c_closebuy")+gv("c_svcfee");
-  const monthlyInt=Math.round(totalLoan*(rate/100)/12),monthlyTax=Math.round(gv("c_tax")/12);
+  const intPrincipal=Math.round(pur*0.90 + 0.50*totalReno);
+  const monthlyInt=Math.round(intPrincipal*(rate/100)/12),monthlyTax=Math.round(gv("c_tax")/12);
   const monthlyTotal=monthlyInt+monthlyTax+gv("c_ins")+gv("c_hoa")+gv("c_util");
   const totalHold=monthlyTotal*holdMo;
   const totalSell=Math.round(arv*(gv("c_bagent")/100))+gv("c_closesell")+gv("c_staging")+gv("c_title")+gv("c_hoaxfer")+gv("c_misc")+(arv>0?Math.ceil(arv/500)*2.55:0);

@@ -233,15 +233,16 @@ function updateCalc(){
     <div class="wb"><div class="wl">DOWN PAYMENT</div><div class="wv" style="color:#f59e0b">${$(downPayment)}</div></div>
     <div class="wb"><div class="wl">TOTAL LOAN FEES</div><div class="wv" style="color:#f59e0b">${$(totalLoanFees)}</div><div class="sub" style="font-size:9px;color:#475569;margin-top:2px">${$(loanPts)} pts + ${$(loanOrig)} orig + ${$(buyClosing)} close + ${$(svcfee)} svc</div></div>`;
 
-  // HOLDING
-  const monthlyInterest=Math.round(totalLoan*(rate/100)/12);
+  // HOLDING — interest accrues on 90% purchase + midpoint rehab draw (50% of reno)
+  const intPrincipal=Math.round(pur*0.90 + 0.50*totalReno);
+  const monthlyInterest=Math.round(intPrincipal*(rate/100)/12);
   const monthlyTax=Math.round(taxAnn/12);
   const monthlyTotal=monthlyInterest+monthlyTax+ins+hoa+util;
   const totalHold=monthlyTotal*holdMo;
 
   document.getElementById("holdSummary").innerHTML=`
     <div style="padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);margin-top:8px">
-      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px"><span style="color:#94a3b8">Interest (${rate}% on ${$(totalLoan)})</span><span style="font-weight:700">${$(monthlyInterest)}/mo</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px"><span style="color:#94a3b8">Interest (${rate}% on ${$(intPrincipal)})</span><span style="font-weight:700">${$(monthlyInterest)}/mo</span></div>
       <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px"><span style="color:#94a3b8">Property Tax</span><span style="font-weight:700">${$(monthlyTax)}/mo</span></div>
       <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px"><span style="color:#94a3b8">Insurance</span><span style="font-weight:700">${$(ins)}/mo</span></div>
       <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px"><span style="color:#94a3b8">HOA</span><span style="font-weight:700">${$(hoa)}/mo</span></div>
@@ -384,7 +385,8 @@ async function doSaveCalc(){
   const svcfee=gv("c_svcfee");
   const loanAmt=Math.round(pur*(ltv/100)),renoFin=Math.round(totalReno*(drawPct/100)),totalLoan=loanAmt+renoFin;
   const loanFees=Math.round(totalLoan*(pts/100))+Math.round(totalLoan*(orig/100))+closeBuyFlat+svcfee;
-  const monthlyH=Math.round(totalLoan*(rate/100)/12)+Math.round(taxAnn/12)+ins+hoa+util;
+  const intPrincipal2=Math.round(pur*0.90 + 0.50*totalReno);
+  const monthlyH=Math.round(intPrincipal2*(rate/100)/12)+Math.round(taxAnn/12)+ins+hoa+util;
   const totalHold=monthlyH*holdMo;
   const totalSell=Math.round(arv*(bagent/100))+closeSellFlat+staging+title+hoaxfer+misc+(arv>0?Math.ceil(arv/500)*2.55:0);
   const totalCost=pur+totalReno+loanFees+totalHold+totalSell-lisaCommAmt2;

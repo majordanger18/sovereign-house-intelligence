@@ -162,7 +162,8 @@ function updateOfferCalc(id){
   const loanOrig=Math.round(totalLoan*(q.orig/100));
   const totalLoanFees=loanPts+loanOrig+q.closeBuy+q.svcfee;
 
-  const monthlyInterest=Math.round(totalLoan*(q.rate/100)/12);
+  const intPrincipal=Math.round(oPrice*0.90 + 0.50*totalReno);
+  const monthlyInterest=Math.round(intPrincipal*(q.rate/100)/12);
   const monthlyTax=Math.round(q.taxAnn/12);
   const monthlyTotal=monthlyInterest+monthlyTax+q.ins+q.hoa+q.util;
   const totalHold=monthlyTotal*q.holdMo;
