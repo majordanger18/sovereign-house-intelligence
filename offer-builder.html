@@ -446,12 +446,16 @@ function buildDealData(form) {
     buyer1_sign_time:rTime,
     buyer1_am_x:(!isPM&&rTime)?"X":"", buyer1_pm_x:(isPM&&rTime)?"X":"",
     buyer2_printed_name:"SOVEREIGN HOUSE LLC",buyer2_sign_date:offerDateForPdf,buyer2_sign_time:rTime,buyer2_am_x:(!isPM&&rTime)?"X":"",buyer2_pm_x:(isPM&&rTime)?"X":"",
-    sellers_broker_name:form.listing_agent_name||"",
-    sellers_agent_name:form.listing_agent_name||"",
-    sellers_company_name:form.list_office_name||"",
-    sellers_agent_license:"",sellers_broker_license:"",sellers_office_address:"",
-    sellers_phone:form.listing_agent_phone||"",sellers_city_state_zip:"",
-    sellers_fax:"",sellers_email:form.listing_agent_email||"",
+    sellers_broker_name:form.sellers_broker_name||"",
+    sellers_agent_name:form.sellers_agent_name||"",
+    sellers_company_name:form.sellers_company_name||"",
+    sellers_agent_license:form.sellers_agent_license||"",
+    sellers_broker_license:form.sellers_broker_license||"",
+    sellers_office_address:form.sellers_office_address||"",
+    sellers_phone:form.sellers_phone||"",
+    sellers_city_state_zip:form.sellers_city_state_zip||"",
+    sellers_fax:form.sellers_fax||"",
+    sellers_email:form.sellers_email||"",
     seller_lic_does_not_x:"",seller_lic_does_x:"",
     seller_lic_principal_x:"",seller_lic_family_x:"",seller_lic_relationship:"",
     firpta_x:"",seller_not_foreign_x:"",seller_is_foreign_x:"",
@@ -825,6 +829,9 @@ const STATE = {
     respond_by_date: "", respond_by_time: "6:00 PM",
     listing_agent_name: "", listing_company: "", listing_broker_name: "",
     listing_agent_phone: "", listing_agent_email: "", list_office_name: "",
+    sellers_broker_name: "", sellers_agent_name: "", sellers_company_name: "",
+    sellers_agent_license: "", sellers_broker_license: "", sellers_office_address: "",
+    sellers_phone: "", sellers_city_state_zip: "", sellers_fax: "", sellers_email: "",
     buyers_broker_name:"GAVIN ERNSTONE", buyers_agent_name:"Lisa A. Hunt",
     buyers_company_name:"SIMPLY VEGAS", buyers_phone:"7026853000",
     buyers_email:"Lisa@lisaahunt.com", buyers_city_state_zip:"Las Vegas  NV  89117",
@@ -1173,13 +1180,24 @@ function render() {
     </div>`);
 
   const s6 = section(6, "Listing Agent / Seller's Broker", `
+    <div class="note">Pre-filled from MLS data where available</div>
     <div class="row">
-      ${makeField("Listing Agent Name","listing_agent_name",200)}
-      ${makeField("Listing Company","list_office_name",200)}
+      ${makeField("Agent Name","sellers_agent_name",200)}
+      ${makeField("Company","sellers_company_name",200)}
     </div>
     <div class="row">
-      ${makeField("Phone","listing_agent_phone",160)}
-      ${makeField("Email","listing_agent_email",240)}
+      ${makeField("Broker Name","sellers_broker_name",200)}
+      ${makeField("Office Address","sellers_office_address",200)}
+    </div>
+    <div class="row">
+      ${makeField("Agent License","sellers_agent_license",120)}
+      ${makeField("Broker License","sellers_broker_license",120)}
+      ${makeField("City/State/ZIP","sellers_city_state_zip",160)}
+    </div>
+    <div class="row">
+      ${makeField("Phone","sellers_phone",160)}
+      ${makeField("Email","sellers_email",200)}
+      ${makeField("Fax","sellers_fax",120)}
     </div>`);
 
   const s7 = section(7, "Response Deadline & Terms", `
@@ -1262,6 +1280,11 @@ document.addEventListener("DOMContentLoaded", function(){
       if (STATE.form.property_address) {
         STATE.form.property_address = STATE.form.property_address.split(",")[0].trim();
       }
+      // Pre-fill seller broker fields from listing agent data (only 4 fields we have)
+      if (data.listing_agent_name && !STATE.form.sellers_agent_name) STATE.form.sellers_agent_name = data.listing_agent_name;
+      if (data.list_office_name && !STATE.form.sellers_company_name) STATE.form.sellers_company_name = data.list_office_name;
+      if (data.listing_agent_phone && !STATE.form.sellers_phone) STATE.form.sellers_phone = data.listing_agent_phone;
+      if (data.listing_agent_email && !STATE.form.sellers_email) STATE.form.sellers_email = data.listing_agent_email;
       // Auto-calc loan amount and balance from purchase price
       if (data.purchase_price) {
         const pp = parseFloat(String(data.purchase_price).replace(/,/g,""));
