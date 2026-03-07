@@ -64,7 +64,7 @@ function openRPABuilder(id){
     listing_agent_phone:agentPhone,
     listing_agent_email:agentEmail,
     licensee_interest:true,
-    licensee_relationship:"Managing Partner of Buyer entity",
+    licensee_relationship:"LISA HUNT IS A MEMBER OF SOVEREIGN HOUSE LLC",
   };
   const encoded=encodeURIComponent(JSON.stringify(rpaData));
   window.open("offer-builder.html?prefill="+encoded,"_blank");
@@ -110,7 +110,7 @@ function openRPAFromDeal(dealId){
     listing_broker_name:d.listing_agent_brokerage||"",
     listing_agent_phone:d.listing_agent_phone||"",
     listing_agent_email:d.listing_agent_email||"",
-    licensee_interest:true, licensee_relationship:"Managing Partner of Buyer entity",
+    licensee_interest:true, licensee_relationship:"LISA HUNT IS A MEMBER OF SOVEREIGN HOUSE LLC",
   };
   const encoded=encodeURIComponent(JSON.stringify(rpaData));
   window.open("offer-builder.html?prefill="+encoded,"_blank");
