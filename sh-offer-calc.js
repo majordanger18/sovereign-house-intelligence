@@ -186,7 +186,7 @@ function exportPDF(){
   doc.text(`Total: ${fmt(totalReno)}`,420,y);y+=18;
 
   // Financing
-  doc.setFontSize(8);doc.setTextColor(212,175,55);doc.text("FINANCING (KIAVI)",M,y);y+=14;
+  doc.setFontSize(8);doc.setTextColor(212,175,55);doc.text("FINANCING",M,y);y+=14;
   doc.setFontSize(10);doc.setTextColor(60,60,60);
   doc.text(`${ltv}% LTV · ${rate}% Rate · ${pts}% Points · ${orig}% Orig · ${fmt(closeBuyFlat)} Close`,M,y);y+=13;
   doc.text(`Loan: ${fmt(totalLoan)}`,M,y);doc.text(`Down: ${fmt(downPay)}`,200,y);doc.text(`Fees: ${fmt(totalLoanFees)}`,360,y);y+=18;

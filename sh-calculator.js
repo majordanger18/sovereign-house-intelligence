@@ -109,10 +109,10 @@ function renderCalc(saved){
       <div class="row3">
         <div class="fld"><label>ORIGINATION %</label><input id="c_orig" type="number" class="cinput" value="${v.orig}" oninput="updateCalc()"/></div>
         <div class="fld"><label>CLOSING (BUY) $</label><input id="c_closebuy" type="number" class="cinput" value="${v.closebuy}" oninput="updateCalc()"/></div>
-        <div class="fld"><label>RENO DRAW %</label><input id="c_drawpct" type="number" class="cinput" value="${v.drawpct}" oninput="updateCalc()"/><div class="sub">Kiavi covers 100% reno</div></div>
+        <div class="fld"><label>RENO DRAW %</label><input id="c_drawpct" type="number" class="cinput" value="${v.drawpct}" oninput="updateCalc()"/><div class="sub">Lender covers 100% reno</div></div>
       </div>
       <div class="row3">
-        <div class="fld"><label>SERVICE FEE $</label><input id="c_svcfee" type="number" class="cinput" value="${v.svcfee}" oninput="updateCalc()"/><div class="sub">Kiavi flat fee</div></div>
+        <div class="fld"><label>SERVICE FEE $</label><input id="c_svcfee" type="number" class="cinput" value="${v.svcfee}" oninput="updateCalc()"/><div class="sub">Lender flat fee</div></div>
       </div>
       <div id="finSummary" class="row3" style="margin-bottom:10px"></div>
     </div>
@@ -328,7 +328,7 @@ function updateCalc(){
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
       <div class="wb"><div class="wl">YOUR CASH IN</div><div class="wv" style="color:#f59e0b">${$(cashIn)}</div><div style="font-size:9px;color:#475569;margin-top:2px">10% down + fees</div></div>
-      <div class="wb"><div class="wl">KIAVI FUNDS</div><div class="wv" style="color:#3b82f6">${$(totalCost-cashIn)}</div><div style="font-size:9px;color:#475569;margin-top:2px">90% purchase + 100% reno</div></div>
+      <div class="wb"><div class="wl">LOAN FUNDS</div><div class="wv" style="color:#3b82f6">${$(totalCost-cashIn)}</div><div style="font-size:9px;color:#475569;margin-top:2px">90% purchase + 100% reno</div></div>
     </div>`;
 }
 

@@ -316,7 +316,7 @@ Offer Price: ${$(oPrice)}
 Earnest Money Deposit: ${$(emd)}
 Close of Escrow: ${coe} days from acceptance
 Inspection Period: ${inspect} days
-Financing: Kiavi bridge loan — pre-qualified, ${finance}-day contingency
+Financing: Hard money loan — pre-qualified, ${finance}-day contingency
 Possession: ${possText}
 ${terms?'Additional Terms: '+terms:''}
 
