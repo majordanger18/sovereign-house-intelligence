@@ -323,8 +323,7 @@ function buildDealData(form) {
   const loan = parseFloat((form.loan_amount||form.purchase_price||"0").replace(/,/g,""));
   const balance = parseFloat((form.balance_down_payment||"0").replace(/,/g,""));
   const buyerName = form.buyer_name || "Sovereign House LLC";
-  // Strip city/state/zip — keep only street address (before first comma)
-  const propAddr = (form.property_address || "").split(",")[0].trim();
+  const propAddr = form.property_address || "";
   const loanType = (form.loan_type||"other").toLowerCase();
 
   const mlsNum = form.mls_number || "";
@@ -1263,6 +1262,10 @@ document.addEventListener("DOMContentLoaded", function(){
         } else if (key in STATE.form) {
           STATE.form[key] = dateFields.includes(key) ? toISODate(val) : val;
         }
+      }
+      // Strip city/state/zip from property_address — keep street only
+      if (STATE.form.property_address) {
+        STATE.form.property_address = STATE.form.property_address.split(",")[0].trim();
       }
       // Auto-calc loan amount and balance from purchase price
       if (data.purchase_price) {
