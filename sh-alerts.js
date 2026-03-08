@@ -1,4 +1,16 @@
 // Sovereign House Intelligence — Alerts System
+// ═══ DEDUPLICATE ALERTS ═══
+// Collapse duplicate alerts (same property + type within 24h) — keep most recent
+function dedupeAlerts(list){
+  const seen=new Map();
+  const sorted=[...list].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  return sorted.filter(a=>{
+    const key=(a.property_id||a.mls_number||"")+"__"+(a.alert_type||"");
+    if(seen.has(key))return false;
+    seen.set(key,true);
+    return true;
+  });
+}
 // ═══ ALERT DISMISS ═══
 function markRead(aid){
   aid=String(aid);
@@ -14,14 +26,14 @@ function removeAlertRow(aid,cb){
 }
 function updateAlertBadge(){
   const dismissed=JSON.parse(localStorage.getItem("sh_dismissed_alerts")||"[]");
-  const visible=alerts.filter(a=>!dismissed.includes(String(a.id)));
+  const visible=dedupeAlerts(alerts.filter(a=>!dismissed.includes(String(a.id))));
   const badge=document.getElementById("alertBadge");
   if(visible.length>0){badge.style.display="flex";document.getElementById("alertCount").textContent=visible.length;}
   else{badge.style.display="none";document.getElementById("alertToast").innerHTML="";}
 }
 function updateAlertPageCount(){
   const dismissed=JSON.parse(localStorage.getItem("sh_dismissed_alerts")||"[]");
-  const visible=alerts.filter(a=>!dismissed.includes(String(a.id)));
+  const visible=dedupeAlerts(alerts.filter(a=>!dismissed.includes(String(a.id))));
   const ct=document.getElementById("alertPageCount");
   if(ct)ct.textContent=`${visible.length} alert${visible.length!==1?"s":""}`;
   if(visible.length===0){
@@ -44,7 +56,7 @@ function dismissAllAlerts(){
 
 function openAlerts(){
   const dismissed=JSON.parse(localStorage.getItem("sh_dismissed_alerts")||"[]");
-  const visible=alerts.filter(a=>!dismissed.includes(String(a.id)));
+  const visible=dedupeAlerts(alerts.filter(a=>!dismissed.includes(String(a.id))));
   const renderAlert=a=>{
     const matchProp=props.find(p=>p.mls_number&&a.mls_number&&p.mls_number===a.mls_number);
     const propId=matchProp?matchProp.id:null;

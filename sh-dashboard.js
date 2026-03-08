@@ -56,9 +56,10 @@ function renderDashboard(){
   const screenedSub=`<span style="color:#22c55e;font-weight:700">${screened}</span> screened`;
   document.getElementById("statsArea").innerHTML=[sB("LISTINGS",st.total,"#e2e8f0",screenedSub),sB("AVG SCORE",st.avgScore,sc(st.avgScore)),sB("AVG PRICE",$k(st.avgPrice),"#e2e8f0"),sB("AVG DOM",st.avgDom,"#f59e0b","days")].join("");
 
-  // Update alert badge
+  // Update alert badge (deduplicated)
   const dismissed=JSON.parse(localStorage.getItem("sh_dismissed_alerts")||"[]");
-  const alertCount=alerts.filter(a=>!dismissed.includes(String(a.id))).length;
+  const dedupedVisible=dedupeAlerts(alerts.filter(a=>!dismissed.includes(String(a.id))));
+  const alertCount=dedupedVisible.length;
   const badge=document.getElementById("alertBadge");
   if(alertCount>0){badge.style.display="flex";document.getElementById("alertCount").textContent=alertCount;}
   else{badge.style.display="none";}
@@ -66,9 +67,9 @@ function renderDashboard(){
   // Alert toast
   const toastArea=document.getElementById("alertToast");
   if(alertCount>0&&!toastDismissed){
-    const priceAlerts=alerts.filter(a=>!dismissed.includes(String(a.id))&&a.alert_type==="PRICE_CHANGE").length;
-    const statusAlerts=alerts.filter(a=>!dismissed.includes(String(a.id))&&a.alert_type==="STATUS_CHANGE").length;
-    const newAlerts=alerts.filter(a=>!dismissed.includes(String(a.id))&&a.alert_type==="NEW_LISTING").length;
+    const priceAlerts=dedupedVisible.filter(a=>a.alert_type==="PRICE_CHANGE").length;
+    const statusAlerts=dedupedVisible.filter(a=>a.alert_type==="STATUS_CHANGE").length;
+    const newAlerts=dedupedVisible.filter(a=>a.alert_type==="NEW_LISTING").length;
     let summary=[];
     if(newAlerts)summary.push(`${newAlerts} new listing${newAlerts>1?"s":""}`);
     if(priceAlerts)summary.push(`${priceAlerts} price drop${priceAlerts>1?"s":""}`);
