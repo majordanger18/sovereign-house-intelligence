@@ -116,11 +116,11 @@ function renderDeals(){
         <div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">
           ${counters?`<span style="font-size:9px;color:#f59e0b;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.15);padding:2px 8px;border-radius:6px;font-weight:700">${counters} counter${counters>1?'s':''}</span>`:''}
           ${d.accepted_commission_pct!=null?`<span style="font-size:9px;color:#d4af37;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.15);padding:2px 8px;border-radius:6px;font-weight:700">Lisa ${d.accepted_commission_pct}%</span>`:`<span style="font-size:9px;color:#d4af37;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.15);padding:2px 8px;border-radius:6px;font-weight:700">Lisa ${d.lisa_buy_commission_pct||0}%</span>`}
-          ${d.coe_date?`<span style="font-size:9px;color:#94a3b8;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);padding:2px 8px;border-radius:6px;font-weight:600">COE ${new Date(d.coe_date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>`:''}
+          ${d.coe_date?`<span style="font-size:9px;color:#94a3b8;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);padding:2px 8px;border-radius:6px;font-weight:600">COE ${new Date(d.coe_date).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'})}</span>`:''}
           ${stale?`<span style="font-size:9px;color:#ef4444;font-weight:700">${daysSince}d no update</span>`:''}
         </div>
 
-        ${lastEvent?`<div style="font-size:10px;color:#64748b;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.04)">Latest: <span style="color:#94a3b8">${esc(lastEvent.summary||lastEvent.type||'')}</span> · ${lastEvent.date?new Date(lastEvent.date).toLocaleDateString():''}</div>`:''}
+        ${lastEvent?`<div style="font-size:10px;color:#64748b;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.04)">Latest: <span style="color:#94a3b8">${esc(lastEvent.summary||lastEvent.type||'')}</span> · ${lastEvent.date?new Date(lastEvent.date).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"}):''}</div>`:''}
       </div>`;
     }).join('');
   }
@@ -144,7 +144,7 @@ function renderDeals(){
         </div>
         <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
           <span style="font-size:9px;color:#d4af37;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.2);padding:2px 8px;border-radius:6px;font-weight:800">DEAL WON</span>
-          ${d.coe_date?`<span style="font-size:9px;color:#94a3b8">COE ${new Date(d.coe_date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>`:''}
+          ${d.coe_date?`<span style="font-size:9px;color:#94a3b8">COE ${new Date(d.coe_date).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'})}</span>`:''}
           ${d.accepted_commission_pct!=null?`<span style="font-size:9px;color:#d4af37">Lisa ${d.accepted_commission_pct}%</span>`:''}
         </div>
       </div>`;
@@ -207,9 +207,9 @@ async function openDeal(dealId){
 
     <!-- KEY DATES -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px">
-      <div style="padding:8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);text-align:center"><div style="font-size:7px;color:#64748b;font-weight:700">CREATED</div><div style="font-size:11px;font-weight:700;color:#94a3b8;margin-top:2px">${d.created_at?new Date(d.created_at).toLocaleDateString():'-'}</div></div>
-      <div style="padding:8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);text-align:center"><div style="font-size:7px;color:#64748b;font-weight:700">CONTRACT</div><div style="font-size:11px;font-weight:700;color:#94a3b8;margin-top:2px">${d.contract_date?new Date(d.contract_date).toLocaleDateString():'-'}</div></div>
-      <div style="padding:8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);text-align:center"><div style="font-size:7px;color:#64748b;font-weight:700">COE DATE</div><div style="font-size:11px;font-weight:700;color:#94a3b8;margin-top:2px">${d.coe_date?new Date(d.coe_date).toLocaleDateString():'-'}</div></div>
+      <div style="padding:8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);text-align:center"><div style="font-size:7px;color:#64748b;font-weight:700">CREATED</div><div style="font-size:11px;font-weight:700;color:#94a3b8;margin-top:2px">${d.created_at?new Date(d.created_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"}):'-'}</div></div>
+      <div style="padding:8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);text-align:center"><div style="font-size:7px;color:#64748b;font-weight:700">CONTRACT</div><div style="font-size:11px;font-weight:700;color:#94a3b8;margin-top:2px">${d.contract_date?new Date(d.contract_date).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"}):'-'}</div></div>
+      <div style="padding:8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);text-align:center"><div style="font-size:7px;color:#64748b;font-weight:700">COE DATE</div><div style="font-size:11px;font-weight:700;color:#94a3b8;margin-top:2px">${d.coe_date?new Date(d.coe_date).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"}):'-'}</div></div>
     </div>
 
     <!-- PIPELINE STATUS UPDATE -->
@@ -290,7 +290,7 @@ async function openDeal(dealId){
           <div style="flex:1">
             <div style="display:flex;justify-content:space-between;align-items:center">
               <div style="font-size:11px;font-weight:700;color:${tc}">${(e.type||'').replace(/_/g,' ').toUpperCase()}${e.from?' · '+e.from.toUpperCase():''}</div>
-              <div style="font-size:9px;color:#475569">${e.date?new Date(e.date).toLocaleDateString():''}</div>
+              <div style="font-size:9px;color:#475569">${e.date?new Date(e.date).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"}):''}</div>
             </div>
             <div style="font-size:12px;color:#e2e8f0;margin-top:2px">${esc(e.summary||'')}</div>
             ${e.price?`<div style="font-size:11px;color:#94a3b8;margin-top:2px">Price: ${$(e.price)}${e.commission_pct!=null?' · Commission: '+e.commission_pct+'%':''}</div>`:''}
@@ -340,7 +340,7 @@ function renderTimelineEntry(e){
     <div style="flex:1">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div style="font-size:11px;font-weight:700;color:${tc}">${(e.type||'').replace(/_/g,' ').toUpperCase()}${e.from?' · '+e.from.toUpperCase():''}</div>
-        <div style="font-size:9px;color:#475569">${e.date?new Date(e.date).toLocaleDateString():''}</div>
+        <div style="font-size:9px;color:#475569">${e.date?new Date(e.date).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"}):''}</div>
       </div>
       <div style="font-size:12px;color:#e2e8f0;margin-top:2px">${esc(e.summary||'')}</div>
       ${e.price?`<div style="font-size:11px;color:#94a3b8;margin-top:2px">Price: ${$(e.price)}${e.commission_pct!=null?' · Commission: '+e.commission_pct+'%':''}</div>`:''}

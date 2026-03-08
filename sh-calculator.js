@@ -79,13 +79,14 @@ function renderCalc(saved){
 
   const m=document.getElementById("calcModal");
   m.innerHTML=`<div class="sheet" style="position:relative"><div class="handle"></div><button class="close-x" onclick="closeCalc()">✕</button>
+    ${editingDealId?`<button onclick="closeCalc()" style="display:inline-flex;align-items:center;gap:4px;margin-bottom:10px;padding:8px 14px;border-radius:8px;border:1px solid rgba(59,130,246,0.2);background:rgba(59,130,246,0.08);color:#60a5fa;font-size:12px;font-weight:700;cursor:pointer;min-height:36px">← Back to Deal</button>`:''}
     <div style="margin-bottom:16px;padding-right:40px">
       <div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">8-STEP PROTOCOL</div>
       <div style="font-size:17px;font-weight:800;margin-top:2px">${esc(p.address)}</div>
       <div style="font-size:10px;color:#64748b;margin-top:1px">MLS# ${p.mls_number} · ${sqft.toLocaleString()}sf · Built ${p.year_built} · ${p.pool?"Pool":"No Pool"}</div>
       ${calcHistory.length>0?`<button onclick="toggleCalcHist()" style="margin-top:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:#64748b;font-size:10px;font-weight:700;cursor:pointer">📂 ${calcHistory.length} Past Run${calcHistory.length>1?"s":""}</button>`:""}
       ${saved?`<div style="margin-top:6px;padding:4px 10px;border-radius:6px;background:rgba(34,197,94,0.08);display:inline-block;font-size:10px;color:#22c55e;font-weight:600">✓ Loaded from ${new Date(saved.updated_at||saved.created_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"})}</div>`:""}
-      ${editingDealId?`<div style="margin-top:6px;padding:6px 12px;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.15);display:inline-block;font-size:10px;color:#60a5fa;font-weight:700">📝 Editing deal — save will update deal numbers</div>`:''}
+      ${editingDealId?`<div id="calcDealBanner" style="margin-top:6px;padding:6px 12px;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.15);display:inline-block;font-size:10px;color:#60a5fa;font-weight:700">📝 Editing deal — save will update deal numbers</div>`:''}
     </div>
     <div id="calcHistArea"></div>
 
@@ -469,9 +470,14 @@ async function doSaveCalc(){
         const dd=deals.find(x=>x.id===editingDealId);if(dd)Object.assign(dd,dealPatch);
         renderDashboard();
       }catch(e){console.error("Deal update failed:",e);}
+      // Hide banner, confirm, and auto-navigate back to deal
+      const banner=document.getElementById("calcDealBanner");if(banner)banner.remove();
+      btn.textContent="✓ Deal Updated!";btn.style.background="rgba(34,197,94,0.15)";btn.style.color="#22c55e";btn.style.opacity="1";
+      setTimeout(()=>closeCalc(),1500);
+      return;
     }
     btn.textContent="✓ Saved!";btn.style.background="rgba(34,197,94,0.15)";btn.style.color="#22c55e";btn.style.opacity="1";
-    setTimeout(()=>{btn.textContent=editingDealId?"💾 Save & Update Deal":"💾 Save Analysis";btn.style.background="rgba(212,175,55,0.9)";btn.style.color="#0a0a0a";},2500);
+    setTimeout(()=>{btn.textContent="💾 Save Analysis";btn.style.background="rgba(212,175,55,0.9)";btn.style.color="#0a0a0a";},2500);
   }catch(e){
     console.error("Save error:",e);
     btn.textContent="❌ Network Error";btn.style.background="rgba(239,68,68,0.15)";btn.style.color="#ef4444";btn.style.opacity="1";
