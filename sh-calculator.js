@@ -86,7 +86,6 @@ function renderCalc(saved){
       <div style="font-size:10px;color:#64748b;margin-top:1px">MLS# ${p.mls_number} · ${sqft.toLocaleString()}sf · Built ${p.year_built} · ${p.pool?"Pool":"No Pool"}</div>
       ${calcHistory.length>0?`<button onclick="toggleCalcHist()" style="margin-top:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:#64748b;font-size:10px;font-weight:700;cursor:pointer">📂 ${calcHistory.length} Past Run${calcHistory.length>1?"s":""}</button>`:""}
       ${saved?`<div style="margin-top:6px;padding:4px 10px;border-radius:6px;background:rgba(34,197,94,0.08);display:inline-block;font-size:10px;color:#22c55e;font-weight:600">✓ Loaded from ${new Date(saved.updated_at||saved.created_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"})}</div>`:""}
-      ${editingDealId?`<div id="calcDealBanner" style="margin-top:6px;padding:6px 12px;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.15);display:inline-block;font-size:10px;color:#60a5fa;font-weight:700">📝 Editing deal — save will update deal numbers</div>`:''}
     </div>
     <div id="calcHistArea"></div>
 
@@ -470,8 +469,6 @@ async function doSaveCalc(){
         const dd=deals.find(x=>x.id===editingDealId);if(dd)Object.assign(dd,dealPatch);
         renderDashboard();
       }catch(e){console.error("Deal update failed:",e);}
-      // Hide banner, confirm, and auto-navigate back to deal
-      const banner=document.getElementById("calcDealBanner");if(banner)banner.remove();
       btn.textContent="✓ Deal Updated!";btn.style.background="rgba(34,197,94,0.15)";btn.style.color="#22c55e";btn.style.opacity="1";
       setTimeout(()=>closeCalc(),1500);
       return;
