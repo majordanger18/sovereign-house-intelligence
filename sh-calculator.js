@@ -2,7 +2,7 @@
 // ═══════════════════════════════════════════
 // ═══ FULL 8-STEP PROTOCOL CALCULATOR ═══
 // ═══════════════════════════════════════════
-let calcProp=null,calcHistory=[];
+let calcProp=null,calcHistory=[],editingDealId=null;
 let calcSections={financing:true,holding:true,selling:true};
 
 async function openCalc(id){
@@ -18,7 +18,28 @@ async function openCalc(id){
   document.getElementById("calcModal").style.display="block";
   document.body.style.overflow="hidden";
 }
-function closeCalc(){document.getElementById("calcModal").style.display="none";if(document.getElementById("detailModal").style.display==="block"){document.body.style.overflow="hidden";}else{document.body.style.overflow="";}}
+async function openCalcForDeal(dealId){
+  const d=deals.find(x=>x.id===dealId);if(!d)return;
+  editingDealId=dealId;
+  // Close deal modal — calc will re-open it when done
+  document.getElementById("dealModal").style.display="none";
+  // Use the real property if available, otherwise build from deal data
+  let p=props.find(x=>x.id===d.property_id);
+  if(!p){
+    p={id:d.property_id,mls_number:d.mls_number,address:d.address,city:'Las Vegas',zip_code:d.zip_code,
+       sqft:d.sqft,bedrooms:d.beds,bathrooms:d.baths,list_price:d.list_price,
+       price_per_sqft:d.sqft?Math.round(d.list_price/d.sqft):0,year_built:null,pool:null,
+       hoa_monthly:null,garage_spaces:null,subdivision_name:d.community,sovereign_score:null};
+  }
+  calcProp=p;
+  const ch=await sb(`calc_history?mls_number=eq.${p.mls_number}&order=created_at.desc`);
+  calcHistory=Array.isArray(ch)?ch:[];
+  renderCalc(calcHistory.length>0?calcHistory[0]:null);
+  document.getElementById("calcModal").style.display="block";
+  document.body.style.overflow="hidden";
+}
+
+function closeCalc(){document.getElementById("calcModal").style.display="none";if(editingDealId){const did=editingDealId;editingDealId=null;openDeal(did);return;}editingDealId=null;if(document.getElementById("detailModal").style.display==="block"){document.body.style.overflow="hidden";}else{document.body.style.overflow="";}}
 
 function gv(id){const el=document.getElementById(id);return el?Number(el.value)||0:0;}
 
@@ -64,6 +85,7 @@ function renderCalc(saved){
       <div style="font-size:10px;color:#64748b;margin-top:1px">MLS# ${p.mls_number} · ${sqft.toLocaleString()}sf · Built ${p.year_built} · ${p.pool?"Pool":"No Pool"}</div>
       ${calcHistory.length>0?`<button onclick="toggleCalcHist()" style="margin-top:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:#64748b;font-size:10px;font-weight:700;cursor:pointer">📂 ${calcHistory.length} Past Run${calcHistory.length>1?"s":""}</button>`:""}
       ${saved?`<div style="margin-top:6px;padding:4px 10px;border-radius:6px;background:rgba(34,197,94,0.08);display:inline-block;font-size:10px;color:#22c55e;font-weight:600">✓ Loaded from ${new Date(saved.updated_at||saved.created_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"})}</div>`:""}
+      ${editingDealId?`<div style="margin-top:6px;padding:6px 12px;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.15);display:inline-block;font-size:10px;color:#60a5fa;font-weight:700">📝 Editing deal — save will update deal numbers</div>`:''}
     </div>
     <div id="calcHistArea"></div>
 
@@ -172,8 +194,8 @@ function renderCalc(saved){
     <!-- RESULTS -->
     <div id="calcResults" style="margin-top:16px"></div>
 
-    <button id="calcSaveBtn" onclick="doSaveCalc()" class="btn" style="width:100%;margin-top:12px;padding:14px;font-size:14px;background:rgba(212,175,55,0.9);color:#0a0a0a">💾 Save Analysis</button>
-    <button onclick="saveAndOffer()" class="btn" style="width:100%;margin-top:8px;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(34,197,94,0.9),rgba(34,197,94,0.7));color:#0a0a0a;font-weight:800">📝 Save & Make Offer →</button>
+    <button id="calcSaveBtn" onclick="doSaveCalc()" class="btn" style="width:100%;margin-top:12px;padding:14px;font-size:14px;background:rgba(212,175,55,0.9);color:#0a0a0a">${editingDealId?'💾 Save & Update Deal':'💾 Save Analysis'}</button>
+    ${editingDealId?'':`<button onclick="saveAndOffer()" class="btn" style="width:100%;margin-top:8px;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(34,197,94,0.9),rgba(34,197,94,0.7));color:#0a0a0a;font-weight:800">📝 Save & Make Offer →</button>`}
     <div style="display:flex;gap:8px;margin-top:8px">
       <button onclick="exportPDF()" class="btn" style="flex:1;padding:12px;font-size:13px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#f1f5f9">📄 Export PDF</button>
       <button onclick="shareAnalysis()" class="btn" style="flex:1;padding:12px;font-size:13px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#f1f5f9">📤 Share</button>
@@ -439,8 +461,17 @@ async function doSaveCalc(){
     }
     const updated=await sb(`calc_history?mls_number=eq.${calcProp.mls_number}&order=created_at.desc`);
     calcHistory=Array.isArray(updated)?updated:[];
+    // Update the deal row if editing from deal context
+    if(editingDealId){
+      const dealPatch={offer_price:pur,reno_budget:totalReno,target_arv:arv,projected_profit_target:profit,projected_roi_target:roi,lisa_buy_commission_pct:lisaCommPct2,lisa_buy_commission_amt:lisaCommAmt2};
+      try{
+        await fetch(`${SB}/rest/v1/deals?id=eq.${editingDealId}`,{method:'PATCH',headers:HD,body:JSON.stringify(dealPatch)});
+        const dd=deals.find(x=>x.id===editingDealId);if(dd)Object.assign(dd,dealPatch);
+        renderDashboard();
+      }catch(e){console.error("Deal update failed:",e);}
+    }
     btn.textContent="✓ Saved!";btn.style.background="rgba(34,197,94,0.15)";btn.style.color="#22c55e";btn.style.opacity="1";
-    setTimeout(()=>{btn.textContent="💾 Save Analysis";btn.style.background="rgba(212,175,55,0.9)";btn.style.color="#0a0a0a";},2500);
+    setTimeout(()=>{btn.textContent=editingDealId?"💾 Save & Update Deal":"💾 Save Analysis";btn.style.background="rgba(212,175,55,0.9)";btn.style.color="#0a0a0a";},2500);
   }catch(e){
     console.error("Save error:",e);
     btn.textContent="❌ Network Error";btn.style.background="rgba(239,68,68,0.15)";btn.style.color="#ef4444";btn.style.opacity="1";

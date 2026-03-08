@@ -226,6 +226,9 @@ async function openDeal(dealId){
       </div>
     </div>`:`<div style="margin-bottom:16px;padding:12px;border-radius:10px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.15)"><div style="font-size:10px;color:#ef4444;font-weight:800;letter-spacing:1px">DEAL ${d.status?.toUpperCase()}</div>${d.kill_reason?`<div style="font-size:12px;color:#94a3b8;margin-top:4px">${esc(d.kill_reason)}</div>`:''}<button onclick="updateDealStatus('${d.id}','offer_drafted')" style="margin-top:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer">♻️ Reopen Deal</button></div>`}
 
+    <!-- EDIT DEAL NUMBERS -->
+    <button onclick="openCalcForDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:14px;font-size:14px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;font-weight:800">🧮 Edit Deal Numbers</button>
+
     <!-- GENERATE RPA -->
     <button onclick="openRPAFromDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:16px;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(224,201,127,0.15),rgba(212,175,55,0.08));border:1px solid rgba(224,201,127,0.3);color:#e0c97f;font-weight:800">📄 Generate GLVAR RPA</button>
 
