@@ -59,3 +59,7 @@ input[type="range"]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;b
 #stickyHeader{transition:box-shadow .2s;background:#09090b}
 #stickyHeader .sh-inner{max-width:1200px;margin:0 auto}
 #stickyHeader.scrolled{box-shadow:0 4px 24px rgba(0,0,0,0.6)}
+.login-screen{min-height:100dvh;display:flex;align-items:center;justify-content:center;background:#09090b;padding:20px}
+.login-box{width:100%;max-width:360px;padding:40px 28px;border-radius:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(212,175,55,0.12)}
+.login-box .cinput{margin-bottom:0}
+.login-box .fld{margin-bottom:14px}

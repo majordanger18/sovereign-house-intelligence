@@ -5,6 +5,53 @@ const HD={apikey:KEY,Authorization:`Bearer ${KEY}`,"Content-Type":"application/j
 // ═══ N8N WEBHOOK — paste your production webhook URL here ═══
 const N8N_WEBHOOK="https://majordanger.app.n8n.cloud/webhook/underwrite";
 async function sb(ep,opts={}){const r=await fetch(`${SB}/rest/v1/${ep}`,{...opts,headers:{...HD,...opts.headers}});return r.json();}
+
+// ═══ SUPABASE AUTH ═══
+const supabaseClient=window.supabase.createClient(SB,KEY);
+window.SH_USER=null;
+
+async function initAuth(){
+  try{
+    const{data:{session}}=await supabaseClient.auth.getSession();
+    if(session&&session.user){
+      window.SH_USER={id:session.user.id,email:session.user.email};
+      document.getElementById("loginScreen").style.display="none";
+      return true;
+    }
+  }catch(e){console.error("Auth check failed:",e);}
+  document.getElementById("loading").style.display="none";
+  document.getElementById("loginScreen").style.display="flex";
+  return false;
+}
+
+async function doLogin(){
+  const email=(document.getElementById("loginEmail").value||"").trim();
+  const pass=document.getElementById("loginPass").value||"";
+  const errEl=document.getElementById("loginError");
+  const btn=document.getElementById("loginBtn");
+  errEl.style.display="none";
+  if(!email||!pass){errEl.textContent="Enter email and password.";errEl.style.display="block";return;}
+  btn.textContent="Signing in...";btn.disabled=true;
+  try{
+    const{data,error}=await supabaseClient.auth.signInWithPassword({email,password:pass});
+    if(error){errEl.textContent=error.message;errEl.style.display="block";btn.textContent="Sign In";btn.disabled=false;return;}
+    window.SH_USER={id:data.user.id,email:data.user.email};
+    document.getElementById("loginScreen").style.display="none";
+    document.getElementById("loading").style.display="flex";
+    loadData().then(()=>{setTimeout(checkMagicLink,800);});
+  }catch(e){errEl.textContent="Connection error. Try again.";errEl.style.display="block";}
+  btn.textContent="Sign In";btn.disabled=false;
+}
+
+async function doLogout(){
+  try{await supabaseClient.auth.signOut();}catch(e){}
+  window.SH_USER=null;
+  document.getElementById("main").style.display="none";
+  document.getElementById("loading").style.display="none";
+  document.getElementById("loginScreen").style.display="flex";
+  document.getElementById("loginPass").value="";
+  document.getElementById("loginError").style.display="none";
+}
 const $=n=>n!=null?`$${Number(n).toLocaleString()}`:"—";
 const $k=n=>n?(n>=1e6?`$${(n/1e6).toFixed(2)}M`:`$${(n/1e3).toFixed(0)}K`):"—";
 const sc=s=>s>=60?"#22c55e":s>=40?"#eab308":s>=20?"#f97316":"#64748b";

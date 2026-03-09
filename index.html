@@ -9,9 +9,25 @@
 <title>Sovereign House Intelligence v3.2</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" class="login-screen" style="display:none">
+  <div class="login-box">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-size:9px;color:#d4af37;font-weight:800;letter-spacing:4px;margin-bottom:6px">SOVEREIGN HOUSE</div>
+      <div style="font-family:'Playfair Display',serif;font-size:28px;font-weight:900;color:#f1f5f9">Intelligence</div>
+      <div style="font-size:11px;color:#475569;margin-top:6px">Sign in to access the dashboard</div>
+    </div>
+    <div id="loginError" style="display:none;padding:10px 14px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#ef4444;font-size:12px;font-weight:600;margin-bottom:16px;text-align:center"></div>
+    <div class="fld"><label>EMAIL</label><input id="loginEmail" type="email" class="cinput" placeholder="you@sovereignhouse.com" autocomplete="email"/></div>
+    <div class="fld"><label>PASSWORD</label><input id="loginPass" type="password" class="cinput" placeholder="••••••••" autocomplete="current-password"/></div>
+    <button id="loginBtn" onclick="doLogin()" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;margin-top:8px;border:none">Sign In</button>
+  </div>
+</div>
 
 <div id="loading" style="min-height:100dvh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px">
   <div style="width:36px;height:36px;border:3px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite"></div>
@@ -30,6 +46,7 @@
           <div id="alertBadge" style="display:none;cursor:pointer;background:#d4af37;color:#0a0a0a;font-size:12px;font-weight:800;border-radius:20px;padding:6px 12px;min-height:32px;align-items:center;gap:4px">🔔 <span id="alertCount">0</span></div>
           <button onclick="togglePulse()" class="btn" style="padding:0 14px;min-height:42px;font-size:16px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8">📊</button>
           <button onclick="this.style.opacity='0.4';loadData().then(()=>{this.style.opacity='1';checkHealth();})" class="btn" style="padding:0 12px;min-height:42px;font-size:14px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8">↻</button>
+          <button onclick="doLogout()" class="btn" style="padding:0 10px;min-height:42px;font-size:10px;font-weight:700;background:transparent;border:1px solid rgba(255,255,255,0.06);color:#475569;letter-spacing:0.5px">OUT</button>
         </div>
       </div>
       <div id="statsArea" class="stat-grid" style="margin-top:10px"></div>

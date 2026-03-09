@@ -254,7 +254,11 @@ async function generateOfferPackage(id){
     original_offer_price:oPrice,
     counter_count:0,
     concessions:[],
-    timeline:[{date:new Date().toISOString(),type:'offer_submitted',from:'buyer',summary:`Offer drafted: ${$(oPrice)} · Lisa ${lisaPct}% · EMD ${$(emd)}`,price:oPrice,commission_pct:lisaPct}]
+    timeline:[{date:new Date().toISOString(),type:'offer_submitted',from:'buyer',summary:`Offer drafted: ${$(oPrice)} · Lisa ${lisaPct}% · EMD ${$(emd)}`,price:oPrice,commission_pct:lisaPct}],
+    created_by:window.SH_USER?.id||null,
+    created_by_email:window.SH_USER?.email||null,
+    updated_by:window.SH_USER?.id||null,
+    updated_by_email:window.SH_USER?.email||null
   };
 
   // Check for existing active deal — update it instead of creating a duplicate
@@ -269,6 +273,9 @@ async function generateOfferPackage(id){
     if(existingDeal){
       // Update existing deal with new offer terms
       dealPayload.timeline=[...( Array.isArray(existingDeal.timeline)?existingDeal.timeline:[]),...dealPayload.timeline];
+      dealPayload.updated_by=window.SH_USER?.id||null;
+      dealPayload.updated_by_email=window.SH_USER?.email||null;
+      delete dealPayload.created_by;delete dealPayload.created_by_email;
       resp=await fetch(`${SB}/rest/v1/deals?id=eq.${existingDeal.id}`,{method:"PATCH",headers:{...HD,Prefer:"return=representation"},body:JSON.stringify(dealPayload)});
       if(resp.ok){dealId=existingDeal.id;}
     } else {

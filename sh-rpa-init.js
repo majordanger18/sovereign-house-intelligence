@@ -1,7 +1,14 @@
 // Sovereign House Intelligence — RPA Builder & Init
 // ═══ RPA BUILDER BRIDGE ═══
-function openRPABuilder(id){
+async function openRPABuilder(id){
   const p=props.find(x=>x.id===id);if(!p)return;
+  // ── RPA DUPLICATE PREVENTION ──
+  const existDeal=deals.find(x=>x.property_id===id&&!DEAD_STATUSES.includes(x.status));
+  if(existDeal&&existDeal.rpa_generated_at){
+    const genDate=new Date(existDeal.rpa_generated_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"});
+    const genBy=existDeal.rpa_generated_by_email||'unknown user';
+    if(!confirm(`An RPA was generated on ${genDate} by ${genBy}. Generate a new version?`))return;
+  }
   const oPrice=Number(document.getElementById("o_price")?.value)||0;
   const emd=Number(document.getElementById("o_emd")?.value)||10000;
   const coeDays=Number(document.getElementById("o_coe")?.value)||30;
@@ -74,10 +81,24 @@ function openRPABuilder(id){
   };
   const encoded=encodeURIComponent(JSON.stringify(rpaData));
   window.open("offer-builder.html?prefill="+encoded,"_blank");
+  // ── STAMP RPA GENERATION (if active deal exists) ──
+  if(existDeal){
+    try{
+      const stamp={rpa_generated_at:new Date().toISOString(),rpa_generated_by:window.SH_USER?.id||null,rpa_generated_by_email:window.SH_USER?.email||null,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null};
+      await fetch(`${SB}/rest/v1/deals?id=eq.${existDeal.id}`,{method:'PATCH',headers:HD,body:JSON.stringify(stamp)});
+      Object.assign(existDeal,stamp);
+    }catch(e){console.error("RPA stamp failed:",e);}
+  }
 }
 
-function openRPAFromDeal(dealId){
+async function openRPAFromDeal(dealId){
   const d=deals.find(x=>x.id===dealId);if(!d)return;
+  // ── RPA DUPLICATE PREVENTION ──
+  if(d.rpa_generated_at){
+    const genDate=new Date(d.rpa_generated_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"});
+    const genBy=d.rpa_generated_by_email||'unknown user';
+    if(!confirm(`An RPA was generated on ${genDate} by ${genBy}. Generate a new version?`))return;
+  }
   // Look up the original property to get parcel_number (deals don't store it)
   const prop=props.find(x=>x.id===d.property_id);
   const oPrice=d.accepted_price||d.offer_price||0;
@@ -126,6 +147,12 @@ function openRPAFromDeal(dealId){
   };
   const encoded=encodeURIComponent(JSON.stringify(rpaData));
   window.open("offer-builder.html?prefill="+encoded,"_blank");
+  // ── STAMP RPA GENERATION ──
+  try{
+    const stamp={rpa_generated_at:new Date().toISOString(),rpa_generated_by:window.SH_USER?.id||null,rpa_generated_by_email:window.SH_USER?.email||null,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null};
+    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify(stamp)});
+    Object.assign(d,stamp);
+  }catch(e){console.error("RPA stamp failed:",e);}
 }
 
 // ═══ MAGIC LINK SUPPORT ═══
@@ -169,4 +196,6 @@ function checkMagicLink(){
   window.history.replaceState({},"",window.location.pathname);
 }
 
-loadData().then(()=>{setTimeout(checkMagicLink,800);});
+initAuth().then(loggedIn=>{
+  if(loggedIn) loadData().then(()=>{setTimeout(checkMagicLink,800);});
+});

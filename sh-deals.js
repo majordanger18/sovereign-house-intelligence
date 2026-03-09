@@ -121,6 +121,7 @@ function renderDeals(){
         </div>
 
         ${lastEvent?`<div style="font-size:10px;color:#64748b;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.04)">Latest: <span style="color:#94a3b8">${esc(lastEvent.summary||lastEvent.type||'')}</span> · ${lastEvent.date?new Date(lastEvent.date).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"}):''}</div>`:''}
+        ${d.updated_by_email||d.created_by_email?`<div style="font-size:9px;color:#475569;margin-top:4px">${d.updated_by_email?'Last update by '+esc(d.updated_by_email.split('@')[0]):'Created by '+esc(d.created_by_email.split('@')[0])}${d.updated_at?' · '+new Date(d.updated_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"}):''}  </div>`:''}
       </div>`;
     }).join('');
   }
@@ -357,7 +358,7 @@ async function updateDealStatus(dealId,newStatus){
   tl.push(newEntry);
 
   try{
-    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:newStatus,timeline:tl,kill_reason:null})});
+    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:newStatus,timeline:tl,kill_reason:null,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null})});
     d.status=newStatus;d.timeline=tl;d.kill_reason=null;
     // Full re-render if transitioning from dead status (layout changes entirely)
     if(DEAD_STATUSES.includes(oldStatus)){
@@ -380,7 +381,7 @@ async function winDeal(dealId){
   const tl=Array.isArray(d.timeline)?[...d.timeline]:[];
   tl.push({date:new Date().toISOString(),type:'status_change',from:'system',summary:'🏆 DEAL WON — Project started'});
   try{
-    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:'closed',timeline:tl})});
+    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:'closed',timeline:tl,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null})});
     d.status='closed';d.timeline=tl;
     closeDeal();
     renderDashboard();
@@ -396,7 +397,7 @@ async function killDeal(dealId,status){
   tl.push({date:new Date().toISOString(),type:status,from:'system',summary:`Deal ${status}${reason?': '+reason:''}`});
 
   try{
-    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:status,kill_reason:reason||null,timeline:tl})});
+    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:status,kill_reason:reason||null,timeline:tl,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null})});
     d.status=status;d.kill_reason=reason;d.timeline=tl;
     openDeal(dealId);
     renderDashboard();
@@ -435,6 +436,8 @@ async function logCounter(dealId){
   if(coeDate) patch.coe_date=coeDate;
 
   try{
+    patch.updated_by=window.SH_USER?.id||null;
+    patch.updated_by_email=window.SH_USER?.email||null;
     await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify(patch)});
     Object.assign(d,patch);
     openDeal(dealId);
@@ -455,7 +458,7 @@ async function addConcession(dealId){
   tl.push({date:new Date().toISOString(),type:'note',from:party,summary:`Concession: ${item}`});
 
   try{
-    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({concessions:conc,timeline:tl})});
+    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({concessions:conc,timeline:tl,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null})});
     d.concessions=conc;d.timeline=tl;
     openDeal(dealId);
   }catch(e){console.error("Add concession failed:",e);}
@@ -466,7 +469,7 @@ async function removeConcession(dealId,idx){
   const conc=Array.isArray(d.concessions)?[...d.concessions]:[];
   conc.splice(idx,1);
   try{
-    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({concessions:conc})});
+    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({concessions:conc,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null})});
     d.concessions=conc;
     openDeal(dealId);
   }catch(e){console.error("Remove concession failed:",e);}
@@ -479,7 +482,7 @@ async function addDealNote(dealId){
   const tl=Array.isArray(d.timeline)?[...d.timeline]:[];
   tl.push({date:new Date().toISOString(),type:'note',from:'user',summary:note});
   try{
-    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({timeline:tl})});
+    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({timeline:tl,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null})});
     d.timeline=tl;
     openDeal(dealId);
   }catch(e){console.error("Add note failed:",e);}
@@ -487,7 +490,7 @@ async function addDealNote(dealId){
 
 async function saveDealField(dealId,field,value){
   const d=deals.find(x=>x.id===dealId);if(!d)return;
-  const patch={};patch[field]=value||null;
+  const patch={};patch[field]=value||null;patch.updated_by=window.SH_USER?.id||null;patch.updated_by_email=window.SH_USER?.email||null;
   try{
     await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify(patch)});
     d[field]=value;
