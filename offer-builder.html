@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sovereign House — Offer Builder</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
@@ -841,6 +842,15 @@ const STATE = {
   openSections: {1:true,2:true,3:true},
 };
 
+// ═══ SUPABASE (for RPA send guard + storage) ═══
+const _SB="https://jyzxbuzzxdlhnbumfthv.supabase.co";
+const _KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp5enhidXp6eGRsaG5idW1mdGh2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MDc1NDEsImV4cCI6MjA4NTk4MzU0MX0.dzsPjQQEeeyDEYAkIzaWrH0B5vGjuGSkL4MoqPo5MHs";
+const _HD={apikey:_KEY,Authorization:`Bearer ${_KEY}`,"Content-Type":"application/json",Prefer:"return=representation"};
+const _sbClient=window.supabase.createClient(_SB,_KEY);
+let RPA_DEAL_ID=null;
+let RPA_USER_ID=null;
+let RPA_USER_EMAIL=null;
+
 function set(key, val) {
   STATE.form[key] = val;
   if (key === "purchase_price" && val) {
@@ -903,13 +913,66 @@ async function sendForSignature() {
   if (isSending) return;
   const btn = document.getElementById("signBtn");
   if (!btn || !STATE.pdfUrl) return;
+
+  // ═══ RPA SEND GUARD — fresh Supabase check ═══
+  console.log("[RPA GUARD] Starting send guard. Deal ID:", RPA_DEAL_ID);
+  if (RPA_DEAL_ID) {
+    try {
+      const guardResp = await fetch(`${_SB}/rest/v1/deals?id=eq.${RPA_DEAL_ID}&select=rpa_generated_at,rpa_generated_by_email,rpa_version`, {headers:{apikey:_KEY,Authorization:`Bearer ${_KEY}`}});
+      const guardData = await guardResp.json();
+      console.log("[RPA GUARD] Supabase response:", guardData);
+      if (guardData[0] && guardData[0].rpa_generated_at) {
+        const genDate = new Date(guardData[0].rpa_generated_at).toLocaleDateString("en-US", {timeZone:"America/Los_Angeles"});
+        const genBy = guardData[0].rpa_generated_by_email || 'unknown user';
+        console.log("[RPA GUARD] Existing RPA found:", genDate, "by", genBy);
+        if (!window.confirm(`An RPA was already sent on ${genDate} by ${genBy}. Send again?`)) {
+          console.log("[RPA GUARD] User cancelled. Aborting send.");
+          return;
+        }
+        console.log("[RPA GUARD] User confirmed re-send. Proceeding.");
+      } else {
+        console.log("[RPA GUARD] No existing RPA. Proceeding with first send.");
+      }
+    } catch (e) {
+      console.warn("[RPA GUARD] Guard check failed (proceeding anyway):", e);
+    }
+  } else {
+    console.log("[RPA GUARD] No deal_id — skipping guard (standalone RPA).");
+  }
+
   isSending = true;
   btn.disabled = true; btn.textContent = "⏳ Sending...";
   try {
     const pdfBytes = await fillRPA(STATE.form);
     if (!pdfBytes || !pdfBytes.length) throw new Error("PDF generation returned empty bytes");
-    let binary = '';
     const bytes = new Uint8Array(pdfBytes);
+
+    // ═══ UPLOAD PDF TO SUPABASE STORAGE ═══
+    let rpaUrl = null;
+    let newVersion = 1;
+    if (RPA_DEAL_ID) {
+      try {
+        // Get current version
+        const verResp = await fetch(`${_SB}/rest/v1/deals?id=eq.${RPA_DEAL_ID}&select=rpa_version`, {headers:{apikey:_KEY,Authorization:`Bearer ${_KEY}`}});
+        const verData = await verResp.json();
+        newVersion = ((verData[0]?.rpa_version) || 0) + 1;
+        const filePath = `deals/${RPA_DEAL_ID}/rpa-v${newVersion}-unsigned.pdf`;
+        console.log("[RPA STORAGE] Uploading to:", filePath);
+        const {data: uploadData, error: uploadErr} = await _sbClient.storage.from('rpa-documents').upload(filePath, bytes, {contentType:'application/pdf', upsert:true});
+        if (uploadErr) {
+          console.error("[RPA STORAGE] Upload error:", uploadErr);
+        } else {
+          const {data: urlData} = _sbClient.storage.from('rpa-documents').getPublicUrl(filePath);
+          rpaUrl = urlData?.publicUrl || null;
+          console.log("[RPA STORAGE] Upload OK. URL:", rpaUrl);
+        }
+      } catch (e) {
+        console.warn("[RPA STORAGE] Storage upload failed (continuing with send):", e);
+      }
+    }
+
+    // ═══ SEND TO INKLESS VIA N8N ═══
+    let binary = '';
     for (let i = 0; i < bytes.length; i++) {
       binary += String.fromCharCode(bytes[i]);
     }
@@ -925,7 +988,8 @@ async function sendForSignature() {
       offerPrice: STATE.form.purchase_price || "",
       listingAgentFirstName,
       listingAgentLastName,
-      listingAgentEmail: STATE.form.listing_agent_email || ""
+      listingAgentEmail: STATE.form.listing_agent_email || "",
+      dealId: RPA_DEAL_ID || null
     };
     await fetch('https://majordanger.app.n8n.cloud/webhook/rpa-sign', {
       method: 'POST',
@@ -933,6 +997,28 @@ async function sendForSignature() {
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload)
     });
+    console.log("[RPA] Webhook sent successfully.");
+
+    // ═══ STAMP DEAL AFTER SUCCESSFUL SEND ═══
+    if (RPA_DEAL_ID) {
+      try {
+        const stamp = {
+          rpa_generated_at: new Date().toISOString(),
+          rpa_generated_by: RPA_USER_ID || null,
+          rpa_generated_by_email: RPA_USER_EMAIL || null,
+          rpa_version: newVersion,
+          rpa_url: rpaUrl,
+          updated_by: RPA_USER_ID || null,
+          updated_by_email: RPA_USER_EMAIL || null
+        };
+        console.log("[RPA STAMP] Patching deal:", stamp);
+        await fetch(`${_SB}/rest/v1/deals?id=eq.${RPA_DEAL_ID}`, {method:'PATCH', headers:_HD, body:JSON.stringify(stamp)});
+        console.log("[RPA STAMP] Deal stamped successfully.");
+      } catch (e) {
+        console.error("[RPA STAMP] Failed to stamp deal:", e);
+      }
+    }
+
     btn.textContent = "Sent ✓";
     btn.style.background = "rgba(34,197,94,0.15)"; btn.style.borderColor = "rgba(34,197,94,0.4)"; btn.style.color = "#22c55e";
   } catch (e) {
@@ -1265,6 +1351,10 @@ document.addEventListener("DOMContentLoaded", function(){
         return s;
       }
       const dateFields = ["coe_date","respond_by_date","offer_date","addl_deposit_date"];
+      // Extract deal_id and user info before merging form fields
+      if(data.deal_id){RPA_DEAL_ID=data.deal_id;console.log("[RPA] Deal ID from prefill:",RPA_DEAL_ID);}
+      if(data.sh_user_id)RPA_USER_ID=data.sh_user_id;
+      if(data.sh_user_email)RPA_USER_EMAIL=data.sh_user_email;
       // Merge prefill data into form state
       for (const [key, val] of Object.entries(data)) {
         if (key === "inspections" && typeof val === "object") {
@@ -1272,6 +1362,8 @@ document.addEventListener("DOMContentLoaded", function(){
         } else if (key === "parcel_number" && !data.apn) {
           // Map parcel_number → apn if apn wasn't explicitly provided
           STATE.form.apn = val;
+        } else if (key === "deal_id" || key === "sh_user_id" || key === "sh_user_email") {
+          // Already extracted above, skip
         } else if (key in STATE.form) {
           STATE.form[key] = dateFields.includes(key) ? toISODate(val) : val;
         }

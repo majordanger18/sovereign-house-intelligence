@@ -231,7 +231,14 @@ async function openDeal(dealId){
     <button onclick="openCalcForDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:14px;font-size:14px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;font-weight:800">🧮 Edit Deal Numbers</button>
 
     <!-- GENERATE RPA -->
-    <button onclick="openRPAFromDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:16px;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(224,201,127,0.15),rgba(212,175,55,0.08));border:1px solid rgba(224,201,127,0.3);color:#e0c97f;font-weight:800">📄 Generate GLVAR RPA</button>
+    <button onclick="openRPAFromDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(224,201,127,0.15),rgba(212,175,55,0.08));border:1px solid rgba(224,201,127,0.3);color:#e0c97f;font-weight:800">📄 Generate GLVAR RPA</button>
+    ${d.rpa_generated_at?`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin-bottom:16px;border-radius:10px;background:rgba(224,201,127,0.04);border:1px solid rgba(224,201,127,0.12)">
+      <div style="font-size:10px;color:#e0c97f">
+        <span style="font-weight:700">RPA v${d.rpa_version||1}</span> · sent ${new Date(d.rpa_generated_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"})}${d.rpa_generated_by_email?' by '+esc(d.rpa_generated_by_email.split('@')[0]):''}
+        ${d.rpa_url?` · <a href="${esc(d.rpa_url)}" target="_blank" style="color:#60a5fa;text-decoration:underline">View PDF</a>`:''}
+      </div>
+      <button onclick="deleteRPA('${d.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;padding:4px 8px;white-space:nowrap">Delete RPA</button>
+    </div>`:`<div style="margin-bottom:16px"></div>`}
 
     <!-- LOG COUNTER OFFER -->
     <div style="margin-bottom:16px;padding:14px;border-radius:14px;background:rgba(249,115,22,0.03);border:1px solid rgba(249,115,22,0.12)">
@@ -318,6 +325,23 @@ async function openDeal(dealId){
 }
 
 // ═══ DEAL ACTIONS ═══
+async function deleteRPA(dealId){
+  if(!confirm("Delete this RPA and reset? This cannot be undone."))return;
+  const d=deals.find(x=>x.id===dealId);if(!d)return;
+  try{
+    // Delete file from Supabase Storage if URL exists
+    if(d.rpa_url&&d.rpa_version){
+      const filePath=`deals/${dealId}/rpa-v${d.rpa_version}-unsigned.pdf`;
+      try{await supabaseClient.storage.from('rpa-documents').remove([filePath]);}catch(e){console.warn("Storage delete failed:",e);}
+    }
+    // Reset RPA fields on deal
+    const reset={rpa_generated_at:null,rpa_generated_by:null,rpa_generated_by_email:null,rpa_url:null,rpa_version:0,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null};
+    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify(reset)});
+    Object.assign(d,reset);
+    openDeal(dealId);
+  }catch(e){console.error("Delete RPA failed:",e);}
+}
+
 async function deleteDeal(dealId){
   if(!confirm("Delete this deal permanently? This cannot be undone."))return;
   try{

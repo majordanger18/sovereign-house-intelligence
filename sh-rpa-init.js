@@ -2,18 +2,7 @@
 // ═══ RPA BUILDER BRIDGE ═══
 async function openRPABuilder(id){
   const p=props.find(x=>x.id===id);if(!p)return;
-  // ── RPA DUPLICATE PREVENTION (fresh query) ──
   let existDeal=deals.find(x=>x.property_id===id&&!DEAD_STATUSES.includes(x.status));
-  if(existDeal){
-    try{
-      const fresh=await sb(`deals?id=eq.${existDeal.id}&select=rpa_generated_at,rpa_generated_by_email&limit=1`);
-      if(fresh[0]&&fresh[0].rpa_generated_at){
-        const genDate=new Date(fresh[0].rpa_generated_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"});
-        const genBy=fresh[0].rpa_generated_by_email||'unknown user';
-        if(!confirm(`An RPA was already generated on ${genDate} by ${genBy}. Generate a new version?`))return;
-      }
-    }catch(e){console.warn("RPA dupe check failed:",e);}
-  }
   const oPrice=Number(document.getElementById("o_price")?.value)||0;
   const emd=Number(document.getElementById("o_emd")?.value)||10000;
   const coeDays=Number(document.getElementById("o_coe")?.value)||30;
@@ -83,30 +72,16 @@ async function openRPABuilder(id){
     list_office_fax:p.list_office_fax||"",
     licensee_interest:true,
     licensee_relationship:"LISA HUNT IS A MEMBER OF SOVEREIGN HOUSE LLC",
+    deal_id:existDeal?.id||null,
+    sh_user_id:window.SH_USER?.id||null,
+    sh_user_email:window.SH_USER?.email||null,
   };
   const encoded=encodeURIComponent(JSON.stringify(rpaData));
   window.open("offer-builder.html?prefill="+encoded,"_blank");
-  // ── STAMP RPA GENERATION (if active deal exists) ──
-  if(existDeal){
-    try{
-      const stamp={rpa_generated_at:new Date().toISOString(),rpa_generated_by:window.SH_USER?.id||null,rpa_generated_by_email:window.SH_USER?.email||null,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null};
-      await fetch(`${SB}/rest/v1/deals?id=eq.${existDeal.id}`,{method:'PATCH',headers:HD,body:JSON.stringify(stamp)});
-      Object.assign(existDeal,stamp);
-    }catch(e){console.error("RPA stamp failed:",e);}
-  }
 }
 
 async function openRPAFromDeal(dealId){
   const d=deals.find(x=>x.id===dealId);if(!d)return;
-  // ── RPA DUPLICATE PREVENTION (fresh query) ──
-  try{
-    const fresh=await sb(`deals?id=eq.${dealId}&select=rpa_generated_at,rpa_generated_by_email&limit=1`);
-    if(fresh[0]&&fresh[0].rpa_generated_at){
-      const genDate=new Date(fresh[0].rpa_generated_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"});
-      const genBy=fresh[0].rpa_generated_by_email||'unknown user';
-      if(!confirm(`An RPA was already generated on ${genDate} by ${genBy}. Generate a new version?`))return;
-    }
-  }catch(e){console.warn("RPA dupe check failed:",e);}
   // Look up the original property to get parcel_number (deals don't store it)
   const prop=props.find(x=>x.id===d.property_id);
   const oPrice=d.accepted_price||d.offer_price||0;
@@ -152,15 +127,12 @@ async function openRPAFromDeal(dealId){
     list_office_phone:d.list_office_phone||prop?.list_office_phone||"",
     list_office_fax:d.list_office_fax||prop?.list_office_fax||"",
     licensee_interest:true, licensee_relationship:"LISA HUNT IS A MEMBER OF SOVEREIGN HOUSE LLC",
+    deal_id:dealId,
+    sh_user_id:window.SH_USER?.id||null,
+    sh_user_email:window.SH_USER?.email||null,
   };
   const encoded=encodeURIComponent(JSON.stringify(rpaData));
   window.open("offer-builder.html?prefill="+encoded,"_blank");
-  // ── STAMP RPA GENERATION ──
-  try{
-    const stamp={rpa_generated_at:new Date().toISOString(),rpa_generated_by:window.SH_USER?.id||null,rpa_generated_by_email:window.SH_USER?.email||null,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null};
-    await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify(stamp)});
-    Object.assign(d,stamp);
-  }catch(e){console.error("RPA stamp failed:",e);}
 }
 
 // ═══ MAGIC LINK SUPPORT ═══
