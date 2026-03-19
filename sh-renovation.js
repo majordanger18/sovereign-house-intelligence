@@ -3,7 +3,7 @@
 // ═══ RENOVATION TRACKER ═══
 // ═══════════════════════════════════════════
 
-const RENO_QUALIFYING=["under_contract","closed","in_renovation","renovation_complete","listing_prep","listed"];
+const RENO_QUALIFYING=["under_contract","inspection","financing","closing","won","closed","in_renovation","renovation_complete","listing_prep","listed"];
 const RENO_CAT_COLORS={kitchen:"#3b82f6",bathrooms:"#a855f7",bathroom:"#a855f7",flooring:"#14b8a6",paint:"#22c55e",electrical:"#eab308",plumbing:"#06b6d4",hvac:"#f97316",roofing:"#ef4444",roof:"#ef4444",landscaping:"#84cc16",windows:"#8b5cf6",doors:"#ec4899",drywall:"#94a3b8",demolition:"#f43f5e",framing:"#d97706",insulation:"#a3e635",exterior:"#0ea5e9",garage:"#64748b",foundation:"#78716c",basement:"#78716c",general:"#94a3b8",contingency:"#f59e0b",permits:"#6366f1",cabinets:"#3b82f6",countertops:"#8b5cf6",appliances:"#06b6d4",siding:"#0ea5e9",gutters:"#64748b",fence:"#84cc16",concrete:"#78716c",tile:"#14b8a6",hardware:"#94a3b8",cleaning:"#a3e635"};
 const RENO_STAT_COLORS={not_started:"#64748b",in_progress:"#3b82f6",complete:"#22c55e",change_order:"#f97316"};
 const EXP_TYPE_COLORS={material:"#3b82f6",labor:"#f97316",permit:"#64748b",fee:"#ef4444",other:"#94a3b8"};
