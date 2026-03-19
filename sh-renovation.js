@@ -16,7 +16,7 @@ const DRAW_PIPE=[
   {key:"disbursed",label:"Disbursed",df:"date_disbursed"}
 ];
 
-let renoDealId=null,renoSub="budget",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null;
+let renoDealId=null,renoSub="budget",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null;
 let renoExpF={sow:"all",type:"all",from:"",to:""};
 
 // ═══ CURRENCY ═══
@@ -82,14 +82,15 @@ async function renderRenoView(){
 
 async function loadRenoData(did){
   try{
-    const[ov,bl,ds,dr,ex,sw,di]=await Promise.all([
+    const[ov,bl,ds,dr,ex,sw,di,fi]=await Promise.all([
       sb("renovation_deal_overview?deal_id=eq."+did),
       sb("renovation_budget_summary?deal_id=eq."+did+"&order=line_number"),
       sb("renovation_draw_summary?deal_id=eq."+did),
       sb("renovation_draws?deal_id=eq."+did+"&order=draw_number"),
       sb("renovation_expenses?deal_id=eq."+did+"&order=expense_date.desc&select=*,renovation_sow_lines(line_number,category,description)"),
       sb("renovation_sow_lines?deal_id=eq."+did+"&order=line_number"),
-      sb("deals?id=eq."+did+"&select=id,address,status,lender_name,lender_max_draws,lender_holdback_pct,lender_draw_fee,lender_loan_number,reno_budget")
+      sb("deals?id=eq."+did+"&select=id,address,status,lender_name,lender_max_draws,lender_holdback_pct,lender_draw_fee,lender_loan_number,lender_draw_turnaround_days,lender_draws_email,lender_change_order_email,reno_budget"),
+      sb("deal_financing?deal_id=eq."+did)
     ]);
     renoOv=Array.isArray(ov)&&ov.length?ov[0]:null;
     renoBLines=Array.isArray(bl)?bl:[];
@@ -98,6 +99,7 @@ async function loadRenoData(did){
     renoExp=Array.isArray(ex)?ex:[];
     renoSOW=Array.isArray(sw)?sw:[];
     renoDeal=Array.isArray(di)&&di.length?di[0]:null;
+    renoFin=Array.isArray(fi)&&fi.length?fi[0]:null;
   }catch(e){console.error("[SH] Reno load error:",e);}
 }
 
@@ -127,13 +129,61 @@ function renderBudget(el){
   h+=`<div class="reno-hero"><div class="reno-hcard"><div class="reno-hl">TOTAL BUDGET</div><div class="reno-hv">${$r(tb)}</div></div><div class="reno-hcard"><div class="reno-hl">TOTAL SPENT</div><div class="reno-hv" style="color:${sc}">${$r(ts)}</div></div><div class="reno-hcard"><div class="reno-hl">REMAINING</div><div class="reno-hv" style="color:${rc}">${$r(rem)}</div></div></div>`;
 
   // Progress bar
-  h+=`<div class="reno-pbar"><div class="reno-pfill" style="width:${Math.min(pct,100)}%;background:${sc}"></div></div><div style="text-align:right;font-size:10px;color:#64748b;margin-top:4px;margin-bottom:16px">${pct.toFixed(1)}% spent</div>`;
+  h+=`<div class="reno-pbar"><div class="reno-pfill" style="width:${Math.min(pct,100)}%;background:${sc}"></div></div><div style="text-align:right;font-size:10px;color:#64748b;margin-top:4px;margin-bottom:8px">${pct.toFixed(1)}% spent</div>`;
 
-  // Secondary metrics
-  const la=ov?.total_lender_approved||0,rb2=ov?.total_reimbursed||0,ue=ov?.unreimbursed_exposure||0,du=ov?.draws_used||0,md=renoDeal?.lender_max_draws||"?";
+  // Maturity countdown bar (if financing data exists)
+  if(renoFin&&renoFin.funded_date){
+    const msFunded=((Date.now()-new Date(renoFin.funded_date+"T00:00:00").getTime())/(864e5*30.44));
+    const msUntilMat=renoFin.maturity_date?((new Date(renoFin.maturity_date+"T00:00:00").getTime()-Date.now())/(864e5*30.44)):null;
+    const matBarColor=msUntilMat===null?'#3b82f6':msUntilMat<2?'#ef4444':msUntilMat<4?'#eab308':'#22c55e';
+    const totalMonths=renoFin.loan_term_months||(msFunded+(msUntilMat||0));
+    const holdPct=totalMonths>0?Math.min(msFunded/totalMonths*100,100):0;
+    h+=`<div class="fin-hold-bar" style="border-color:${matBarColor}30;background:${matBarColor}08">`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:${matBarColor}">HOLD PERIOD</span>`;
+    h+=`<span style="font-size:10px;color:#64748b">Funded ${new Date(renoFin.funded_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"numeric"})}</span></div>`;
+    h+=`<div class="reno-pbar" style="margin-bottom:6px"><div class="reno-pfill" style="width:${holdPct}%;background:${matBarColor}"></div></div>`;
+    h+=`<div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700">`;
+    h+=`<span style="color:#94a3b8">${msFunded.toFixed(1)} months elapsed</span>`;
+    if(msUntilMat!==null)h+=`<span style="color:${matBarColor}">${msUntilMat.toFixed(1)} months until maturity</span>`;
+    h+=`</div></div>`;
+  }
+
+  // Secondary metrics (use financing data when available)
+  const la=renoFin?.rehab_holdback||ov?.total_lender_approved||0;
+  const rb2=ov?.total_reimbursed||0,ue=ov?.unreimbursed_exposure||0,du=ov?.draws_used||0;
+  const md=renoFin?.max_draws||renoDeal?.lender_max_draws||"?";
   const ueBg=ue>50000?"rgba(239,68,68,0.08)":"rgba(255,255,255,0.02)";
   const ueBr=ue>50000?"rgba(239,68,68,0.2)":"rgba(255,255,255,0.06)";
-  h+=`<div class="reno-sgrid"><div class="reno-scard"><div class="reno-sl">LENDER APPROVED</div><div class="reno-sv">${$r(la)}</div></div><div class="reno-scard"><div class="reno-sl">REIMBURSED</div><div class="reno-sv" style="color:#22c55e">${$r(rb2)}</div></div><div class="reno-scard" style="background:${ueBg};border-color:${ueBr}"><div class="reno-sl">UNREIMBURSED</div><div class="reno-sv" style="color:${ue>50000?"#ef4444":"#f1f5f9"}">${$r(ue)}</div></div><div class="reno-scard"><div class="reno-sl">DRAWS USED</div><div class="reno-sv">${du} / ${md}</div></div></div>`;
+  h+=`<div class="reno-sgrid">`;
+  h+=`<div class="reno-scard"><div class="reno-sl">${renoFin?.rehab_holdback?'REHAB HOLDBACK':'LENDER APPROVED'}</div><div class="reno-sv">${$r(la)}</div></div>`;
+  h+=`<div class="reno-scard"><div class="reno-sl">REIMBURSED</div><div class="reno-sv" style="color:#22c55e">${$r(rb2)}</div></div>`;
+  h+=`<div class="reno-scard" style="background:${ueBg};border-color:${ueBr}"><div class="reno-sl">UNREIMBURSED</div><div class="reno-sv" style="color:${ue>50000?"#ef4444":"#f1f5f9"}">${$r(ue)}</div></div>`;
+  h+=`<div class="reno-scard"><div class="reno-sl">DRAWS USED</div><div class="reno-sv">${du} / ${md}</div></div>`;
+  h+=`</div>`;
+
+  // Monthly interest card (if financing data has monthly payment)
+  if(renoFin?.monthly_interest_payment){
+    h+=`<div class="reno-scard" style="margin-bottom:16px;text-align:left;padding:12px 14px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div class="reno-sl">MONTHLY INTEREST</div><div class="reno-sv" style="color:#f59e0b;font-size:18px">${$r(renoFin.monthly_interest_payment)}</div></div><button onclick="openFinancing('${renoDealId}')" style="background:none;border:1px solid rgba(6,182,212,0.2);border-radius:8px;padding:6px 12px;color:#22d3ee;font-size:10px;font-weight:700;cursor:pointer">💰 Financing</button></div></div>`;
+  } else {
+    // Just show the financing button if no monthly payment
+    h+=`<div style="margin-bottom:12px"><button onclick="openFinancing('${renoDealId}')" class="btn" style="width:100%;padding:10px;font-size:12px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);color:#22d3ee;font-weight:700">💰 Financing</button></div>`;
+  }
+
+  // Lender info collapsible (Bug 2)
+  if(renoDeal){
+    const di=renoDeal;
+    h+=`<div style="margin-bottom:16px"><button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.nextElementSibling.style.display==='none'?'ℹ️ Lender Terms':'ℹ️ Lender Terms ▾'" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:700;cursor:pointer;padding:4px 0">ℹ️ Lender Terms</button>`;
+    h+=`<div style="display:none;margin-top:8px;padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);font-size:12px">`;
+    if(di.lender_name)h+=`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><span style="color:#64748b">Lender</span><span style="color:#e2e8f0;font-weight:600">${esc(di.lender_name)}</span></div>`;
+    if(di.lender_loan_number)h+=`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><span style="color:#64748b">Loan #</span><span style="color:#e2e8f0">${esc(di.lender_loan_number)}</span></div>`;
+    h+=`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><span style="color:#64748b">Max Draws</span><span style="color:#e2e8f0">${di.lender_max_draws||"—"}</span></div>`;
+    if(di.lender_holdback_pct!=null)h+=`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><span style="color:#64748b">Holdback</span><span style="color:#e2e8f0">${di.lender_holdback_pct}% (final ${100-di.lender_holdback_pct}% held until project complete)</span></div>`;
+    if(di.lender_draw_fee)h+=`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><span style="color:#64748b">Draw Fee</span><span style="color:#e2e8f0">${$r(di.lender_draw_fee)}/draw</span></div>`;
+    if(di.lender_draw_turnaround_days)h+=`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><span style="color:#64748b">Draw Turnaround</span><span style="color:#e2e8f0">~${di.lender_draw_turnaround_days} days</span></div>`;
+    if(di.lender_draws_email)h+=`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><span style="color:#64748b">Draws Email</span><a href="mailto:${esc(di.lender_draws_email)}" style="color:#60a5fa;text-decoration:none">${esc(di.lender_draws_email)}</a></div>`;
+    if(di.lender_change_order_email)h+=`<div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:#64748b">Change Orders</span><a href="mailto:${esc(di.lender_change_order_email)}" style="color:#60a5fa;text-decoration:none">${esc(di.lender_change_order_email)}</a></div>`;
+    h+=`</div></div>`;
+  }
 
   // SOW table
   const fl=renoBLines.filter(l=>l.lender_approved>0||l.planned_budget>0||l.total_spent>0);
@@ -163,21 +213,47 @@ async function toggleLineExp(lid){renoExpandedLine=renoExpandedLine===lid?null:l
 
 async function loadLineExp(lid){
   const c=document.getElementById("renoLX_"+lid);if(!c)return;
+  const sowLine=renoSOW.find(s=>s.id===lid);
   try{
     const ex=await sb("renovation_expenses?sow_line_id=eq."+lid+"&order=expense_date.desc");
-    if(!Array.isArray(ex)||!ex.length){c.innerHTML=`<div style="padding:12px;color:#475569;font-size:11px">No expenses for this line item.</div>`;return;}
-    let h=`<div class="reno-lx">`;
-    ex.forEach(e=>{
-      const tc=EXP_TYPE_COLORS[e.expense_type]||"#94a3b8";
-      h+=`<div class="reno-lx-row"><span style="color:#64748b;min-width:60px">${e.expense_date?new Date(e.expense_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric"}):"—"}</span><span style="color:#94a3b8;min-width:100px">${esc(e.vendor_name||"—")}</span><span style="flex:1;color:#e2e8f0">${esc(e.description||"")}</span><span style="font-weight:700;min-width:80px;text-align:right">${$r(e.amount)}</span><span><span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30">${e.expense_type||"other"}</span></span></div>`;
-    });
-    h+=`</div>`;c.innerHTML=h;
+    let h='';
+    // Section A — Linked Expenses
+    if(Array.isArray(ex)&&ex.length){
+      h+=`<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin:8px 0 4px">EXPENSES</div><div class="reno-lx">`;
+      ex.forEach(e=>{
+        const tc=EXP_TYPE_COLORS[e.expense_type]||"#94a3b8";
+        h+=`<div class="reno-lx-row"><span style="color:#64748b;min-width:60px">${e.expense_date?new Date(e.expense_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric"}):"—"}</span><span style="color:#94a3b8;min-width:100px">${esc(e.vendor_name||"—")}</span><span style="flex:1;color:#e2e8f0">${esc(e.description||"")}</span><span style="font-weight:700;min-width:80px;text-align:right">${$r(e.amount)}</span><span><span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30">${e.expense_type||"other"}</span></span></div>`;
+      });
+      h+=`</div>`;
+    }else{
+      h+=`<div style="padding:8px 0;color:#475569;font-size:11px">No expenses recorded for this line item.</div>`;
+    }
+    // Section B — Inline Edit Fields
+    if(sowLine){
+      h+=`<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin:12px 0 6px">EDIT LINE</div>`;
+      h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px" class="reno-line-edit">`;
+      h+=`<div class="fld" style="margin-bottom:0"><label>PLANNED BUDGET</label><input type="number" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${sowLine.planned_budget||""}" onblur="saveSOWField('${lid}','planned_budget',Number(this.value))" onkeydown="if(event.key==='Enter'){this.blur()}"/></div>`;
+      h+=`<div class="fld" style="margin-bottom:0"><label>STATUS</label><select class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" onchange="saveSOWField('${lid}','status',this.value)"><option value="not_started"${sowLine.status==="not_started"?" selected":""}>Not Started</option><option value="in_progress"${sowLine.status==="in_progress"?" selected":""}>In Progress</option><option value="complete"${sowLine.status==="complete"?" selected":""}>Complete</option><option value="change_order"${sowLine.status==="change_order"?" selected":""}>Change Order</option></select></div>`;
+      h+=`<div class="fld" style="margin-bottom:0"><label>NOTES</label><input type="text" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${esc(sowLine.notes||"")}" placeholder="Notes..." onblur="saveSOWField('${lid}','notes',this.value)" onkeydown="if(event.key==='Enter'){this.blur()}"/></div>`;
+      h+=`</div>`;
+    }
+    c.innerHTML=h;
   }catch(e){c.innerHTML=`<div style="padding:12px;color:#ef4444;font-size:11px">Failed to load expenses.</div>`;}
+}
+
+async function saveSOWField(lid,field,value){
+  const patch={};patch[field]=value||null;
+  try{
+    await fetch(SB+"/rest/v1/renovation_sow_lines?id=eq."+lid,{method:"PATCH",headers:HD,body:JSON.stringify(patch)});
+    const s=renoSOW.find(x=>x.id===lid);if(s)s[field]=value;
+    await loadRenoData(renoDealId);
+    const el=document.getElementById("renoContent");if(el&&renoSub==="budget")renderBudget(el);
+  }catch(e){console.error("Save SOW field failed:",e);}
 }
 
 // ═══ DRAWS VIEW ═══
 function renderDrawsV(el){
-  const ds=renoDS,md=renoDeal?.lender_max_draws||"?";
+  const ds=renoDS,md=renoFin?.max_draws||renoDeal?.lender_max_draws||"?";
   let h='';
   h+=`<div class="reno-sgrid"><div class="reno-scard"><div class="reno-sl">TOTAL DRAWN</div><div class="reno-sv">${$r(ds?.total_requested)}</div></div><div class="reno-scard"><div class="reno-sl">TOTAL RECEIVED</div><div class="reno-sv" style="color:#22c55e">${$r(ds?.total_received)}</div></div><div class="reno-scard"><div class="reno-sl">AVG REIMBURSEMENT</div><div class="reno-sv">${ds?.avg_days_to_reimburse?Math.round(ds.avg_days_to_reimburse)+" days":"—"}</div></div><div class="reno-scard"><div class="reno-sl">DRAWS REMAINING</div><div class="reno-sv">${ds?.draws_remaining!=null?ds.draws_remaining:"—"} / ${md}</div></div></div>`;
 
@@ -263,31 +339,64 @@ async function saveDrawUpdate(drawId,sk,df){
 }
 
 // ═══ NEW DRAW ═══
-function openNewDraw(){
-  const nn=renoDraws.length+1,fee=renoDeal?.lender_draw_fee||0;
+async function openNewDraw(){
+  const nn=renoDraws.length+1,fee=renoFin?.draw_fee||renoDeal?.lender_draw_fee||0;
+  // Fetch fresh SOW lines with lender approval
+  let drawSOW=[];
+  try{drawSOW=await sb("renovation_sow_lines?deal_id=eq."+renoDealId+"&order=line_number&lender_approved=gt.0");if(!Array.isArray(drawSOW))drawSOW=[];}catch(e){drawSOW=renoSOW.filter(l=>l.lender_approved>0);}
+  const coEmail=renoDeal?.lender_change_order_email||"lender";
   const m=document.getElementById("renoModal");
   let h=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeRenoModal()">✕</button>`;
   h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">NEW DRAW</div>`;
   h+=`<div style="font-size:18px;font-weight:800;margin-bottom:16px">Draw #${nn}</div>`;
-  h+=`<div class="fld"><label>AMOUNT REQUESTED</label><input id="ndAmt" type="number" class="cinput" placeholder="Total draw amount"/></div>`;
+  h+=`<div class="fld"><label>AMOUNT REQUESTED</label><input id="ndAmt" type="number" class="cinput" placeholder="Auto-calculated from lines below"/></div>`;
   h+=`<div class="fld"><label>DRAW FEE</label><input id="ndFee" type="number" class="cinput" value="${fee}"/></div>`;
 
   h+=`<div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin:16px 0 8px">SOW LINE ITEMS IN THIS DRAW</div>`;
-  renoSOW.forEach(l=>{
-    h+=`<div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);margin-bottom:4px"><input type="checkbox" id="ndL_${l.id}" data-lid="${l.id}" data-cat="${l.category||""}" class="ndLCb" style="width:18px;height:18px;accent-color:#d4af37"/><label for="ndL_${l.id}" style="flex:1;font-size:12px;color:#e2e8f0;cursor:pointer">#${l.line_number} — ${esc(l.description||l.category||"")}</label><input type="number" id="ndLA_${l.id}" class="cinput ndLAmt" style="width:100px;min-height:36px;font-size:12px;padding:6px 8px" placeholder="$0"/></div>`;
-  });
-  h+=`<div id="ndCWarn" style="display:none;margin:8px 0;padding:10px 12px;border-radius:10px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);font-size:11px;color:#eab308">⚠️ Draws from contingency over $1,000 require a change order. File with lender before submitting.</div>`;
+  if(!drawSOW.length){
+    h+=`<div style="padding:12px;color:#475569;font-size:11px">No lender-approved SOW lines found.</div>`;
+  }else{
+    drawSOW.forEach(l=>{
+      h+=`<div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);margin-bottom:4px">`;
+      h+=`<input type="checkbox" id="ndL_${l.id}" data-lid="${l.id}" data-cat="${l.category||""}" class="ndLCb" style="width:18px;height:18px;accent-color:#d4af37" onchange="ndLineToggle(this)"/>`;
+      h+=`<label for="ndL_${l.id}" style="flex:1;font-size:12px;color:#e2e8f0;cursor:pointer">#${l.line_number} — ${esc(l.description||l.category||"")} <span style="color:#64748b;font-size:10px">(${$r(l.lender_approved)} approved)</span></label>`;
+      h+=`<input type="number" id="ndLA_${l.id}" class="cinput ndLAmt" style="width:110px;min-height:36px;font-size:12px;padding:6px 8px" placeholder="Amount" disabled oninput="ndRecalcTotal();chkContWarn()"/>`;
+      h+=`</div>`;
+    });
+  }
+  h+=`<div id="ndCWarn" style="display:none;margin:8px 0;padding:10px 12px;border-radius:10px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);font-size:11px;color:#eab308">⚠️ Draws from contingency over $1,000 require a change order. Submit to <strong>${esc(coEmail)}</strong> before submitting this draw.</div>`;
 
   h+=`<div style="margin-top:16px;font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:8px">DOCUMENTATION</div>`;
-  h+=`<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px"><label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#e2e8f0;cursor:pointer"><input type="checkbox" id="ndInv" style="accent-color:#d4af37"/> Invoices</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#e2e8f0;cursor:pointer"><input type="checkbox" id="ndLW" style="accent-color:#d4af37"/> Lien Waivers</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#e2e8f0;cursor:pointer"><input type="checkbox" id="ndDF" style="accent-color:#d4af37"/> Draw Request Form</label></div>`;
-  h+=`<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#e2e8f0;cursor:pointer;margin-bottom:16px"><input type="checkbox" id="ndInt" checked style="accent-color:#d4af37"/> Interest payments current</label>`;
+  h+=`<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px">`;
+  h+=renoToggle("ndInv","Invoices",false);
+  h+=renoToggle("ndLW","Lien Waivers",false);
+  h+=renoToggle("ndDF","Draw Request Form",false);
+  h+=renoToggle("ndInt","Interest Payments Current",true);
+  h+=`</div>`;
+  h+=`<div style="font-size:10px;color:#64748b;margin-bottom:16px">⚠️ Lender will not disburse if monthly interest payments are delinquent.</div>`;
   h+=`<button onclick="saveNewDraw(${nn})" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none">Create Draw</button></div>`;
 
   m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
-  setTimeout(()=>{
-    document.querySelectorAll(".ndLCb").forEach(cb=>cb.addEventListener("change",chkContWarn));
-    document.querySelectorAll(".ndLAmt").forEach(inp=>inp.addEventListener("input",chkContWarn));
-  },50);
+}
+
+function renoToggle(id,label,checked){
+  return`<label class="reno-tog"><span style="font-size:12px;color:#e2e8f0;flex:1">${label}</span><input type="checkbox" id="${id}" class="reno-tog-cb"${checked?" checked":""}/><span class="reno-tog-slider"></span></label>`;
+}
+
+function ndLineToggle(cb){
+  const lid=cb.dataset.lid;
+  const amt=document.getElementById("ndLA_"+lid);
+  if(amt){amt.disabled=!cb.checked;if(!cb.checked)amt.value="";}
+  ndRecalcTotal();chkContWarn();
+}
+
+function ndRecalcTotal(){
+  let total=0;
+  document.querySelectorAll(".ndLCb").forEach(cb=>{
+    if(cb.checked){total+=Number(document.getElementById("ndLA_"+cb.dataset.lid)?.value)||0;}
+  });
+  const el=document.getElementById("ndAmt");
+  if(el&&total>0)el.value=total;
 }
 
 function chkContWarn(){
@@ -330,18 +439,18 @@ function renderExpV(el){
   h+=`<div class="reno-ef"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:10px">LOG EXPENSE</div><div class="reno-eg">`;
   h+=`<div class="fld"><label>DATE</label><input id="exD" type="date" class="cinput" value="${new Date().toISOString().split("T")[0]}"/></div>`;
   h+=`<div class="fld"><label>SOW LINE</label><select id="exS" class="cinput">`;
-  renoSOW.forEach(l=>{h+=`<option value="${l.id}">#${l.line_number} — ${esc(l.description||l.category||"")}</option>`;});
+  renoSOW.filter(l=>l.lender_approved>0||l.planned_budget>0).forEach(l=>{h+=`<option value="${l.id}">#${l.line_number} — ${esc(l.description||l.category||"")} (${$r(l.planned_budget||l.lender_approved||0)})</option>`;});
   h+=`</select></div>`;
   h+=`<div class="fld"><label>DESCRIPTION</label><input id="exDe" type="text" class="cinput" placeholder="What was purchased or paid for"/></div>`;
   h+=`<div class="fld"><label>AMOUNT</label><input id="exA" type="number" class="cinput" placeholder="$0.00" step="0.01"/></div>`;
   h+=`<div class="fld"><label>TYPE</label><select id="exT" class="cinput"><option value="material">Material</option><option value="labor">Labor</option><option value="permit">Permit</option><option value="fee">Fee</option><option value="other">Other</option></select></div>`;
+  h+=`<div class="fld"><label>PAYMENT</label><select id="exPm" class="cinput"><option value="">—</option><option value="cash">Cash</option><option value="loc">LOC</option><option value="credit_card">Credit Card</option><option value="check">Check</option><option value="wire">Wire</option></select></div>`;
   h+=`</div>`;
 
   // More details
   h+=`<button id="exMoreBtn" onclick="toggleExpMore()" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:700;cursor:pointer;padding:4px 0;margin-bottom:8px">More Details ▸</button>`;
   h+=`<div id="exMore" style="display:none"><div class="reno-eg">`;
   h+=`<div class="fld"><label>VENDOR</label><input id="exV" type="text" class="cinput" placeholder="Vendor name" list="vdl"/><datalist id="vdl">${[...new Set(renoExp.map(e=>e.vendor_name).filter(Boolean))].map(v=>`<option value="${esc(v)}">`).join("")}</datalist></div>`;
-  h+=`<div class="fld"><label>PAYMENT</label><select id="exPm" class="cinput"><option value="">—</option><option value="cash">Cash</option><option value="loc">LOC</option><option value="credit_card">Credit Card</option><option value="check">Check</option><option value="wire">Wire</option></select></div>`;
   h+=`<div class="fld"><label>PRODUCT NAME</label><input id="exPn" type="text" class="cinput" placeholder="Product name"/></div>`;
   h+=`<div class="fld"><label>UNIT COST</label><input id="exUC" type="number" class="cinput" step="0.01" placeholder="Per unit"/></div>`;
   h+=`<div class="fld"><label>UNIT TYPE</label><select id="exUT" class="cinput"><option value="">—</option><option value="sf">SF</option><option value="lf">LF</option><option value="unit">Unit</option><option value="each">Each</option><option value="hour">Hour</option></select></div>`;
@@ -417,22 +526,381 @@ async function saveExpense(){
   if(gv("exN"))p.notes=gv("exN");
 
   try{
-    await fetch(SB+"/rest/v1/renovation_expenses",{method:"POST",headers:HD,body:JSON.stringify(p)});
-    // Clear form (keep date)
+    const res=await fetch(SB+"/rest/v1/renovation_expenses",{method:"POST",headers:HD,body:JSON.stringify(p)});
+    if(!res.ok){const err=await res.text();console.error("Save expense error:",res.status,err);showRenoToast("Failed to save expense");return;}
+    // Clear form (keep date and payment method)
     ["exDe","exA","exV","exPn","exUC","exQ","exN"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
     showRenoToast("Expense logged");
     await loadRenoData(renoDealId);renderRenoSub();
-  }catch(e){console.error("Save expense failed:",e);alert("Failed to save expense.");}
+  }catch(e){console.error("Save expense failed:",e);showRenoToast("Failed to save expense");}
 }
 
 // ═══ HELPERS ═══
-function showRenoToast(msg){
+function showRenoToast(msg,isErr){
   const t=document.getElementById("alertToast");
-  t.innerHTML=`<div style="margin:8px 20px;padding:14px 16px;border-radius:14px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.15);animation:fadeUp .3s ease"><div style="font-size:13px;font-weight:700;color:#22c55e">✓ ${esc(msg)}</div></div>`;
+  const c=isErr||msg.toLowerCase().includes("fail")?"#ef4444":"#22c55e";
+  const icon=isErr||msg.toLowerCase().includes("fail")?"✗":"✓";
+  t.innerHTML=`<div style="margin:8px 20px;padding:14px 16px;border-radius:14px;background:${c}0F;border:1px solid ${c}26;animation:fadeUp .3s ease"><div style="font-size:13px;font-weight:700;color:${c}">${icon} ${esc(msg)}</div></div>`;
   setTimeout(()=>{t.innerHTML="";},3000);
 }
 
 function closeRenoModal(){document.getElementById("renoModal").style.display="none";document.body.style.overflow="";}
+
+// ═══ FINANCING MODULE ═══
+let finData=null,finDealId=null;
+const FIN_STATUSES=["application","approved","clear_to_close","funded","active","paid_off"];
+const FIN_LABELS={application:"Application",approved:"Approved",clear_to_close:"Clear to Close",funded:"Funded",active:"Active",paid_off:"Paid Off"};
+
+async function loadFinancing(dealId){
+  try{
+    const res=await sb("deal_financing?deal_id=eq."+dealId);
+    finData=Array.isArray(res)&&res.length?res[0]:null;
+    finDealId=dealId;
+  }catch(e){console.error("Load financing failed:",e);finData=null;}
+}
+
+async function openFinancing(dealId){
+  const d=deals.find(x=>x.id===dealId);if(!d)return;
+  finDealId=dealId;
+  await loadFinancing(dealId);
+  const f=finData;
+  const isNew=!f;
+  const m=document.getElementById("renoModal");
+
+  let h=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeRenoModal()">✕</button>`;
+  h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">DEAL FINANCING</div>`;
+  h+=`<div style="font-size:18px;font-weight:800;margin-bottom:4px">${esc(d.address)}</div>`;
+  h+=`<div style="font-size:11px;color:#64748b;margin-bottom:16px">${d.community?esc(d.community)+' · ':''}${d.zip_code||''}</div>`;
+
+  // Status pipeline
+  const cs=f?.status||"application";
+  h+=`<div class="fin-pipe">`;
+  FIN_STATUSES.forEach((s,i)=>{
+    const active=s===cs;
+    const done=FIN_STATUSES.indexOf(cs)>i;
+    h+=`<button onclick="updateFinStatus('${s}')" class="fin-ps${active?' active':''}${done?' done':''}">${FIN_LABELS[s]}</button>`;
+  });
+  h+=`</div>`;
+
+  // Section 1: Loan Terms
+  const s1sum=f?`${esc(f.lender_name||'—')} | ${f.interest_rate||'—'}% | ${f.loan_term_months||'—'}mo${f.maturity_date?' | Matures '+fmtDate(f.maturity_date):''}`:''
+  const s1open=isNew||!f?.lender_name;
+  h+=finSection('fin1','LOAN TERMS',s1sum,s1open,`
+    <div class="row2">
+      <div class="fld"><label>LENDER NAME</label><input id="fin_lender_name" class="cinput" value="${esc(f?.lender_name||d.lender_name||'')}"/></div>
+      <div class="fld"><label>LOAN NUMBER</label><input id="fin_loan_number" class="cinput" value="${esc(f?.loan_number||d.lender_loan_number||'')}"/></div>
+    </div>
+    <div class="fld"><label>LOAN OFFICER</label><input id="fin_loan_officer" class="cinput" value="${esc(f?.loan_officer||'')}"/></div>
+    <div class="row2">
+      <div class="fld"><label>INTEREST RATE (%)</label><input id="fin_interest_rate" type="number" step="0.01" class="cinput" value="${f?.interest_rate||d.lender_interest_rate||''}"/></div>
+      <div class="fld"><label>RATE TYPE</label><select id="fin_interest_rate_type" class="cinput"><option value="fixed"${(f?.interest_rate_type||'fixed')==='fixed'?' selected':''}>Fixed</option><option value="variable"${f?.interest_rate_type==='variable'?' selected':''}>Variable</option></select></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>LOAN TERM (MONTHS)</label><input id="fin_loan_term_months" type="number" class="cinput" value="${f?.loan_term_months||''}"/></div>
+      <div class="fld"><label>MATURITY DATE</label><input id="fin_maturity_date" type="date" class="cinput ${finMaturityClass(f?.maturity_date)}" value="${f?.maturity_date||''}"/></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>FIRST PAYMENT DATE</label><input id="fin_first_payment_date" type="date" class="cinput" value="${f?.first_payment_date||''}"/></div>
+      <div class="fld"><label>PAYMENT DUE DAY (1-28)</label><input id="fin_payment_due_day" type="number" min="1" max="28" class="cinput" value="${f?.payment_due_day||''}"/></div>
+    </div>
+    <div style="margin-top:4px">${renoToggle('fin_extension_available','Extension Available',!!f?.extension_available)}</div>
+    <div id="finExtFields" style="display:${f?.extension_available?'block':'none'};margin-top:8px">
+      <div class="row2">
+        <div class="fld"><label>EXTENSION FEE (%)</label><input id="fin_extension_fee_pct" type="number" step="0.01" class="cinput" value="${f?.extension_fee_pct||''}"/></div>
+        <div class="fld"><label>EXTENSION (MONTHS)</label><input id="fin_extension_months" type="number" class="cinput" value="${f?.extension_months||''}"/></div>
+      </div>
+    </div>
+  `);
+
+  // Section 2: Funded Amounts
+  const s2sum=f?`Principal: ${$r(f.funded_principal)} | Rehab: ${$r(f.rehab_holdback)} | Total: ${$r(f.total_loan_amount)}`:'';
+  const s2open=isNew||!f?.funded_principal;
+  h+=finSection('fin2','FUNDED AMOUNTS',s2sum,s2open,`
+    <div class="row2">
+      <div class="fld"><label>PURCHASE PRICE</label><input id="fin_purchase_price" type="number" class="cinput" value="${f?.purchase_price||d.accepted_price||d.offer_price||''}"/></div>
+      <div class="fld"><label>FUNDED PRINCIPAL</label><input id="fin_funded_principal" type="number" class="cinput" value="${f?.funded_principal||''}" oninput="finCalcTotal()"/></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>REHAB HOLDBACK</label><input id="fin_rehab_holdback" type="number" class="cinput" value="${f?.rehab_holdback||''}" oninput="finCalcTotal()"/></div>
+      <div class="fld"><label>TOTAL LOAN AMOUNT</label><input id="fin_total_loan_amount" type="number" class="cinput fin-calc" value="${f?.total_loan_amount||''}" readonly tabindex="-1"/></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>DOWN PAYMENT</label><input id="fin_down_payment" type="number" class="cinput" value="${f?.down_payment||''}"/></div>
+      <div class="fld"><label>MONTHLY PAYMENT <span style="font-size:8px;color:#475569">(from lender statement)</span></label><input id="fin_monthly_interest_payment" type="number" step="0.01" class="cinput" value="${f?.monthly_interest_payment||''}"/></div>
+    </div>
+  `);
+
+  // Section 3: Fees & Closing Costs
+  const s3sum=f?`Origination: ${$r(f.origination_fee_amount)} | Closing: ${$r(f.total_closing_costs)} | Cash to Close: ${$r(f.total_cash_to_close)}`:'';
+  const s3open=isNew||!f?.total_cash_to_close;
+  h+=finSection('fin3','FEES & CLOSING COSTS',s3sum,s3open,`
+    <div class="row2">
+      <div class="fld"><label>ORIGINATION FEE (%)</label><input id="fin_origination_fee_pct" type="number" step="0.01" class="cinput" value="${f?.origination_fee_pct||d.lender_origination_pct||''}" oninput="finCalcOrig()"/></div>
+      <div class="fld"><label>ORIGINATION FEE ($)</label><input id="fin_origination_fee_amount" type="number" class="cinput" value="${f?.origination_fee_amount||''}" oninput="finCalcCash()"/></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>SERVICE FEE</label><input id="fin_service_fee" type="number" class="cinput" value="${f?.service_fee||d.lender_service_fee||''}" oninput="finCalcCash()"/></div>
+      <div class="fld"><label>PRO-RATED INTEREST</label><input id="fin_prorated_interest" type="number" step="0.01" class="cinput" value="${f?.prorated_interest||''}" oninput="finCalcCash()"/></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>OTHER LENDER FEES</label><input id="fin_other_lender_fees" type="number" class="cinput" value="${f?.other_lender_fees||0}" oninput="finCalcCash()"/></div>
+      <div class="fld"><label>ESCROW FEE</label><input id="fin_escrow_fee" type="number" class="cinput" value="${f?.escrow_fee||''}" oninput="finCalcClosing()"/></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>LENDER'S TITLE INSURANCE</label><input id="fin_lenders_title_insurance" type="number" class="cinput" value="${f?.lenders_title_insurance||''}" oninput="finCalcClosing()"/></div>
+      <div class="fld"><label>RECORDING FEES</label><input id="fin_recording_fees" type="number" class="cinput" value="${f?.recording_fees||''}" oninput="finCalcClosing()"/></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>NOTARY / DOC PREP</label><input id="fin_notary_doc_prep" type="number" class="cinput" value="${f?.notary_doc_prep||''}" oninput="finCalcClosing()"/></div>
+      <div class="fld"><label>WIRE FEE</label><input id="fin_wire_fee" type="number" class="cinput" value="${f?.wire_fee||''}" oninput="finCalcClosing()"/></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>TOTAL CLOSING COSTS</label><input id="fin_total_closing_costs" type="number" class="cinput fin-calc" value="${f?.total_closing_costs||''}" readonly tabindex="-1"/></div>
+      <div class="fld"><label style="color:#d4af37;font-size:11px">TOTAL CASH TO CLOSE</label><input id="fin_total_cash_to_close" type="number" class="cinput fin-calc" style="font-size:20px;font-weight:800;color:#d4af37" value="${f?.total_cash_to_close||''}" readonly tabindex="-1"/></div>
+    </div>
+    <div style="margin-top:12px;padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">
+      <div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:8px">CASH SOURCE BREAKDOWN</div>
+      <div class="row3">
+        <div class="fld"><label>CASH</label><input id="fin_csb_cash" type="number" class="cinput" value="${(f?.cash_source_breakdown?.cash)||''}" oninput="finCalcCSB()"/></div>
+        <div class="fld"><label>LINE OF CREDIT</label><input id="fin_csb_loc" type="number" class="cinput" value="${(f?.cash_source_breakdown?.loc)||''}" oninput="finCalcCSB()"/></div>
+        <div class="fld"><label>LISA COMMISSION CREDIT</label><input id="fin_csb_commission" type="number" class="cinput" value="${(f?.cash_source_breakdown?.commission_credit)||''}" oninput="finCalcCSB()"/></div>
+      </div>
+      <div id="finCSBCheck" style="font-size:11px;font-weight:700;margin-top:4px"></div>
+    </div>
+  `);
+
+  // Section 4: Draw Terms
+  const s4sum=f?`Max Draws: ${f.max_draws||'—'} | Holdback: ${f.holdback_pct||'—'}% | Fee: ${$r(f.draw_fee)}/draw`:'';
+  const s4open=isNew||!f?.max_draws;
+  h+=finSection('fin4','DRAW TERMS',s4sum,s4open,`
+    <div class="row2">
+      <div class="fld"><label>MAX DRAWS</label><input id="fin_max_draws" type="number" class="cinput" value="${f?.max_draws||d.lender_max_draws||''}"/></div>
+      <div class="fld"><label>HOLDBACK (%)</label><input id="fin_holdback_pct" type="number" step="0.01" class="cinput" value="${f?.holdback_pct||d.lender_holdback_pct||''}"/></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>DRAW FEE ($)</label><input id="fin_draw_fee" type="number" class="cinput" value="${f?.draw_fee||d.lender_draw_fee||''}"/></div>
+      <div class="fld"><label>FINAL DRAW MIN (%)</label><input id="fin_final_draw_min_pct" type="number" class="cinput" value="${f?.final_draw_min_pct||10}" placeholder="10"/></div>
+    </div>
+  `);
+
+  // Section 5: Running Totals (read-only)
+  h+=finRunningTotals(f,d);
+
+  // Save button
+  h+=`<button onclick="saveFinancing('${dealId}')" class="btn" style="width:100%;padding:16px;font-size:15px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;margin-top:16px">Save Financing</button>`;
+  h+=`</div>`;
+
+  m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
+
+  // Init extension toggle listener
+  document.getElementById("fin_extension_available")?.addEventListener("change",function(){
+    document.getElementById("finExtFields").style.display=this.checked?"block":"none";
+  });
+  // Init live calcs
+  finCalcTotal();finCalcClosing();finCalcCash();finCalcCSB();
+}
+
+function finSection(id,title,summary,open,content){
+  return`<div class="fin-section" id="${id}_sec">
+    <button class="fin-sec-hdr" onclick="finToggleSec('${id}')">
+      <div style="flex:1;text-align:left">
+        <div style="font-size:11px;font-weight:800;color:#e2e8f0;letter-spacing:0.5px">${title}</div>
+        ${summary?`<div class="fin-sec-sum" id="${id}_sum" style="${open?'display:none':''}">${summary}</div>`:''}
+      </div>
+      <span class="fin-chev" id="${id}_chev">${open?'▼':'▶'}</span>
+    </button>
+    <div class="fin-sec-body" id="${id}_body" style="${open?'':'display:none'}">${content}</div>
+  </div>`;
+}
+
+function finToggleSec(id){
+  const body=document.getElementById(id+"_body");
+  const chev=document.getElementById(id+"_chev");
+  const sum=document.getElementById(id+"_sum");
+  if(!body)return;
+  const show=body.style.display==="none";
+  body.style.display=show?"":"none";
+  if(chev)chev.textContent=show?"▼":"▶";
+  if(sum)sum.style.display=show?"none":"";
+}
+
+function finMaturityClass(dt){
+  if(!dt)return'';
+  const diff=(new Date(dt+"T00:00:00")-new Date())/(864e5*30);
+  return diff<4?'fin-mat-warn':'';
+}
+
+function finRunningTotals(f,d){
+  let h=`<div class="fin-section"><div class="fin-sec-hdr" style="cursor:default"><div style="flex:1;text-align:left"><div style="font-size:11px;font-weight:800;color:#e2e8f0;letter-spacing:0.5px">RUNNING TOTALS</div></div><span style="font-size:10px;color:#64748b">AUTO</span></div><div class="fin-sec-body">`;
+  const mip=f?.monthly_interest_payment||0;
+  const fundedDate=f?.funded_date;
+  const matDate=f?.maturity_date;
+  const monthsSinceFunded=fundedDate?((Date.now()-new Date(fundedDate+"T00:00:00").getTime())/(864e5*30.44)).toFixed(1):null;
+  const monthsUntilMat=matDate?((new Date(matDate+"T00:00:00").getTime()-Date.now())/(864e5*30.44)).toFixed(1):null;
+  const matColor=monthsUntilMat!==null?(monthsUntilMat<2?'#ef4444':monthsUntilMat<4?'#eab308':'#22c55e'):'#94a3b8';
+  const estInterest=monthsSinceFunded?mip*parseFloat(monthsSinceFunded):0;
+  const curBal=(f?.funded_principal||0)+(f?.total_draws_received||0);
+  const estPayoff=curBal+estInterest;
+
+  h+=`<div class="reno-sgrid" style="grid-template-columns:repeat(2,1fr)">`;
+  h+=`<div class="reno-scard"><div class="reno-sl">MONTHS SINCE FUNDED</div><div class="reno-sv">${monthsSinceFunded||'—'}</div></div>`;
+  h+=`<div class="reno-scard"><div class="reno-sl">MONTHS UNTIL MATURITY</div><div class="reno-sv" style="color:${matColor}">${monthsUntilMat||'—'}</div></div>`;
+  h+=`<div class="reno-scard"><div class="reno-sl">TOTAL INTEREST PAID</div><div class="reno-sv">${$r(f?.total_interest_paid)}</div></div>`;
+  h+=`<div class="reno-scard"><div class="reno-sl">EST. INTEREST ACCRUED</div><div class="reno-sv" style="color:#f59e0b">${$r(estInterest)}</div></div>`;
+  h+=`<div class="reno-scard"><div class="reno-sl">CURRENT BALANCE</div><div class="reno-sv">${$r(curBal)}</div></div>`;
+  h+=`<div class="reno-scard"><div class="reno-sl">TOTAL DRAWS RECEIVED</div><div class="reno-sv" style="color:#22c55e">${$r(f?.total_draws_received)}</div></div>`;
+  h+=`<div class="reno-scard"><div class="reno-sl">REMAINING DRAWABLE</div><div class="reno-sv">${$r((f?.rehab_holdback||0)-(f?.total_draws_received||0))}</div></div>`;
+  h+=`<div class="reno-scard"><div class="reno-sl">ESTIMATED PAYOFF</div><div class="reno-sv" style="color:#ef4444">${$r(estPayoff)}</div></div>`;
+  h+=`</div>`;
+
+  // Log Interest Payment button
+  h+=`<div style="margin-top:12px"><button onclick="document.getElementById('finIntForm').style.display=document.getElementById('finIntForm').style.display==='none'?'block':'none'" class="btn" style="width:100%;padding:10px;font-size:12px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);color:#60a5fa;font-weight:700">Log Interest Payment</button>`;
+  h+=`<div id="finIntForm" style="display:none;margin-top:8px;padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
+  h+=`<div class="row2"><div class="fld"><label>PAYMENT DATE</label><input id="finIntDate" type="date" class="cinput" value="${new Date().toISOString().split('T')[0]}"/></div>`;
+  h+=`<div class="fld"><label>AMOUNT</label><input id="finIntAmt" type="number" step="0.01" class="cinput" value="${mip}"/></div></div>`;
+  h+=`<button onclick="logInterestPayment()" class="btn" style="width:100%;padding:10px;font-size:12px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;margin-top:6px">Save Payment</button>`;
+  h+=`</div></div>`;
+
+  // Funded date
+  h+=`<div class="fld" style="margin-top:12px"><label>FUNDED DATE</label><input id="fin_funded_date" type="date" class="cinput" value="${f?.funded_date||''}"/></div>`;
+  h+=`<div class="fld"><label>NOTES</label><textarea id="fin_notes" class="cinput" rows="2" style="min-height:60px;font-size:13px">${esc(f?.notes||'')}</textarea></div>`;
+
+  h+=`</div></div>`;
+  return h;
+}
+
+// ═══ FINANCING LIVE CALCULATIONS ═══
+function finCalcTotal(){
+  const fp=Number(document.getElementById("fin_funded_principal")?.value)||0;
+  const rh=Number(document.getElementById("fin_rehab_holdback")?.value)||0;
+  const el=document.getElementById("fin_total_loan_amount");
+  if(el)el.value=fp+rh||'';
+  finCalcOrig();
+}
+function finCalcOrig(){
+  const pct=Number(document.getElementById("fin_origination_fee_pct")?.value)||0;
+  const total=Number(document.getElementById("fin_total_loan_amount")?.value)||0;
+  const el=document.getElementById("fin_origination_fee_amount");
+  if(el&&pct&&total&&!el._userEdited)el.value=Math.round(pct/100*total);
+  finCalcCash();
+}
+function finCalcClosing(){
+  const ids=["fin_escrow_fee","fin_lenders_title_insurance","fin_recording_fees","fin_notary_doc_prep","fin_wire_fee"];
+  let sum=0;ids.forEach(id=>{sum+=Number(document.getElementById(id)?.value)||0;});
+  const el=document.getElementById("fin_total_closing_costs");
+  if(el)el.value=sum||'';
+  finCalcCash();
+}
+function finCalcCash(){
+  const dp=Number(document.getElementById("fin_down_payment")?.value)||0;
+  const cc=Number(document.getElementById("fin_total_closing_costs")?.value)||0;
+  const orig=Number(document.getElementById("fin_origination_fee_amount")?.value)||0;
+  const sf=Number(document.getElementById("fin_service_fee")?.value)||0;
+  const pi=Number(document.getElementById("fin_prorated_interest")?.value)||0;
+  const olf=Number(document.getElementById("fin_other_lender_fees")?.value)||0;
+  const total=dp+cc+orig+sf+pi+olf;
+  const el=document.getElementById("fin_total_cash_to_close");
+  if(el)el.value=total||'';
+  finCalcCSB();
+}
+function finCalcCSB(){
+  const cash=Number(document.getElementById("fin_csb_cash")?.value)||0;
+  const loc=Number(document.getElementById("fin_csb_loc")?.value)||0;
+  const comm=Number(document.getElementById("fin_csb_commission")?.value)||0;
+  const csbTotal=cash+loc+comm;
+  const target=Number(document.getElementById("fin_total_cash_to_close")?.value)||0;
+  const el=document.getElementById("finCSBCheck");
+  if(!el)return;
+  if(!target&&!csbTotal){el.innerHTML='';return;}
+  const diff=Math.abs(csbTotal-target);
+  if(diff<1)el.innerHTML=`<span style="color:#22c55e">✓ Sources balance: ${$r(csbTotal)}</span>`;
+  else el.innerHTML=`<span style="color:#ef4444">⚠ Sources total ${$r(csbTotal)} — ${csbTotal<target?'short':'over'} by ${$r(diff)}</span>`;
+}
+
+async function updateFinStatus(newStatus){
+  if(!finData)return;
+  try{
+    await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:HD,body:JSON.stringify({status:newStatus})});
+    finData.status=newStatus;
+    // Re-render pipeline
+    document.querySelectorAll(".fin-ps").forEach((btn,i)=>{
+      const s=FIN_STATUSES[i];
+      const active=s===newStatus;
+      const done=FIN_STATUSES.indexOf(newStatus)>i;
+      btn.className="fin-ps"+(active?" active":"")+(done?" done":"");
+    });
+  }catch(e){console.error("Update fin status failed:",e);}
+}
+
+async function logInterestPayment(){
+  if(!finData)return;
+  const amt=Number(document.getElementById("finIntAmt")?.value)||0;
+  if(!amt){showRenoToast("Enter an amount");return;}
+  const newTotal=(finData.total_interest_paid||0)+amt;
+  try{
+    await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:HD,body:JSON.stringify({total_interest_paid:newTotal})});
+    finData.total_interest_paid=newTotal;
+    showRenoToast("Interest payment logged: "+$r(amt));
+    openFinancing(finDealId);
+  }catch(e){console.error("Log interest failed:",e);showRenoToast("Failed to log payment");}
+}
+
+async function saveFinancing(dealId){
+  const gv=id=>(document.getElementById(id)?.value||"").trim();
+  const gn=id=>Number(document.getElementById(id)?.value)||0;
+  const gc=id=>document.getElementById(id)?.checked||false;
+
+  const payload={
+    deal_id:dealId,
+    lender_name:gv("fin_lender_name"),loan_number:gv("fin_loan_number"),loan_officer:gv("fin_loan_officer"),
+    interest_rate:gn("fin_interest_rate")||null,interest_rate_type:gv("fin_interest_rate_type")||"fixed",
+    loan_term_months:gn("fin_loan_term_months")||null,maturity_date:gv("fin_maturity_date")||null,
+    first_payment_date:gv("fin_first_payment_date")||null,payment_due_day:gn("fin_payment_due_day")||null,
+    extension_available:gc("fin_extension_available"),
+    extension_fee_pct:gc("fin_extension_available")?gn("fin_extension_fee_pct")||null:null,
+    extension_months:gc("fin_extension_available")?gn("fin_extension_months")||null:null,
+    purchase_price:gn("fin_purchase_price")||null,funded_principal:gn("fin_funded_principal")||null,
+    rehab_holdback:gn("fin_rehab_holdback")||null,total_loan_amount:gn("fin_total_loan_amount")||null,
+    down_payment:gn("fin_down_payment")||null,monthly_interest_payment:gn("fin_monthly_interest_payment")||null,
+    origination_fee_pct:gn("fin_origination_fee_pct")||null,origination_fee_amount:gn("fin_origination_fee_amount")||null,
+    service_fee:gn("fin_service_fee")||null,prorated_interest:gn("fin_prorated_interest")||null,
+    other_lender_fees:gn("fin_other_lender_fees")||null,
+    escrow_fee:gn("fin_escrow_fee")||null,lenders_title_insurance:gn("fin_lenders_title_insurance")||null,
+    recording_fees:gn("fin_recording_fees")||null,notary_doc_prep:gn("fin_notary_doc_prep")||null,
+    wire_fee:gn("fin_wire_fee")||null,
+    total_closing_costs:gn("fin_total_closing_costs")||null,total_cash_to_close:gn("fin_total_cash_to_close")||null,
+    cash_source_breakdown:{cash:gn("fin_csb_cash")||0,loc:gn("fin_csb_loc")||0,commission_credit:gn("fin_csb_commission")||0},
+    max_draws:gn("fin_max_draws")||null,holdback_pct:gn("fin_holdback_pct")||null,
+    draw_fee:gn("fin_draw_fee")||null,final_draw_min_pct:gn("fin_final_draw_min_pct")||10,
+    funded_date:gv("fin_funded_date")||null,notes:gv("fin_notes")||null,
+    status:finData?.status||"application"
+  };
+
+  try{
+    if(finData){
+      const res=await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:HD,body:JSON.stringify(payload)});
+      if(!res.ok){showRenoToast("Failed to save financing");return;}
+    }else{
+      const res=await fetch(SB+"/rest/v1/deal_financing",{method:"POST",headers:HD,body:JSON.stringify(payload)});
+      if(!res.ok){showRenoToast("Failed to save financing");return;}
+    }
+
+    // Sync lender fields back to deals table
+    const dealSync={
+      lender_name:payload.lender_name||null,lender_loan_number:payload.loan_number||null,
+      lender_interest_rate:payload.interest_rate,lender_max_draws:payload.max_draws,
+      lender_holdback_pct:payload.holdback_pct,lender_draw_fee:payload.draw_fee
+    };
+    await fetch(SB+"/rest/v1/deals?id=eq."+dealId,{method:"PATCH",headers:HD,body:JSON.stringify(dealSync)});
+    const dl=deals.find(x=>x.id===dealId);
+    if(dl)Object.assign(dl,dealSync);
+
+    showRenoToast("Financing saved");
+    await loadFinancing(dealId);
+    if(renoDealId===dealId){await loadRenoData(dealId);if(renoSub==="budget"){const el=document.getElementById("renoContent");if(el)renderBudget(el);}}
+    closeRenoModal();
+  }catch(e){console.error("Save financing failed:",e);showRenoToast("Failed to save financing");}
+}
 
 // Restore search bar when leaving reno view
 const _origRL=renderList;

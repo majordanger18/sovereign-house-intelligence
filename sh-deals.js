@@ -227,8 +227,14 @@ async function openDeal(dealId){
       </div>
     </div>`:`<div style="margin-bottom:16px;padding:12px;border-radius:10px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.15)"><div style="font-size:10px;color:#ef4444;font-weight:800;letter-spacing:1px">DEAL ${d.status?.toUpperCase()}</div>${d.kill_reason?`<div style="font-size:12px;color:#94a3b8;margin-top:4px">${esc(d.kill_reason)}</div>`:''}<button onclick="updateDealStatus('${d.id}','offer_drafted')" style="margin-top:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer">♻️ Reopen Deal</button></div>`}
 
+    <!-- FINANCING SUMMARY -->
+    <div id="dealFinSummary"></div>
+
     <!-- EDIT DEAL NUMBERS -->
     <button onclick="openCalcForDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:14px;font-size:14px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;font-weight:800">🧮 Edit Deal Numbers</button>
+
+    <!-- FINANCING -->
+    <button onclick="openFinancing('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:14px;font-size:14px;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);color:#22d3ee;font-weight:800">💰 Financing</button>
 
     <!-- GENERATE RPA -->
     <button onclick="openRPAFromDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(224,201,127,0.15),rgba(212,175,55,0.08));border:1px solid rgba(224,201,127,0.3);color:#e0c97f;font-weight:800">📄 Generate GLVAR RPA</button>
@@ -322,6 +328,9 @@ async function openDeal(dealId){
   </div>`;
 
   m.style.display="block";document.body.style.overflow="hidden";
+
+  // Load financing summary asynchronously
+  loadDealFinSummary(d.id);
 }
 
 // ═══ DEAL ACTIONS ═══
@@ -519,4 +528,27 @@ async function saveDealField(dealId,field,value){
     await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify(patch)});
     d[field]=value;
   }catch(e){console.error("Save field failed:",e);}
+}
+
+async function loadDealFinSummary(dealId){
+  const el=document.getElementById("dealFinSummary");if(!el)return;
+  try{
+    const res=await sb("deal_financing?deal_id=eq."+dealId);
+    const f=Array.isArray(res)&&res.length?res[0]:null;
+    if(!f){el.innerHTML='';return;}
+    const st=f.status||"application";
+    const funded=st==="funded"||st==="active";
+    const pending=st==="application"||st==="approved";
+    const sc2=funded?"#22c55e":pending?"#eab308":"#94a3b8";
+    let matWarn='';
+    if(f.maturity_date){
+      const diff=(new Date(f.maturity_date+"T00:00:00")-new Date())/(864e5*30);
+      if(diff<4)matWarn=` · <span style="color:#ef4444;font-weight:800">Matures ${new Date(f.maturity_date+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</span>`;
+      else matWarn=` · Matures ${new Date(f.maturity_date+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}`;
+    }
+    el.innerHTML=`<div style="padding:10px 12px;margin-bottom:8px;border-radius:10px;background:rgba(6,182,212,0.04);border:1px solid rgba(6,182,212,0.12);font-size:11px;color:${sc2}">
+      <span style="font-weight:800">FINANCING:</span> ${esc(f.lender_name||'—')} | ${f.interest_rate||'—'}% | ${$r(f.funded_principal)} principal${matWarn}
+      ${pending?' · <span style="color:#eab308">⏳ Pending funding</span>':''}
+    </div>`;
+  }catch(e){el.innerHTML='';}
 }
