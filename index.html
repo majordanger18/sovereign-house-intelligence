@@ -80,6 +80,8 @@
 <div id="alertModal" class="overlay" style="display:none;z-index:950"></div>
 <div id="offerModal" class="overlay" style="display:none;z-index:1100"></div>
 <div id="dealModal" class="overlay" style="display:none;z-index:1150"></div>
+<div id="renoModal" class="overlay" style="display:none;z-index:1200"></div>
+<div id="contactsModal" class="overlay" style="display:none;z-index:1250"></div>
 
 <!-- Modular JS — load order matters -->
 <script src="sh-core.js"></script>
@@ -89,12 +91,14 @@
 <script src="sh-ai.js"></script>
 <script src="sh-calculator.js"></script>
 <script src="sh-offer-calc.js"></script>
+<script src="sh-renovation.js"></script>
+<script src="sh-contacts.js"></script>
 <script src="sh-alerts.js"></script>
 <script src="sh-offer.js"></script>
 <script src="sh-rpa-init.js"></script>
 <script>
 // Tap backdrop (outside sheet) to close modals
-[["detailModal","closeDetail"],["alertModal","closeAlerts"],["offerModal","closeOffer"],["dealModal","closeDeal"]].forEach(([id,fn])=>{
+[["detailModal","closeDetail"],["alertModal","closeAlerts"],["offerModal","closeOffer"],["dealModal","closeDeal"],["renoModal","closeRenoModal"],["contactsModal","closeCtModal"]].forEach(([id,fn])=>{
   document.getElementById(id).addEventListener("click",function(e){
     if(e.target===this&&typeof window[fn]==="function")window[fn]();
   });

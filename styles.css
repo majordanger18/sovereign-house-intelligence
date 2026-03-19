@@ -63,3 +63,80 @@ input[type="range"]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;b
 .login-box{width:100%;max-width:360px;padding:40px 28px;border-radius:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(212,175,55,0.12)}
 .login-box .cinput{margin-bottom:0}
 .login-box .fld{margin-bottom:14px}
+
+/* ═══ RENOVATION MODULE ═══ */
+.reno-wrap{max-width:100%}
+.reno-pills{display:flex;gap:6px;margin-bottom:16px}
+.reno-pill{padding:8px 20px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#64748b;cursor:pointer;transition:all .15s}
+.reno-pill.active{border-color:rgba(212,175,55,0.35);background:rgba(212,175,55,0.08);color:#d4af37}
+.reno-pill:active{transform:scale(0.97)}
+.reno-hero{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
+@media(max-width:480px){.reno-hero{grid-template-columns:1fr}}
+.reno-hcard{padding:16px;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);text-align:center}
+.reno-hl{font-size:9px;color:#64748b;font-weight:700;letter-spacing:1.5px}
+.reno-hv{font-size:22px;font-weight:800;color:#f1f5f9;margin-top:4px}
+@media(max-width:480px){.reno-hv{font-size:18px}}
+.reno-pbar{height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden}
+.reno-pfill{height:100%;border-radius:3px;transition:width .5s ease}
+.reno-sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:16px}
+@media(max-width:600px){.reno-sgrid{grid-template-columns:repeat(2,1fr)}}
+.reno-scard{padding:10px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);text-align:center}
+.reno-sl{font-size:8px;color:#64748b;font-weight:700;letter-spacing:1px;display:block}
+.reno-sv{font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px}
+.reno-tw{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;border:1px solid rgba(255,255,255,0.06)}
+.reno-tbl{width:100%;border-collapse:collapse;font-size:11px;min-width:600px}
+.reno-tbl thead{background:rgba(255,255,255,0.03)}
+.reno-tbl th{padding:8px 10px;text-align:left;font-size:9px;color:#64748b;font-weight:700;letter-spacing:0.5px;border-bottom:1px solid rgba(255,255,255,0.06);white-space:nowrap}
+.reno-tbl td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.03);vertical-align:middle}
+.reno-tbl tbody tr{transition:background .1s}
+.reno-tbl tbody tr:hover{background:rgba(255,255,255,0.02)}
+.reno-r{cursor:pointer}
+.reno-r.expanded{background:rgba(212,175,55,0.04)}
+.reno-xrow{background:rgba(255,255,255,0.01)}
+.reno-xrow td{padding:0 10px 8px}
+.reno-chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:9px;font-weight:700;letter-spacing:0.3px;white-space:nowrap;text-transform:capitalize}
+.reno-lx{display:flex;flex-direction:column;gap:4px;padding:8px 0}
+.reno-lx-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,0.02);font-size:11px}
+.reno-hm{/* hide on mobile */}
+@media(max-width:600px){.reno-hm{display:none}}
+.reno-oop{margin-top:16px;padding:14px;border-radius:12px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.15)}
+.reno-oop-r{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#94a3b8}
+.reno-oop-t{border-top:1px solid rgba(245,158,11,0.2);margin-top:4px;padding-top:8px;font-weight:800;color:#f1f5f9}
+.reno-dc{border-radius:16px;padding:16px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.015);margin-bottom:12px}
+.reno-pipe{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;padding:12px 0;gap:0}
+.reno-ps{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;z-index:1}
+.reno-pd{width:20px;height:20px;border-radius:50%;border:2px solid #475569;display:flex;align-items:center;justify-content:center;font-size:9px;color:transparent;background:#1a1a1e;transition:all .2s}
+.reno-pd.done{border-color:#d4af37;background:rgba(212,175,55,0.15);color:#d4af37}
+.reno-pd.cur{border-color:#3b82f6;background:rgba(59,130,246,0.15);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,0.3)}50%{box-shadow:0 0 0 6px rgba(59,130,246,0)}}
+.reno-pl{font-size:8px;color:#64748b;font-weight:600;white-space:nowrap;letter-spacing:0.3px}
+@media(max-width:480px){.reno-pl{font-size:7px}}
+.reno-pln{flex:1;height:2px;background:#27272a;margin-top:10px;min-width:4px}
+.reno-pln.done{background:rgba(212,175,55,0.4)}
+.reno-db{padding:0}
+.reno-dr{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:#94a3b8}
+.reno-ef{padding:16px;border-radius:14px;background:rgba(212,175,55,0.02);border:1px solid rgba(212,175,55,0.1);margin-bottom:4px}
+.reno-eg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:480px){.reno-eg{grid-template-columns:1fr}}
+.reno-totals{display:flex;gap:24px;padding:16px 0;flex-wrap:wrap}
+.reno-totals>div{display:flex;flex-direction:column;gap:2px}
+
+/* ═══ CONTACTS MODULE ═══ */
+.ct-wrap{max-width:100%}
+.ct-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:4px}
+.ct-fsel{min-height:44px;font-size:12px;min-width:120px;max-width:160px}
+@media(max-width:480px){.ct-fsel{min-width:0;flex:1}}
+.ct-list{display:flex;flex-direction:column;gap:8px}
+@media(min-width:768px){.ct-list{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}}
+@media(min-width:1100px){.ct-list{grid-template-columns:repeat(3,1fr)}}
+.ct-card{border-radius:16px;padding:14px;cursor:pointer;border:1px solid rgba(255,255,255,0.05);background:rgba(255,255,255,0.015);transition:transform .1s;overflow:hidden}
+.ct-card:active{transform:scale(0.99)}
+.ct-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.ct-info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px}
+.ct-info-l{color:#64748b;font-weight:600;font-size:10px;letter-spacing:0.5px}
+.ct-perf-card{border-left:3px solid rgba(212,175,55,0.3)}
+.ct-metrics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+@media(max-width:480px){.ct-metrics-grid{grid-template-columns:repeat(2,1fr)}}
+.ct-metric{padding:8px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);text-align:center}
+.ct-ml{font-size:8px;color:#64748b;font-weight:700;letter-spacing:0.5px}
+.ct-mv{font-size:14px;font-weight:800;color:#f1f5f9;margin-top:2px}
