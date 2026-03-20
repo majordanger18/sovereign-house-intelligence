@@ -242,6 +242,7 @@ async function loadLineExp(lid){
       h+=`<div class="fld" style="margin-bottom:6px"><label>PLANNED BUDGET</label><input type="number" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${pbVal||""}" onblur="saveSOWField('${lid}','planned_budget',Number(this.value))" onkeydown="if(event.key==='Enter'){this.blur()}"/><div style="font-size:9px;color:#64748b;margin-top:2px">Lender approved: ${$r(laRef)}</div>${pbVal>laRef&&laRef>0?`<div style="font-size:9px;color:#f59e0b;margin-top:1px">Out-of-pocket: ${$r(pbVal-laRef)}</div>`:''}</div>`;
       h+=`<div class="fld" style="margin-bottom:6px"><label>STATUS</label><select class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" onchange="saveSOWField('${lid}','status',this.value)"><option value="not_started"${sowLine.status==="not_started"?" selected":""}>Not Started</option><option value="in_progress"${sowLine.status==="in_progress"?" selected":""}>In Progress</option><option value="complete"${sowLine.status==="complete"?" selected":""}>Complete</option><option value="change_order"${sowLine.status==="change_order"?" selected":""}>Change Order</option></select></div>`;
       h+=`<div class="fld" style="margin-bottom:0"><label>NOTES</label><input type="text" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${esc(sowLine.notes||"")}" placeholder="Add notes for this line item..." onblur="saveSOWField('${lid}','notes',this.value)" onkeydown="if(event.key==='Enter'){this.blur()}"/></div>`;
+      h+=`<button onclick="event.stopPropagation();deleteSOWLine('${lid}')" style="margin-top:8px;background:none;border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:6px 12px;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer">Delete This Line</button>`;
     }else{
       h+=`<div style="color:#475569;font-size:11px">Line data not loaded.</div>`;
     }
@@ -1183,6 +1184,23 @@ async function saveNewSOWLine(){
     showRenoToast("SOW line #"+ln+" added");
     await loadRenoData(renoDealId);renderRenoSub();
   }catch(e){console.error("Add SOW line failed:",e);showRenoToast("Failed to add line");}
+}
+
+async function deleteSOWLine(lid){
+  const line = renoSOW.find(s=>s.id===lid);
+  const lineNum = line ? '#'+line.line_number+' — '+(line.description||'') : 'this line';
+  if(!confirm('Delete '+lineNum+'? This cannot be undone.'))return;
+  try{
+    const expCheck = await sb('renovation_expenses?sow_line_id=eq.'+lid+'&select=id&limit=1');
+    if(Array.isArray(expCheck)&&expCheck.length){
+      if(!confirm('This line has linked expenses. Deleting will unlink them. Continue?'))return;
+    }
+    await fetch(SB+'/rest/v1/renovation_sow_lines?id=eq.'+lid,{method:'DELETE',headers:HD});
+    renoExpandedLine=null;
+    showRenoToast('SOW line deleted');
+    await loadRenoData(renoDealId);
+    renderRenoSub();
+  }catch(e){console.error('Delete SOW line failed:',e);showRenoToast('Failed to delete line');}
 }
 
 // Restore search bar when leaving reno view
