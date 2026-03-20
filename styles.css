@@ -1,6 +1,8 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{background:#09090b;color:#f1f5f9;font-family:'DM Sans',-apple-system,sans-serif;min-height:100dvh;overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 input,select,button,textarea{font-family:inherit;-webkit-appearance:none}
+select{background-color:#1a1a2e;color:#e0e0e0}
+select option{background-color:#1a1a2e;color:#e0e0e0}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
@@ -90,16 +92,20 @@ input[type="range"]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;b
 .reno-tbl td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.03);vertical-align:middle}
 .reno-tbl tbody tr{transition:background .1s}
 .reno-tbl tbody tr:hover{background:rgba(255,255,255,0.02)}
-.reno-r{cursor:pointer}
+.reno-r{cursor:pointer;transition:background .15s}
+.reno-r:hover{background:rgba(255,255,255,0.03)}
 .reno-r.expanded{background:rgba(212,175,55,0.04)}
-.reno-xrow{background:rgba(255,255,255,0.01)}
-.reno-xrow td{padding:0 10px 8px}
+.reno-xrow{background:rgba(0,0,0,0.15)}
+.reno-xrow td{padding:0 10px 12px;border-left:3px solid rgba(212,175,55,0.4)}
 .reno-chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:9px;font-weight:700;letter-spacing:0.3px;white-space:nowrap;text-transform:capitalize}
-.reno-lx{display:flex;flex-direction:column;gap:4px;padding:8px 0}
-.reno-lx-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,0.02);font-size:11px}
+.reno-exp-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;padding:12px 0}
+@media(max-width:768px){.reno-exp-grid{grid-template-columns:1fr}}
+.reno-exp-col{min-width:0}
+.reno-lx{display:flex;flex-direction:column;gap:4px;padding:4px 0}
+.reno-lx-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;background:rgba(255,255,255,0.02);font-size:11px}
 .reno-hm{/* hide on mobile */}
 @media(max-width:600px){.reno-hm{display:none}}
-.reno-oop{margin-top:16px;padding:14px;border-radius:12px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.15)}
+.reno-oop{margin-top:16px;padding:14px;border-radius:12px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.15);border-left:3px solid #f59e0b}
 .reno-oop-r{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#94a3b8}
 .reno-oop-t{border-top:1px solid rgba(245,158,11,0.2);margin-top:4px;padding-top:8px;font-weight:800;color:#f1f5f9}
 .reno-dc{border-radius:16px;padding:16px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.015);margin-bottom:12px}
