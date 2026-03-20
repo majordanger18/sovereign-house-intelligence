@@ -32,22 +32,21 @@ setView=function(v){if(v==="renovation"){view="renovation";renderDashboard();ret
 function getRenoDeals(){return deals.filter(d=>RENO_QUALIFYING.includes(d.status));}
 
 function injectRenoTab(){
-  const fa=document.getElementById("filtersArea");if(!fa)return;
+  const nt=document.getElementById("navTabs");if(!nt)return;
   const rd=getRenoDeals();if(!rd.length)return;
-  const btns=fa.querySelectorAll(".filt");
+  const btns=nt.querySelectorAll(".nav-tab");
   let dealsBtn=null;
   btns.forEach(b=>{if(b.textContent.includes("Deals"))dealsBtn=b;});
   const rb=document.createElement("button");
-  rb.className="filt"+(view==="renovation"?" on":"");
+  rb.className="nav-tab"+(view==="renovation"?" active":"");
   rb.onclick=()=>setView("renovation");
   let dot="";
   if(renoOv){const h=renoOv.budget_health;const dc=h==="over_budget"?"#ef4444":h==="warning"?"#eab308":"#22c55e";dot=` <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dc};vertical-align:middle"></span>`;}
   rb.innerHTML=`Reno${dot}`;
-  if(view==="renovation"){rb.style.borderColor="rgba(212,175,55,0.5)";rb.style.background="rgba(212,175,55,0.12)";rb.style.color="#d4af37";}
-  if(dealsBtn&&dealsBtn.nextSibling)fa.insertBefore(rb,dealsBtn.nextSibling);
-  else if(dealsBtn)fa.appendChild(rb);
-  else if(btns.length>1)fa.insertBefore(rb,btns[1]);
-  else fa.appendChild(rb);
+  if(dealsBtn&&dealsBtn.nextSibling)nt.insertBefore(rb,dealsBtn.nextSibling);
+  else if(dealsBtn)nt.appendChild(rb);
+  else if(btns.length>1)nt.insertBefore(rb,btns[1]);
+  else nt.appendChild(rb);
 }
 
 // ═══ MAIN RENDER ═══

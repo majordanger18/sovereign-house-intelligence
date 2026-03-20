@@ -29,21 +29,20 @@ renderList=function(){
 };
 
 function injectCtTab(){
-  const fa=document.getElementById("filtersArea");if(!fa)return;
-  const btns=fa.querySelectorAll(".filt");
+  const nt=document.getElementById("navTabs");if(!nt)return;
+  const btns=nt.querySelectorAll(".nav-tab");
   // Find reno tab or deals tab to insert after
   let anchor=null;
   btns.forEach(b=>{if(b.textContent.includes("Reno"))anchor=b;});
   if(!anchor)btns.forEach(b=>{if(b.textContent.includes("Deals"))anchor=b;});
   const cb=document.createElement("button");
-  cb.className="filt"+(view==="contacts"?" on":"");
+  cb.className="nav-tab"+(view==="contacts"?" active":"");
   cb.onclick=()=>setView("contacts");
   const cnt=ctList.length;
   cb.innerHTML=`Contacts${cnt?` (${cnt})`:""}`;
-  if(view==="contacts"){cb.style.borderColor="rgba(212,175,55,0.5)";cb.style.background="rgba(212,175,55,0.12)";cb.style.color="#d4af37";}
-  if(anchor&&anchor.nextSibling)fa.insertBefore(cb,anchor.nextSibling);
-  else if(anchor)fa.appendChild(cb);
-  else fa.appendChild(cb);
+  if(anchor&&anchor.nextSibling)nt.insertBefore(cb,anchor.nextSibling);
+  else if(anchor)nt.appendChild(cb);
+  else nt.appendChild(cb);
 }
 
 // ═══ MAIN RENDER ═══

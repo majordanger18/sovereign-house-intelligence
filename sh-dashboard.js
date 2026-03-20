@@ -84,15 +84,20 @@ function renderDashboard(){
   const activeDeals=deals.filter(d=>!["closed","rejected","withdrawn","expired"].includes(d.status));
   const deadDeals=deals.filter(d=>["closed","rejected","withdrawn","expired"].includes(d.status));
   const queuedCount=activeProps.filter(p=>!analysisMap[p.id]).length;
-  const fD=[["deals",`🤝 Deals (${activeDeals.length})`],["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["watched",`★ Watch (${st.watched})`],["queued",`Queued (${queuedCount})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${props.filter(p=>isPend(p)).length})`]];
-  document.getElementById("filtersArea").innerHTML=fD.map(([v,l])=>{
-    const isDeals=v==="deals";
-    const hasActive=isDeals&&activeDeals.length>0;
-    const isOn=view===v;
-    if(isDeals&&hasActive&&!isOn) return`<button class="filt" onclick="setView('${v}')" style="border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.06);color:#22c55e">${l}</button>`;
-    if(isDeals&&isOn) return`<button class="filt on" onclick="setView('${v}')" style="border-color:rgba(34,197,94,0.5);background:rgba(34,197,94,0.12);color:#22c55e">${l}</button>`;
-    return`<button class="filt${isOn?" on":""}" onclick="setView('${v}')">${l}</button>`;
-  }).join("");
+
+  // Nav tabs (row 1)
+  const feedViews=["all","fresh","go","maybe","watched","queued","reduced","golf","pending"];
+  const isFeed=feedViews.includes(view);
+  const navTabs=document.getElementById("navTabs");
+  navTabs.innerHTML=`<button class="nav-tab${isFeed?" active":""}" onclick="setView('all')">Feed (${st.total})</button>`+
+    `<button class="nav-tab${view==="deals"?" active":""}" onclick="setView('deals')">Deals (${activeDeals.length})</button>`;
+
+  // Feed filter pills (row 2) — only visible on feed views
+  const feedFilters=document.getElementById("feedFilters");
+  const fD=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["watched",`★ Watch (${st.watched})`],["queued",`Queued (${queuedCount})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${props.filter(p=>isPend(p)).length})`]];
+  feedFilters.innerHTML=fD.map(([v,l])=>`<button class="filt${view===v?" on":""}" onclick="setView('${v}')">${l}</button>`).join("");
+  feedFilters.style.display=isFeed?"":"none";
+
   renderList();
 }
 
