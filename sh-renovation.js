@@ -18,6 +18,7 @@ const DRAW_PIPE=[
 
 let renoDealId=null,renoSub="budget",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null;
 let renoExpF={sow:"all",type:"all",from:"",to:""};
+const RENO_WH={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=representation"};
 
 // ═══ CURRENCY ═══
 function $r(n){if(n==null)return"—";const v=Number(n);if(isNaN(v))return"—";return v%1!==0?"$"+v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):"$"+v.toLocaleString();}
@@ -204,9 +205,9 @@ function renderBudget(el){
       const pb=l.planned_budget||0,sp=l.total_spent||0,la2=l.lender_approved||0,rb3=l.remaining_budget||0;
       const rmc=rb3<0?"#ef4444":pb>0&&sp/pb>0.8?"#eab308":"#22c55e";
       const oopDot=pb>la2&&la2>0?`<span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#f59e0b;margin-left:4px;vertical-align:middle" title="Out-of-pocket"></span>`:'';
-      const exp=renoExpandedLine===l.id;
-      h+=`<tr class="reno-r${exp?" expanded":""}" onclick="toggleLineExp('${l.id}')"><td style="color:#64748b">${l.line_number}</td><td><span class="reno-chip" style="color:${cc};background:${cc}15;border:1px solid ${cc}30">${esc((l.category||"").replace(/_/g," "))}</span></td><td style="font-weight:600;color:#e2e8f0">${esc(l.description||"")}</td><td class="reno-hm" style="text-align:right">${$r(la2)}</td><td style="text-align:right">${$r(pb)}${oopDot}</td><td style="text-align:right;font-weight:700">${$r(sp)}</td><td class="reno-hm" style="text-align:right">${$r(l.total_drawn)}</td><td style="text-align:right;color:${rmc};font-weight:700">${$r(rb3)}</td><td><span class="reno-chip" style="color:${stc};background:${stc}15;border:1px solid ${stc}30">${(l.status||"not_started").replace(/_/g," ")}</span></td></tr>`;
-      if(exp)h+=`<tr class="reno-xrow"><td colspan="9" id="renoLX_${l.id}"><div style="padding:8px 0;color:#64748b;font-size:11px">Loading...</div></td></tr>`;
+      const exp=renoExpandedLine===l.sow_line_id;
+      h+=`<tr class="reno-r${exp?" expanded":""}" onclick="toggleLineExp('${l.sow_line_id}')"><td style="color:#64748b">${l.line_number}</td><td><span class="reno-chip" style="color:${cc};background:${cc}15;border:1px solid ${cc}30">${esc((l.category||"").replace(/_/g," "))}</span></td><td style="font-weight:600;color:#e2e8f0">${esc(l.description||"")}</td><td class="reno-hm" style="text-align:right">${$r(la2)}</td><td style="text-align:right">${$r(pb)}${oopDot}</td><td style="text-align:right;font-weight:700">${$r(sp)}</td><td class="reno-hm" style="text-align:right">${$r(l.total_drawn)}</td><td style="text-align:right;color:${rmc};font-weight:700">${$r(rb3)}</td><td><span class="reno-chip" style="color:${stc};background:${stc}15;border:1px solid ${stc}30">${(l.status||"not_started").replace(/_/g," ")}</span></td></tr>`;
+      if(exp)h+=`<tr class="reno-xrow"><td colspan="9" id="renoLX_${l.sow_line_id}"><div style="padding:8px 0;color:#64748b;font-size:11px">Loading...</div></td></tr>`;
     });
     h+=`</tbody></table></div></div>`;
   }
@@ -289,7 +290,7 @@ async function loadLineExp(lid){
 async function saveSOWField(lid,field,value){
   const patch={};patch[field]=field==='planned_budget'?(value||0):(value||null);
   try{
-    const res=await fetch(SB+"/rest/v1/renovation_sow_lines?id=eq."+lid,{method:"PATCH",headers:HD,body:JSON.stringify(patch)});
+    const res=await fetch(SB+"/rest/v1/renovation_sow_lines?id=eq."+lid,{method:"PATCH",headers:RENO_WH,body:JSON.stringify(patch)});
     if(!res.ok){showRenoToast("Failed to save");return;}
     const s=renoSOW.find(x=>x.id===lid);if(s)s[field]=value;
     showRenoToast(field.replace(/_/g," ")+" saved");
@@ -381,8 +382,8 @@ async function loadDrawLines(drawId){
 async function deleteDraw(drawId,drawNum){
   if(!confirm("Delete Draw #"+drawNum+"? This cannot be undone."))return;
   try{
-    await fetch(SB+"/rest/v1/renovation_draw_lines?draw_id=eq."+drawId,{method:"DELETE",headers:HD});
-    await fetch(SB+"/rest/v1/renovation_draws?id=eq."+drawId,{method:"DELETE",headers:HD});
+    await fetch(SB+"/rest/v1/renovation_draw_lines?draw_id=eq."+drawId,{method:"DELETE",headers:RENO_WH});
+    await fetch(SB+"/rest/v1/renovation_draws?id=eq."+drawId,{method:"DELETE",headers:RENO_WH});
     showRenoToast("Draw #"+drawNum+" deleted");
     await loadRenoData(renoDealId);renderRenoSub();
   }catch(e){console.error("Delete draw failed:",e);showRenoToast("Failed to delete draw");}
@@ -428,7 +429,7 @@ async function saveDrawUpdate(drawId,sk,df){
     if(dr?.date_submitted){patch.days_to_reimburse=Math.round((new Date(dv)-new Date(dr.date_submitted))/(864e5));}
   }
   try{
-    await fetch(SB+"/rest/v1/renovation_draws?id=eq."+drawId,{method:"PATCH",headers:HD,body:JSON.stringify(patch)});
+    await fetch(SB+"/rest/v1/renovation_draws?id=eq."+drawId,{method:"PATCH",headers:RENO_WH,body:JSON.stringify(patch)});
     closeRenoModal();await loadRenoData(renoDealId);renderRenoSub();
   }catch(e){console.error("Draw update failed:",e);}
 }
@@ -512,13 +513,13 @@ async function saveNewDraw(num){
   const fee=Number(document.getElementById("ndFee")?.value)||0;
   const payload={draw_number:num,amount_requested:amt,draw_fee:fee,status:"preparing",date_prepared:new Date().toISOString().split("T")[0],has_invoices:!!document.getElementById("ndInv")?.checked,has_lien_waivers:!!document.getElementById("ndLW")?.checked,has_draw_request_form:!!document.getElementById("ndDF")?.checked,interest_payments_current:!!document.getElementById("ndInt")?.checked,deal_id:renoDealId};
   try{
-    const res=await fetch(SB+"/rest/v1/renovation_draws",{method:"POST",headers:HD,body:JSON.stringify(payload)});
+    const res=await fetch(SB+"/rest/v1/renovation_draws",{method:"POST",headers:RENO_WH,body:JSON.stringify(payload)});
     const result=await res.json();
     const newId=Array.isArray(result)?result[0]?.id:result?.id;
     if(newId){
       const lp=[];
       document.querySelectorAll(".ndLCb").forEach(cb=>{
-        if(cb.checked){const lid=cb.dataset.lid;const la=Number(document.getElementById("ndLA_"+lid)?.value)||0;if(la>0)lp.push(fetch(SB+"/rest/v1/renovation_draw_lines",{method:"POST",headers:HD,body:JSON.stringify({draw_id:newId,sow_line_id:lid,amount:la})}));}
+        if(cb.checked){const lid=cb.dataset.lid;const la=Number(document.getElementById("ndLA_"+lid)?.value)||0;if(la>0)lp.push(fetch(SB+"/rest/v1/renovation_draw_lines",{method:"POST",headers:RENO_WH,body:JSON.stringify({draw_id:newId,sow_line_id:lid,amount:la})}));}
       });
       await Promise.all(lp);
     }
@@ -623,7 +624,7 @@ async function saveExpense(){
   if(gv("exN"))p.notes=gv("exN");
 
   try{
-    const res=await fetch(SB+"/rest/v1/renovation_expenses",{method:"POST",headers:HD,body:JSON.stringify(p)});
+    const res=await fetch(SB+"/rest/v1/renovation_expenses",{method:"POST",headers:RENO_WH,body:JSON.stringify(p)});
     if(!res.ok){const err=await res.text();console.error("Save expense error:",res.status,err);showRenoToast("Failed to save expense");return;}
     // Clear form (keep date and payment method)
     ["exDe","exA","exV","exPn","exUC","exQ","exN"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
@@ -918,12 +919,12 @@ async function updateFinStatus(newStatus){
   try{
     if(!finData){
       // No record exists yet — create one with deal_id + status
-      const res=await fetch(SB+"/rest/v1/deal_financing",{method:"POST",headers:HD,body:JSON.stringify({deal_id:finDealId,status:newStatus})});
+      const res=await fetch(SB+"/rest/v1/deal_financing",{method:"POST",headers:RENO_WH,body:JSON.stringify({deal_id:finDealId,status:newStatus})});
       if(!res.ok){showRenoToast("Failed to create financing record");return;}
       const result=await res.json();
       finData=Array.isArray(result)?result[0]:result;
     }else{
-      await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:HD,body:JSON.stringify({status:newStatus})});
+      await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:RENO_WH,body:JSON.stringify({status:newStatus})});
       finData.status=newStatus;
     }
     // Re-render pipeline
@@ -942,7 +943,7 @@ async function logInterestPayment(){
   if(!amt){showRenoToast("Enter an amount");return;}
   const newTotal=(finData.total_interest_paid||0)+amt;
   try{
-    await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:HD,body:JSON.stringify({total_interest_paid:newTotal})});
+    await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:RENO_WH,body:JSON.stringify({total_interest_paid:newTotal})});
     finData.total_interest_paid=newTotal;
     showRenoToast("Interest payment logged: "+$r(amt));
     openFinancing(finDealId);
@@ -982,10 +983,10 @@ async function saveFinancing(dealId){
 
   try{
     if(finData){
-      const res=await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:HD,body:JSON.stringify(payload)});
+      const res=await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:RENO_WH,body:JSON.stringify(payload)});
       if(!res.ok){showRenoToast("Failed to save financing");return;}
     }else{
-      const res=await fetch(SB+"/rest/v1/deal_financing",{method:"POST",headers:HD,body:JSON.stringify(payload)});
+      const res=await fetch(SB+"/rest/v1/deal_financing",{method:"POST",headers:RENO_WH,body:JSON.stringify(payload)});
       if(!res.ok){showRenoToast("Failed to save financing");return;}
     }
 
@@ -995,7 +996,7 @@ async function saveFinancing(dealId){
       lender_interest_rate:payload.interest_rate,lender_max_draws:payload.max_draws,
       lender_holdback_pct:payload.holdback_pct,lender_draw_fee:payload.draw_fee
     };
-    await fetch(SB+"/rest/v1/deals?id=eq."+dealId,{method:"PATCH",headers:HD,body:JSON.stringify(dealSync)});
+    await fetch(SB+"/rest/v1/deals?id=eq."+dealId,{method:"PATCH",headers:RENO_WH,body:JSON.stringify(dealSync)});
     const dl=deals.find(x=>x.id===dealId);
     if(dl)Object.assign(dl,dealSync);
 
@@ -1131,10 +1132,10 @@ async function confirmSOWSave(){
     for(const row of rows){
       const existing=renoSOW.find(s=>s.line_number===row.line_number);
       if(existing){
-        const res=await fetch(SB+"/rest/v1/renovation_sow_lines?id=eq."+existing.id,{method:"PATCH",headers:HD,body:JSON.stringify({category:row.category,description:row.description,lender_approved:row.lender_approved,planned_budget:row.planned_budget})});
+        const res=await fetch(SB+"/rest/v1/renovation_sow_lines?id=eq."+existing.id,{method:"PATCH",headers:RENO_WH,body:JSON.stringify({category:row.category,description:row.description,lender_approved:row.lender_approved,planned_budget:row.planned_budget})});
         if(res.ok)saved++;else errors++;
       }else{
-        const res=await fetch(SB+"/rest/v1/renovation_sow_lines",{method:"POST",headers:HD,body:JSON.stringify(row)});
+        const res=await fetch(SB+"/rest/v1/renovation_sow_lines",{method:"POST",headers:RENO_WH,body:JSON.stringify(row)});
         if(res.ok)saved++;else errors++;
       }
     }
@@ -1181,13 +1182,13 @@ async function saveNewSOWLine(){
     if(Array.isArray(existing)&&existing.length){
       const ex=existing[0];
       if(!confirm("Line #"+ln+" already exists: "+(ex.description||ex.category||"")+". Update it with these new values?"))return;
-      const res=await fetch(SB+"/rest/v1/renovation_sow_lines?id=eq."+ex.id,{method:"PATCH",headers:HD,body:JSON.stringify({category:cat,description:desc,lender_approved:amt,planned_budget:amt})});
+      const res=await fetch(SB+"/rest/v1/renovation_sow_lines?id=eq."+ex.id,{method:"PATCH",headers:RENO_WH,body:JSON.stringify({category:cat,description:desc,lender_approved:amt,planned_budget:amt})});
       if(!res.ok){showRenoToast("Failed to update line");return;}
       const area=document.getElementById("sowAddLineArea");if(area)area.innerHTML="";
       showRenoToast("Line #"+ln+" updated");
     }else{
       const payload={deal_id:renoDealId,line_number:ln,category:cat,description:desc,lender_approved:amt,planned_budget:amt,status:"not_started"};
-      const res=await fetch(SB+"/rest/v1/renovation_sow_lines",{method:"POST",headers:HD,body:JSON.stringify(payload)});
+      const res=await fetch(SB+"/rest/v1/renovation_sow_lines",{method:"POST",headers:RENO_WH,body:JSON.stringify(payload)});
       if(!res.ok){showRenoToast("Failed to add line");return;}
       const area=document.getElementById("sowAddLineArea");if(area)area.innerHTML="";
       showRenoToast("Line #"+ln+" added");
@@ -1205,7 +1206,7 @@ async function deleteSOWLine(lid){
     if(Array.isArray(expCheck)&&expCheck.length){
       if(!confirm('This line has linked expenses. Deleting will unlink them. Continue?'))return;
     }
-    await fetch(SB+'/rest/v1/renovation_sow_lines?id=eq.'+lid,{method:'DELETE',headers:HD});
+    await fetch(SB+'/rest/v1/renovation_sow_lines?id=eq.'+lid,{method:'DELETE',headers:RENO_WH});
     renoExpandedLine=null;
     showRenoToast('SOW line deleted');
     await loadRenoData(renoDealId);
