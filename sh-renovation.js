@@ -1177,12 +1177,22 @@ async function saveNewSOWLine(){
   const amt=Number(document.getElementById("alAmt")?.value)||0;
   if(!ln||!desc){showRenoToast("Fill in line number and description");return;}
 
-  const payload={deal_id:renoDealId,line_number:ln,category:cat,description:desc,lender_approved:amt,planned_budget:amt,status:"not_started"};
   try{
-    const res=await fetch(SB+"/rest/v1/renovation_sow_lines",{method:"POST",headers:HD,body:JSON.stringify(payload)});
-    if(!res.ok){showRenoToast("Failed to add line");return;}
-    const area=document.getElementById("sowAddLineArea");if(area)area.innerHTML="";
-    showRenoToast("SOW line #"+ln+" added");
+    const existing=await sb("renovation_sow_lines?deal_id=eq."+renoDealId+"&line_number=eq."+ln);
+    if(Array.isArray(existing)&&existing.length){
+      const ex=existing[0];
+      if(!confirm("Line #"+ln+" already exists: "+(ex.description||ex.category||"")+". Update it with these new values?"))return;
+      const res=await fetch(SB+"/rest/v1/renovation_sow_lines?id=eq."+ex.id,{method:"PATCH",headers:HD,body:JSON.stringify({category:cat,description:desc,lender_approved:amt,planned_budget:amt})});
+      if(!res.ok){showRenoToast("Failed to update line");return;}
+      const area=document.getElementById("sowAddLineArea");if(area)area.innerHTML="";
+      showRenoToast("Line #"+ln+" updated");
+    }else{
+      const payload={deal_id:renoDealId,line_number:ln,category:cat,description:desc,lender_approved:amt,planned_budget:amt,status:"not_started"};
+      const res=await fetch(SB+"/rest/v1/renovation_sow_lines",{method:"POST",headers:HD,body:JSON.stringify(payload)});
+      if(!res.ok){showRenoToast("Failed to add line");return;}
+      const area=document.getElementById("sowAddLineArea");if(area)area.innerHTML="";
+      showRenoToast("Line #"+ln+" added");
+    }
     await loadRenoData(renoDealId);renderRenoSub();
   }catch(e){console.error("Add SOW line failed:",e);showRenoToast("Failed to add line");}
 }
