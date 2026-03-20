@@ -471,9 +471,8 @@ async function openNewDraw(){
   }else{
     drawSOW.forEach(l=>{
       h+=`<div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);margin-bottom:4px">`;
-      h+=`<input type="checkbox" id="ndL_${l.id}" data-lid="${l.id}" data-cat="${l.category||""}" class="ndLCb" style="width:18px;height:18px;accent-color:#d4af37" onchange="ndLineToggle(this)"/>`;
-      h+=`<label for="ndL_${l.id}" style="flex:1;font-size:12px;color:#e2e8f0;cursor:pointer">#${l.line_number} — ${esc(l.description||l.category||"")} <span style="color:#64748b;font-size:10px">(${$r(l.lender_approved)} approved)</span></label>`;
-      h+=`<input type="number" id="ndLA_${l.id}" class="cinput ndLAmt" style="width:110px;min-height:36px;font-size:12px;padding:6px 8px" placeholder="Amount" disabled oninput="ndRecalcTotal();chkContWarn()"/>`;
+      h+=`<span style="flex:1;font-size:12px;color:#e2e8f0">#${l.line_number} — ${esc(l.description||l.category||"")} <span style="color:#64748b;font-size:10px">(${$r(l.lender_approved)} approved)</span></span>`;
+      h+=`<input type="number" id="ndLA_${l.id}" data-lid="${l.id}" data-cat="${l.category||""}" class="cinput ndLAmt" style="width:110px;min-height:36px;font-size:12px;padding:6px 8px" placeholder="Amount" oninput="ndRecalcTotal();chkContWarn()"/>`;
       h+=`</div>`;
     });
   }
@@ -496,17 +495,10 @@ function renoToggle(id,label,checked){
   return`<label class="reno-tog"><span style="font-size:12px;color:#e2e8f0;flex:1">${label}</span><input type="checkbox" id="${id}" class="reno-tog-cb"${checked?" checked":""}/><span class="reno-tog-slider"></span></label>`;
 }
 
-function ndLineToggle(cb){
-  const lid=cb.dataset.lid;
-  const amt=document.getElementById("ndLA_"+lid);
-  if(amt){amt.disabled=!cb.checked;if(!cb.checked)amt.value="";}
-  ndRecalcTotal();chkContWarn();
-}
-
 function ndRecalcTotal(){
   let total=0;
-  document.querySelectorAll(".ndLCb").forEach(cb=>{
-    if(cb.checked){total+=Number(document.getElementById("ndLA_"+cb.dataset.lid)?.value)||0;}
+  document.querySelectorAll(".ndLAmt").forEach(inp=>{
+    total+=Number(inp.value)||0;
   });
   const el=document.getElementById("ndAmt");
   if(el&&total>0)el.value=total;
@@ -515,11 +507,9 @@ function ndRecalcTotal(){
 function chkContWarn(){
   const w=document.getElementById("ndCWarn");if(!w)return;
   let show=false;
-  document.querySelectorAll(".ndLCb").forEach(cb=>{
-    if(cb.checked&&(cb.dataset.cat||"").toLowerCase()==="contingency"){
-      const amt=Number(document.getElementById("ndLA_"+cb.dataset.lid)?.value)||0;
-      if(amt>1000)show=true;
-    }
+  document.querySelectorAll(".ndLAmt").forEach(inp=>{
+    const amt=Number(inp.value)||0;
+    if(amt>1000&&(inp.dataset.cat||"").toLowerCase()==="contingency")show=true;
   });
   w.style.display=show?"block":"none";
 }
@@ -535,8 +525,8 @@ async function saveNewDraw(num){
     const newId=Array.isArray(result)?result[0]?.id:result?.id;
     if(newId){
       const lp=[];
-      document.querySelectorAll(".ndLCb").forEach(cb=>{
-        if(cb.checked){const lid=cb.dataset.lid;const la=Number(document.getElementById("ndLA_"+lid)?.value)||0;if(la>0)lp.push(fetch(SB+"/rest/v1/renovation_draw_lines",{method:"POST",headers:RENO_WH,body:JSON.stringify({draw_id:newId,sow_line_id:lid,amount:la})}));}
+      document.querySelectorAll(".ndLAmt").forEach(inp=>{
+        const la=Number(inp.value)||0;if(la>0)lp.push(fetch(SB+"/rest/v1/renovation_draw_lines",{method:"POST",headers:RENO_WH,body:JSON.stringify({draw_id:newId,sow_line_id:inp.dataset.lid,amount:la})}));
       });
       await Promise.all(lp);
     }
