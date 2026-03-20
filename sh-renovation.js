@@ -311,6 +311,8 @@ function renderDrawsV(el){
     renoDraws.forEach(d=>{h+=renderDC(d);});
   }
   el.innerHTML=h;
+  // Lazy-load SOW line breakdowns into each draw card
+  renoDraws.forEach(d=>{loadDrawLines(d.id);});
 }
 
 function renderDC(d){
@@ -347,17 +349,48 @@ function renderDC(d){
   h+=`</div>`;
   if(d.interest_payments_current===false)h+=`<div style="font-size:10px;color:#f59e0b;margin-top:6px">⚠️ Interest payments not current</div>`;
   else if(d.interest_payments_current===true)h+=`<div style="font-size:10px;color:#22c55e;margin-top:6px">✓ Interest current</div>`;
+
+  // SOW line breakdown placeholder (loaded async)
+  h+=`<div id="drawLines_${d.id}" style="margin-top:8px"></div>`;
   h+=`</div>`;
 
   if(d.status!=="disbursed")h+=`<button onclick="openDrawUpdate('${d.id}',${cs})" class="btn" style="width:100%;margin-top:12px;padding:10px;font-size:12px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);color:#60a5fa;font-weight:700">Update Status</button>`;
+
+  // Delete button
+  h+=`<button onclick="deleteDraw('${d.id}',${d.draw_number})" style="width:100%;margin-top:8px;padding:10px;font-size:11px;background:none;border:none;color:#ef4444;font-weight:700;cursor:pointer;opacity:0.7;transition:opacity .2s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">Delete Draw #${d.draw_number}</button>`;
+
   h+=`</div>`;
   return h;
+}
+
+async function loadDrawLines(drawId){
+  const el=document.getElementById("drawLines_"+drawId);if(!el)return;
+  try{
+    const lines=await sb("renovation_draw_lines?draw_id=eq."+drawId+"&select=*,renovation_sow_lines(line_number,description,lender_approved)");
+    if(!Array.isArray(lines)||!lines.length){el.innerHTML="";return;}
+    let h=`<div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:1px;margin-bottom:4px">SOW LINES IN THIS DRAW</div>`;
+    lines.forEach(l=>{
+      const s=l.renovation_sow_lines||{};
+      h+=`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:11px"><span style="color:#94a3b8">#${s.line_number||"?"} — ${esc(s.description||"Unknown")}</span><span style="font-weight:700;color:#e2e8f0">${$r(l.amount)}</span></div>`;
+    });
+    el.innerHTML=h;
+  }catch(e){console.error("Load draw lines failed:",e);}
+}
+
+async function deleteDraw(drawId,drawNum){
+  if(!confirm("Delete Draw #"+drawNum+"? This cannot be undone."))return;
+  try{
+    await fetch(SB+"/rest/v1/renovation_draw_lines?draw_id=eq."+drawId,{method:"DELETE",headers:HD});
+    await fetch(SB+"/rest/v1/renovation_draws?id=eq."+drawId,{method:"DELETE",headers:HD});
+    showRenoToast("Draw #"+drawNum+" deleted");
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){console.error("Delete draw failed:",e);showRenoToast("Failed to delete draw");}
 }
 
 function fmtDate(d){if(!d)return"—";return new Date(d+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"numeric"});}
 
 // ═══ DRAW STATUS UPDATE ═══
-function openDrawUpdate(drawId,cs){
+async function openDrawUpdate(drawId,cs){
   const dr=renoDraws.find(d=>d.id===drawId);if(!dr)return;
   const ns=DRAW_PIPE[cs];if(!ns)return;
   const m=document.getElementById("renoModal");
@@ -366,6 +399,21 @@ function openDrawUpdate(drawId,cs){
   h+=`<div style="font-size:16px;font-weight:800;margin-bottom:16px">Draw #${dr.draw_number} → ${ns.label}</div>`;
   h+=`<div class="fld"><label>${ns.label.toUpperCase()} DATE</label><input id="dsDate" type="date" class="cinput" value="${new Date().toISOString().split("T")[0]}"/></div>`;
   if(ns.key==="disbursed")h+=`<div class="fld"><label>AMOUNT RECEIVED</label><input id="dsAmt" type="number" class="cinput" value="${(dr.amount_requested||0)-(dr.draw_fee||0)}" placeholder="Net amount received"/></div>`;
+
+  // Fetch and show SOW lines in this draw
+  let drawLines=[];
+  try{drawLines=await sb("renovation_draw_lines?draw_id=eq."+drawId+"&select=*,renovation_sow_lines(line_number,description,lender_approved)");}catch(e){}
+  if(Array.isArray(drawLines)&&drawLines.length){
+    h+=`<div style="margin:12px 0"><div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1.5px;margin-bottom:6px">SOW LINES IN THIS DRAW</div>`;
+    let dlTotal=0;
+    drawLines.forEach(l=>{
+      const s=l.renovation_sow_lines||{};
+      dlTotal+=l.amount||0;
+      h+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px"><span style="color:#94a3b8">#${s.line_number||"?"} — ${esc(s.description||"Unknown")}</span><span style="font-weight:700;color:#e2e8f0">${$r(l.amount)}</span></div>`;
+    });
+    h+=`<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-size:12px;font-weight:800"><span style="color:#64748b">Total</span><span style="color:#f1f5f9">${$r(dlTotal)}</span></div></div>`;
+  }
+
   h+=`<button onclick="saveDrawUpdate('${drawId}','${ns.key}','${ns.df}')" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none">Save Status</button></div>`;
   m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
 }
@@ -866,10 +914,17 @@ function finCalcCSB(){
 }
 
 async function updateFinStatus(newStatus){
-  if(!finData)return;
   try{
-    await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:HD,body:JSON.stringify({status:newStatus})});
-    finData.status=newStatus;
+    if(!finData){
+      // No record exists yet — create one with deal_id + status
+      const res=await fetch(SB+"/rest/v1/deal_financing",{method:"POST",headers:HD,body:JSON.stringify({deal_id:finDealId,status:newStatus})});
+      if(!res.ok){showRenoToast("Failed to create financing record");return;}
+      const result=await res.json();
+      finData=Array.isArray(result)?result[0]:result;
+    }else{
+      await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:HD,body:JSON.stringify({status:newStatus})});
+      finData.status=newStatus;
+    }
     // Re-render pipeline
     document.querySelectorAll(".fin-ps").forEach((btn,i)=>{
       const s=FIN_STATUSES[i];
