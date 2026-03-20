@@ -132,7 +132,8 @@ function renderBudget(el){
   let h='';
 
   // Big Three
-  h+=`<div class="reno-hero"><div class="reno-hcard"><div class="reno-hl">TOTAL BUDGET</div><div class="reno-hv">${$r(tb)}</div></div><div class="reno-hcard"><div class="reno-hl">TOTAL SPENT</div><div class="reno-hv" style="color:${sc}">${$r(ts)}</div></div><div class="reno-hcard"><div class="reno-hl">REMAINING</div><div class="reno-hv" style="color:${rc}">${$r(rem)}</div></div></div>`;
+  const tla=ov?.total_lender_approved||0;
+  h+=`<div class="reno-hero"><div class="reno-hcard"><div class="reno-hl">TOTAL BUDGET</div><div class="reno-hv">${$r(tb)}</div>${tla&&tla!==tb?`<div style="font-size:10px;color:#64748b;margin-top:2px">Lender: ${$r(tla)}</div>`:''}</div><div class="reno-hcard"><div class="reno-hl">TOTAL SPENT</div><div class="reno-hv" style="color:${sc}">${$r(ts)}</div></div><div class="reno-hcard"><div class="reno-hl">REMAINING</div><div class="reno-hv" style="color:${rc}">${$r(rem)}</div></div></div>`;
 
   // Progress bar
   h+=`<div class="reno-pbar"><div class="reno-pfill" style="width:${Math.min(pct,100)}%;background:${sc}"></div></div><div style="text-align:right;font-size:10px;color:#64748b;margin-top:4px;margin-bottom:8px">${pct.toFixed(1)}% spent</div>`;
@@ -191,17 +192,21 @@ function renderBudget(el){
     h+=`</div></div>`;
   }
 
-  // SOW table
+  // SOW action buttons + table
+  h+=`<div style="margin-top:20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">SCOPE OF WORK</div><div style="display:flex;gap:6px"><button onclick="event.stopPropagation();openSOWUpload()" class="btn" style="padding:6px 14px;font-size:11px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:700;min-height:32px">📄 Upload Lender SOW</button><button onclick="event.stopPropagation();openAddLineForm()" class="btn" style="padding:6px 14px;font-size:11px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700;min-height:32px">+ Add Line</button></div></div>`;
+  h+=`<div id="sowUploadArea"></div><div id="sowAddLineArea"></div>`;
   const fl=renoBLines.filter(l=>l.lender_approved>0||l.planned_budget>0||l.total_spent>0);
   if(fl.length){
-    h+=`<div style="margin-top:20px"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:10px">SCOPE OF WORK</div><div class="reno-tw"><table class="reno-tbl"><thead><tr><th>#</th><th>Category</th><th>Description</th><th class="reno-hm">Approved</th><th>Planned</th><th>Spent</th><th class="reno-hm">Drawn</th><th>Remaining</th><th>Status</th></tr></thead><tbody>`;
+    h+=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th>#</th><th>Category</th><th>Description</th><th class="reno-hm">Approved</th><th>Planned</th><th>Spent</th><th class="reno-hm">Drawn</th><th>Remaining</th><th>Status</th></tr></thead><tbody>`;
     fl.forEach(l=>{
       const cc=RENO_CAT_COLORS[(l.category||"").toLowerCase()]||"#64748b";
       const stc=RENO_STAT_COLORS[l.status]||"#64748b";
-      const rmc=(l.remaining_budget||0)<0?"#ef4444":"#22c55e";
+      const pb=l.planned_budget||0,sp=l.total_spent||0,la2=l.lender_approved||0,rb3=l.remaining_budget||0;
+      const rmc=rb3<0?"#ef4444":pb>0&&sp/pb>0.8?"#eab308":"#22c55e";
+      const oopDot=pb>la2&&la2>0?`<span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#f59e0b;margin-left:4px;vertical-align:middle" title="Out-of-pocket"></span>`:'';
       const exp=renoExpandedLine===l.id;
-      h+=`<tr class="reno-r${exp?" expanded":""}" onclick="toggleLineExp('${l.id}')"><td style="color:#64748b">${l.line_number}</td><td><span class="reno-chip" style="color:${cc};background:${cc}15;border:1px solid ${cc}30">${esc((l.category||"").replace(/_/g," "))}</span></td><td style="font-weight:600;color:#e2e8f0">${esc(l.description||"")}</td><td class="reno-hm" style="text-align:right">${$r(l.lender_approved)}</td><td style="text-align:right">${$r(l.planned_budget)}</td><td style="text-align:right;font-weight:700">${$r(l.total_spent)}</td><td class="reno-hm" style="text-align:right">${$r(l.total_drawn)}</td><td style="text-align:right;color:${rmc};font-weight:700">${$r(l.remaining_budget)}</td><td><span class="reno-chip" style="color:${stc};background:${stc}15;border:1px solid ${stc}30">${(l.status||"not_started").replace(/_/g," ")}</span></td></tr>`;
-      if(exp)h+=`<tr class="reno-xrow"><td colspan="9" id="renoLX_${l.id}"><div style="padding:8px 0;color:#64748b;font-size:11px">Loading expenses...</div></td></tr>`;
+      h+=`<tr class="reno-r${exp?" expanded":""}" onclick="toggleLineExp('${l.id}')"><td style="color:#64748b">${l.line_number}</td><td><span class="reno-chip" style="color:${cc};background:${cc}15;border:1px solid ${cc}30">${esc((l.category||"").replace(/_/g," "))}</span></td><td style="font-weight:600;color:#e2e8f0">${esc(l.description||"")}</td><td class="reno-hm" style="text-align:right">${$r(la2)}</td><td style="text-align:right">${$r(pb)}${oopDot}</td><td style="text-align:right;font-weight:700">${$r(sp)}</td><td class="reno-hm" style="text-align:right">${$r(l.total_drawn)}</td><td style="text-align:right;color:${rmc};font-weight:700">${$r(rb3)}</td><td><span class="reno-chip" style="color:${stc};background:${stc}15;border:1px solid ${stc}30">${(l.status||"not_started").replace(/_/g," ")}</span></td></tr>`;
+      if(exp)h+=`<tr class="reno-xrow"><td colspan="9" id="renoLX_${l.id}"><div style="padding:8px 0;color:#64748b;font-size:11px">Loading...</div></td></tr>`;
     });
     h+=`</tbody></table></div></div>`;
   }
@@ -209,7 +214,9 @@ function renderBudget(el){
   // Out of Pocket
   if(tb>la&&la>0){
     const oop=tb-la;
-    h+=`<div class="reno-oop"><div class="reno-oop-r"><span>Planned Total</span><span>${$r(tb)}</span></div><div class="reno-oop-r"><span>Lender Covers</span><span>${$r(la)}</span></div><div class="reno-oop-r reno-oop-t"><span>Out-of-Pocket</span><span style="color:#f59e0b">${$r(oop)}</span></div></div>`;
+    const csb=renoFin?.cash_source_breakdown;
+    const fundSrcs=[];if(csb?.cash)fundSrcs.push("Cash");if(csb?.loc)fundSrcs.push("LOC");if(csb?.commission_credit)fundSrcs.push("Lisa Commission");
+    h+=`<div class="reno-oop"><div style="font-size:9px;color:#f59e0b;font-weight:700;letter-spacing:1.5px;margin-bottom:6px">OUT-OF-POCKET SUMMARY</div><div class="reno-oop-r"><span>Total Planned</span><span>${$r(tb)}</span></div><div class="reno-oop-r"><span>Lender Covers</span><span>${$r(la)}</span></div><div class="reno-oop-r reno-oop-t"><span>Your Out-of-Pocket</span><span style="color:#f59e0b">${$r(oop)}</span></div>${fundSrcs.length?`<div style="font-size:10px;color:#64748b;margin-top:6px">Funded by: ${fundSrcs.join(" + ")}</div>`:''}</div>`;
   }
   el.innerHTML=h;
   if(renoExpandedLine)loadLineExp(renoExpandedLine);
@@ -219,42 +226,75 @@ async function toggleLineExp(lid){renoExpandedLine=renoExpandedLine===lid?null:l
 
 async function loadLineExp(lid){
   const c=document.getElementById("renoLX_"+lid);if(!c)return;
-  const sowLine=renoSOW.find(s=>s.id===lid);
+  const sowLine=renoSOW.find(s=>s.id===lid)||renoBLines.find(s=>s.id===lid);
   try{
-    const ex=await sb("renovation_expenses?sow_line_id=eq."+lid+"&order=expense_date.desc");
-    let h='';
-    // Section A — Linked Expenses
+    const[ex,dl]=await Promise.all([
+      sb("renovation_expenses?sow_line_id=eq."+lid+"&order=expense_date.desc"),
+      sb("renovation_draw_lines?sow_line_id=eq."+lid+"&select=*,renovation_draws(draw_number,status,date_submitted,date_disbursed)").catch(()=>[])
+    ]);
+    let h=`<div class="reno-exp-grid">`;
+
+    // Part A — Edit This Line
+    h+=`<div class="reno-exp-col">`;
+    h+=`<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:6px">EDIT LINE</div>`;
+    if(sowLine){
+      const laRef=sowLine.lender_approved||0,pbVal=sowLine.planned_budget||0;
+      h+=`<div class="fld" style="margin-bottom:6px"><label>PLANNED BUDGET</label><input type="number" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${pbVal||""}" onblur="saveSOWField('${lid}','planned_budget',Number(this.value))" onkeydown="if(event.key==='Enter'){this.blur()}"/><div style="font-size:9px;color:#64748b;margin-top:2px">Lender approved: ${$r(laRef)}</div>${pbVal>laRef&&laRef>0?`<div style="font-size:9px;color:#f59e0b;margin-top:1px">Out-of-pocket: ${$r(pbVal-laRef)}</div>`:''}</div>`;
+      h+=`<div class="fld" style="margin-bottom:6px"><label>STATUS</label><select class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" onchange="saveSOWField('${lid}','status',this.value)"><option value="not_started"${sowLine.status==="not_started"?" selected":""}>Not Started</option><option value="in_progress"${sowLine.status==="in_progress"?" selected":""}>In Progress</option><option value="complete"${sowLine.status==="complete"?" selected":""}>Complete</option><option value="change_order"${sowLine.status==="change_order"?" selected":""}>Change Order</option></select></div>`;
+      h+=`<div class="fld" style="margin-bottom:0"><label>NOTES</label><input type="text" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${esc(sowLine.notes||"")}" placeholder="Add notes for this line item..." onblur="saveSOWField('${lid}','notes',this.value)" onkeydown="if(event.key==='Enter'){this.blur()}"/></div>`;
+    }else{
+      h+=`<div style="color:#475569;font-size:11px">Line data not loaded.</div>`;
+    }
+    h+=`</div>`;
+
+    // Part B — Expenses For This Line
+    h+=`<div class="reno-exp-col">`;
+    h+=`<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:6px">EXPENSES</div>`;
     if(Array.isArray(ex)&&ex.length){
-      h+=`<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin:8px 0 4px">EXPENSES</div><div class="reno-lx">`;
+      let exTotal=0;
+      h+=`<div class="reno-lx">`;
       ex.forEach(e=>{
         const tc=EXP_TYPE_COLORS[e.expense_type]||"#94a3b8";
-        h+=`<div class="reno-lx-row"><span style="color:#64748b;min-width:60px">${e.expense_date?new Date(e.expense_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric"}):"—"}</span><span style="color:#94a3b8;min-width:100px">${esc(e.vendor_name||"—")}</span><span style="flex:1;color:#e2e8f0">${esc(e.description||"")}</span><span style="font-weight:700;min-width:80px;text-align:right">${$r(e.amount)}</span><span><span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30">${e.expense_type||"other"}</span></span></div>`;
+        exTotal+=e.amount||0;
+        h+=`<div class="reno-lx-row"><span style="color:#64748b;min-width:52px;font-size:10px">${e.expense_date?new Date(e.expense_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"2-digit"}):"—"}</span><span style="color:#94a3b8;min-width:70px;font-size:10px">${esc(e.vendor_name||"—")}</span><span style="flex:1;color:#e2e8f0;font-size:10px">${esc(e.description||"")}</span><span style="font-weight:700;min-width:65px;text-align:right;font-size:10px">${$r(e.amount)}</span><span><span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30">${e.expense_type||"other"}</span></span></div>`;
       });
-      h+=`</div>`;
+      h+=`</div><div style="font-size:11px;font-weight:700;color:#f1f5f9;margin-top:4px">Total: ${$r(exTotal)}</div>`;
     }else{
-      h+=`<div style="padding:8px 0;color:#475569;font-size:11px">No expenses recorded for this line item.</div>`;
+      h+=`<div style="color:#475569;font-size:11px">No expenses yet</div>`;
     }
-    // Section B — Inline Edit Fields
-    if(sowLine){
-      h+=`<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin:12px 0 6px">EDIT LINE</div>`;
-      h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px" class="reno-line-edit">`;
-      h+=`<div class="fld" style="margin-bottom:0"><label>PLANNED BUDGET</label><input type="number" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${sowLine.planned_budget||""}" onblur="saveSOWField('${lid}','planned_budget',Number(this.value))" onkeydown="if(event.key==='Enter'){this.blur()}"/></div>`;
-      h+=`<div class="fld" style="margin-bottom:0"><label>STATUS</label><select class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" onchange="saveSOWField('${lid}','status',this.value)"><option value="not_started"${sowLine.status==="not_started"?" selected":""}>Not Started</option><option value="in_progress"${sowLine.status==="in_progress"?" selected":""}>In Progress</option><option value="complete"${sowLine.status==="complete"?" selected":""}>Complete</option><option value="change_order"${sowLine.status==="change_order"?" selected":""}>Change Order</option></select></div>`;
-      h+=`<div class="fld" style="margin-bottom:0"><label>NOTES</label><input type="text" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${esc(sowLine.notes||"")}" placeholder="Notes..." onblur="saveSOWField('${lid}','notes',this.value)" onkeydown="if(event.key==='Enter'){this.blur()}"/></div>`;
-      h+=`</div>`;
+    h+=`<button onclick="event.stopPropagation();renoSub='expenses';renoExpF.sow='${lid}';renderRenoSub()" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;padding:4px 0;margin-top:6px">+ Add Expense</button>`;
+    h+=`</div>`;
+
+    // Part C — Draw History For This Line
+    h+=`<div class="reno-exp-col">`;
+    h+=`<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:6px">DRAW HISTORY</div>`;
+    const draws=Array.isArray(dl)?dl:[];
+    if(draws.length){
+      draws.forEach(d=>{
+        const dr=d.renovation_draws||{};
+        const dsc=RENO_STAT_COLORS[dr.status]||"#64748b";
+        h+=`<div class="reno-lx-row"><span style="color:#e2e8f0;font-weight:700;font-size:10px;min-width:55px">Draw #${dr.draw_number||"?"}</span><span style="font-weight:700;font-size:10px;min-width:65px;text-align:right">${$r(d.amount)}</span><span><span class="reno-chip" style="color:${dsc};background:${dsc}15;border:1px solid ${dsc}30">${(dr.status||"—").replace(/_/g," ")}</span></span>${dr.date_submitted?`<span style="color:#64748b;font-size:9px">${new Date(dr.date_submitted+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric"})}</span>`:''}</div>`;
+      });
+    }else{
+      h+=`<div style="color:#475569;font-size:11px">Not drawn yet</div>`;
     }
+    h+=`</div>`;
+
+    h+=`</div>`;
     c.innerHTML=h;
-  }catch(e){c.innerHTML=`<div style="padding:12px;color:#ef4444;font-size:11px">Failed to load expenses.</div>`;}
+  }catch(e){c.innerHTML=`<div style="padding:12px;color:#ef4444;font-size:11px">Failed to load line details.</div>`;}
 }
 
 async function saveSOWField(lid,field,value){
-  const patch={};patch[field]=value||null;
+  const patch={};patch[field]=field==='planned_budget'?(value||0):(value||null);
   try{
-    await fetch(SB+"/rest/v1/renovation_sow_lines?id=eq."+lid,{method:"PATCH",headers:HD,body:JSON.stringify(patch)});
+    const res=await fetch(SB+"/rest/v1/renovation_sow_lines?id=eq."+lid,{method:"PATCH",headers:HD,body:JSON.stringify(patch)});
+    if(!res.ok){showRenoToast("Failed to save");return;}
     const s=renoSOW.find(x=>x.id===lid);if(s)s[field]=value;
+    showRenoToast(field.replace(/_/g," ")+" saved");
     await loadRenoData(renoDealId);
     const el=document.getElementById("renoContent");if(el&&renoSub==="budget")renderBudget(el);
-  }catch(e){console.error("Save SOW field failed:",e);}
+  }catch(e){console.error("Save SOW field failed:",e);showRenoToast("Failed to save");}
 }
 
 // ═══ DRAWS VIEW ═══
@@ -908,6 +948,186 @@ async function saveFinancing(dealId){
     if(renoDealId===dealId){await loadRenoData(dealId);if(renoSub==="budget"){const el=document.getElementById("renoContent");if(el)renderBudget(el);}}
     closeRenoModal();
   }catch(e){console.error("Save financing failed:",e);showRenoToast("Failed to save financing");}
+}
+
+// ═══ SOW UPLOAD & ADD LINE ═══
+const SOW_CATEGORIES=["kitchen","bathrooms","flooring","paint","electrical","plumbing","hvac","roofing","landscaping","windows","doors","drywall","demolition","framing","insulation","exterior","garage","foundation","cabinets","countertops","appliances","siding","gutters","fence","concrete","tile","hardware","cleaning","permits","contingency","general"];
+let sowParsedLines=[];
+
+function openSOWUpload(){
+  const area=document.getElementById("sowUploadArea");if(!area)return;
+  if(area.innerHTML){area.innerHTML="";return;}
+  const ala=document.getElementById("sowAddLineArea");if(ala)ala.innerHTML="";
+
+  let h=`<div style="margin-top:12px;padding:16px;border-radius:12px;background:rgba(212,175,55,0.04);border:1px solid rgba(212,175,55,0.15)">`;
+  if(renoSOW.length)h+=`<div style="padding:10px 12px;border-radius:10px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);font-size:11px;color:#eab308;margin-bottom:10px">⚠️ ${renoSOW.length} SOW lines already exist. Uploading will <strong>replace</strong> matching line numbers and add new ones.</div>`;
+  h+=`<div style="font-size:11px;color:#94a3b8;margin-bottom:10px">Upload your lender's Scope of Work PDF. AI will parse line items automatically.</div>`;
+  h+=`<input type="file" id="sowFileInput" accept=".pdf" style="display:none" onchange="handleSOWFile(this)"/>`;
+  h+=`<div id="sowFileLabel" onclick="document.getElementById('sowFileInput').click()" style="padding:20px;border-radius:10px;border:2px dashed rgba(212,175,55,0.2);background:rgba(212,175,55,0.02);text-align:center;cursor:pointer;color:#94a3b8;font-size:13px;font-weight:600;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(212,175,55,0.5)'" onmouseout="this.style.borderColor='rgba(212,175,55,0.2)'">📄 Choose PDF file</div>`;
+  h+=`<div id="sowParseArea"></div>`;
+  h+=`</div>`;
+  area.innerHTML=h;
+}
+
+function handleSOWFile(input){
+  const file=input.files[0];if(!file)return;
+  const label=document.getElementById("sowFileLabel");
+  label.innerHTML=`📄 ${esc(file.name)} <span style="color:#64748b">(${(file.size/1024).toFixed(0)} KB)</span>`;
+  label.style.borderColor="rgba(34,197,94,0.4)";label.style.color="#e2e8f0";
+  const pa=document.getElementById("sowParseArea");
+  pa.innerHTML=`<button onclick="parseSOWPDF()" class="btn" style="width:100%;margin-top:10px;padding:12px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.2),rgba(212,175,55,0.08));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">🤖 Parse SOW with AI</button>`;
+}
+
+async function parseSOWPDF(){
+  const file=document.getElementById("sowFileInput")?.files[0];if(!file)return;
+  let apiKey=localStorage.getItem("sh_claude_key");
+  if(!apiKey){
+    apiKey=prompt("Enter your Claude API key (stored locally only):");
+    if(!apiKey)return;
+    localStorage.setItem("sh_claude_key",apiKey);
+  }
+  const pa=document.getElementById("sowParseArea");
+  pa.innerHTML=`<div style="text-align:center;padding:24px"><div style="width:24px;height:24px;border:2px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px"></div><div style="font-size:12px;color:#d4af37;font-weight:700">Parsing SOW with Claude...</div><div style="font-size:10px;color:#64748b;margin-top:4px">This may take 10-30 seconds</div></div>`;
+
+  try{
+    const buf=await file.arrayBuffer();
+    const bytes=new Uint8Array(buf);
+    let binary="";const chunk=8192;
+    for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+    const b64=btoa(binary);
+
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
+      body:JSON.stringify({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:4096,
+        messages:[{role:"user",content:[
+          {type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}},
+          {type:"text",text:"Parse this lender Scope of Work document. Extract each line item and return a JSON array. Each object must have: line_number (integer), category (one of: "+SOW_CATEGORIES.join(",")+"), description (string, the line item name/description), lender_approved (number, the dollar amount approved by the lender). Return ONLY the JSON array, no other text. Skip any total/summary rows. If a category doesn't match the list exactly, pick the closest match."}
+        ]}]
+      })
+    });
+
+    if(!res.ok){
+      if(res.status===401){localStorage.removeItem("sh_claude_key");pa.innerHTML=`<div style="color:#ef4444;font-size:12px;padding:12px">❌ Invalid API key. Click Parse again to re-enter.</div>`;return;}
+      const err=await res.text();pa.innerHTML=`<div style="color:#ef4444;font-size:12px;padding:12px">❌ API error ${res.status}: ${esc(err.substring(0,200))}</div>`;return;
+    }
+
+    const data=await res.json();
+    const text=data.content?.[0]?.text||"";
+    const jm=text.match(/\[[\s\S]*\]/);
+    if(!jm){pa.innerHTML=`<div style="color:#ef4444;font-size:12px;padding:12px">❌ Could not parse AI response.<br><span style="color:#64748b;font-size:10px">${esc(text.substring(0,300))}</span></div>`;return;}
+
+    sowParsedLines=JSON.parse(jm[0]);
+    if(!sowParsedLines.length){pa.innerHTML=`<div style="color:#ef4444;font-size:12px;padding:12px">❌ No line items found in document.</div>`;return;}
+    renderSOWReview();
+  }catch(e){
+    console.error("SOW parse error:",e);
+    pa.innerHTML=`<div style="color:#ef4444;font-size:12px;padding:12px">❌ Parse failed: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderSOWReview(){
+  const pa=document.getElementById("sowParseArea");if(!pa)return;
+  const total=sowParsedLines.reduce((s,l)=>s+(l.lender_approved||0),0);
+  let h=`<div style="margin-top:12px">`;
+  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:10px;color:#22c55e;font-weight:700;letter-spacing:1.5px">✓ PARSED ${sowParsedLines.length} LINE ITEMS</div><div style="font-size:12px;color:#d4af37;font-weight:800">Total: ${$r(total)}</div></div>`;
+  h+=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th style="width:30px"><input type="checkbox" id="sowChkAll" checked onchange="sowToggleAll(this.checked)" style="accent-color:#d4af37"/></th><th>#</th><th>Category</th><th>Description</th><th style="text-align:right">Approved</th></tr></thead><tbody>`;
+  sowParsedLines.forEach((l,i)=>{
+    const cc=RENO_CAT_COLORS[(l.category||"").toLowerCase()]||"#64748b";
+    h+=`<tr>`;
+    h+=`<td><input type="checkbox" class="sowChk" data-idx="${i}" checked style="accent-color:#d4af37"/></td>`;
+    h+=`<td><input type="number" class="cinput sowLN" data-idx="${i}" value="${l.line_number||i+1}" style="width:45px;min-height:30px;font-size:11px;padding:4px 6px;text-align:center"/></td>`;
+    h+=`<td><select class="cinput sowCat" data-idx="${i}" style="min-height:30px;font-size:11px;padding:4px 6px">`;
+    SOW_CATEGORIES.forEach(c=>{h+=`<option value="${c}"${c===(l.category||"").toLowerCase()?" selected":""}>${c.replace(/_/g," ")}</option>`;});
+    h+=`</select></td>`;
+    h+=`<td><input type="text" class="cinput sowDesc" data-idx="${i}" value="${esc(l.description||"")}" style="min-height:30px;font-size:11px;padding:4px 6px;width:100%"/></td>`;
+    h+=`<td style="text-align:right"><input type="number" class="cinput sowAmt" data-idx="${i}" value="${l.lender_approved||0}" style="width:90px;min-height:30px;font-size:11px;padding:4px 6px;text-align:right"/></td>`;
+    h+=`</tr>`;
+  });
+  h+=`</tbody></table></div>`;
+  h+=`<button onclick="confirmSOWSave()" class="btn" style="width:100%;margin-top:10px;padding:14px;font-size:14px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-weight:800;border:none">✓ Confirm & Save ${sowParsedLines.length} Lines</button>`;
+  h+=`</div>`;
+  pa.innerHTML=h;
+}
+
+function sowToggleAll(checked){document.querySelectorAll(".sowChk").forEach(cb=>{cb.checked=checked;});}
+
+async function confirmSOWSave(){
+  const rows=[];
+  document.querySelectorAll(".sowChk").forEach(cb=>{
+    if(!cb.checked)return;
+    const i=Number(cb.dataset.idx);
+    const ln=Number(document.querySelector(`.sowLN[data-idx="${i}"]`)?.value)||i+1;
+    const cat=document.querySelector(`.sowCat[data-idx="${i}"]`)?.value||"general";
+    const desc=document.querySelector(`.sowDesc[data-idx="${i}"]`)?.value||"";
+    const amt=Number(document.querySelector(`.sowAmt[data-idx="${i}"]`)?.value)||0;
+    rows.push({deal_id:renoDealId,line_number:ln,category:cat,description:desc,lender_approved:amt,planned_budget:amt,status:"not_started"});
+  });
+  if(!rows.length){showRenoToast("No lines selected");return;}
+
+  const pa=document.getElementById("sowParseArea");
+  pa.innerHTML=`<div style="text-align:center;padding:16px"><div style="width:20px;height:20px;border:2px solid rgba(34,197,94,0.2);border-top-color:#22c55e;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px"></div><div style="font-size:12px;color:#22c55e;font-weight:700">Saving ${rows.length} lines...</div></div>`;
+
+  try{
+    let saved=0,errors=0;
+    for(const row of rows){
+      const existing=renoSOW.find(s=>s.line_number===row.line_number);
+      if(existing){
+        const res=await fetch(SB+"/rest/v1/renovation_sow_lines?id=eq."+existing.id,{method:"PATCH",headers:HD,body:JSON.stringify({category:row.category,description:row.description,lender_approved:row.lender_approved,planned_budget:row.planned_budget})});
+        if(res.ok)saved++;else errors++;
+      }else{
+        const res=await fetch(SB+"/rest/v1/renovation_sow_lines",{method:"POST",headers:HD,body:JSON.stringify(row)});
+        if(res.ok)saved++;else errors++;
+      }
+    }
+    sowParsedLines=[];
+    const area=document.getElementById("sowUploadArea");if(area)area.innerHTML="";
+    showRenoToast(saved+" SOW lines saved"+(errors?" ("+errors+" errors)":""));
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){
+    console.error("SOW save error:",e);
+    showRenoToast("Failed to save SOW lines");
+  }
+}
+
+function openAddLineForm(){
+  const area=document.getElementById("sowAddLineArea");if(!area)return;
+  if(area.innerHTML){area.innerHTML="";return;}
+  const ua=document.getElementById("sowUploadArea");if(ua)ua.innerHTML="";
+
+  const nextNum=renoSOW.length?Math.max(...renoSOW.map(s=>s.line_number||0))+1:1;
+  let h=`<div style="margin-top:12px;padding:16px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
+  h+=`<div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">ADD SOW LINE</div>`;
+  h+=`<div class="reno-eg">`;
+  h+=`<div class="fld"><label>LINE #</label><input id="alNum" type="number" class="cinput" value="${nextNum}" style="width:70px"/></div>`;
+  h+=`<div class="fld"><label>CATEGORY</label><select id="alCat" class="cinput">`;
+  SOW_CATEGORIES.forEach(c=>{h+=`<option value="${c}">${c.replace(/_/g," ")}</option>`;});
+  h+=`</select></div>`;
+  h+=`<div class="fld"><label>DESCRIPTION</label><input id="alDesc" type="text" class="cinput" placeholder="Line item description"/></div>`;
+  h+=`<div class="fld"><label>LENDER APPROVED</label><input id="alAmt" type="number" class="cinput" placeholder="$0"/></div>`;
+  h+=`</div>`;
+  h+=`<button onclick="saveNewSOWLine()" class="btn" style="width:100%;padding:12px;font-size:13px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;margin-top:8px">Add Line</button>`;
+  h+=`</div>`;
+  area.innerHTML=h;
+}
+
+async function saveNewSOWLine(){
+  const ln=Number(document.getElementById("alNum")?.value);
+  const cat=document.getElementById("alCat")?.value;
+  const desc=(document.getElementById("alDesc")?.value||"").trim();
+  const amt=Number(document.getElementById("alAmt")?.value)||0;
+  if(!ln||!desc){showRenoToast("Fill in line number and description");return;}
+
+  const payload={deal_id:renoDealId,line_number:ln,category:cat,description:desc,lender_approved:amt,planned_budget:amt,status:"not_started"};
+  try{
+    const res=await fetch(SB+"/rest/v1/renovation_sow_lines",{method:"POST",headers:HD,body:JSON.stringify(payload)});
+    if(!res.ok){showRenoToast("Failed to add line");return;}
+    const area=document.getElementById("sowAddLineArea");if(area)area.innerHTML="";
+    showRenoToast("SOW line #"+ln+" added");
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){console.error("Add SOW line failed:",e);showRenoToast("Failed to add line");}
 }
 
 // Restore search bar when leaving reno view
