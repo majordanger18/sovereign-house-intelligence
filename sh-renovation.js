@@ -81,6 +81,8 @@ async function renderRenoView(){
 }
 
 async function loadRenoData(did){
+  console.log("[SH] loadRenoData called with deal_id:",did,"(type:"+typeof did+")");
+  console.log("[SH] SOW fetch URL:",SB+"/rest/v1/renovation_sow_lines?deal_id=eq."+did+"&order=line_number");
   try{
     const[ov,bl,ds,dr,ex,sw,di]=await Promise.all([
       sb("renovation_deal_overview?deal_id=eq."+did),
@@ -98,7 +100,7 @@ async function loadRenoData(did){
     renoExp=Array.isArray(ex)?ex:[];
     renoSOW=Array.isArray(sw)?sw:[];
     renoDeal=Array.isArray(di)&&di.length?di[0]:null;
-    console.log("[SH] renoSOW loaded:",renoSOW.length,"lines");
+    console.log("[SH] renoSOW loaded:",renoSOW.length,"lines, raw sw:",JSON.stringify(sw).substring(0,200));
   }catch(e){console.error("[SH] Reno load error:",e);}
   // Financing fetch is non-fatal — don't let it break the core data
   try{
