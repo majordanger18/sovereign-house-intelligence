@@ -401,6 +401,16 @@ async function openDrawUpdate(drawId,cs){
   h+=`<div style="font-size:16px;font-weight:800;margin-bottom:16px">Draw #${dr.draw_number} → ${ns.label}</div>`;
   h+=`<div class="fld"><label>${ns.label.toUpperCase()} DATE</label><input id="dsDate" type="date" class="cinput" value="${new Date().toISOString().split("T")[0]}"/></div>`;
   if(ns.key==="disbursed")h+=`<div class="fld"><label>AMOUNT RECEIVED</label><input id="dsAmt" type="number" class="cinput" value="${(dr.amount_requested||0)-(dr.draw_fee||0)}" placeholder="Net amount received"/></div>`;
+  h+=`<div class="fld"><label>AMOUNT REQUESTED</label><input id="dsAmt2" type="number" class="cinput" value="${dr.amount_requested||0}"/></div>`;
+  h+=`<div class="fld"><label>DRAW FEE</label><input id="dsFee" type="number" class="cinput" value="${dr.draw_fee||0}"/></div>`;
+  h+=`<div style="margin:12px 0;font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">DOCUMENTATION</div>`;
+  h+=`<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px">`;
+  h+=renoToggle("dsInv","Invoices",!!dr.has_invoices);
+  h+=renoToggle("dsLW","Lien Waivers",!!dr.has_lien_waivers);
+  h+=renoToggle("dsDF","Draw Request Form",!!dr.has_draw_request_form);
+  h+=renoToggle("dsInt","Interest Payments Current",!!dr.interest_payments_current);
+  h+=`</div>`;
+  h+=`<div class="fld"><label>NOTES</label><input id="dsNotes" type="text" class="cinput" value="${esc(dr.notes||"")}" placeholder="Notes"/></div>`;
 
   // Fetch and show SOW lines in this draw
   let drawLines=[];
@@ -422,10 +432,17 @@ async function openDrawUpdate(drawId,cs){
 
 async function saveDrawUpdate(drawId,sk,df){
   const dv=document.getElementById("dsDate")?.value;if(!dv)return;
+  const dr=renoDraws.find(d=>d.id===drawId);
   const patch={status:sk};patch[df]=dv;
+  patch.amount_requested=Number(document.getElementById("dsAmt2")?.value)||dr?.amount_requested;
+  patch.draw_fee=Number(document.getElementById("dsFee")?.value)||dr?.draw_fee;
+  patch.has_invoices=!!document.getElementById("dsInv")?.checked;
+  patch.has_lien_waivers=!!document.getElementById("dsLW")?.checked;
+  patch.has_draw_request_form=!!document.getElementById("dsDF")?.checked;
+  patch.interest_payments_current=!!document.getElementById("dsInt")?.checked;
+  patch.notes=(document.getElementById("dsNotes")?.value||"").trim()||null;
   if(sk==="disbursed"){
     const amt=Number(document.getElementById("dsAmt")?.value);if(amt)patch.amount_received=amt;
-    const dr=renoDraws.find(d=>d.id===drawId);
     if(dr?.date_submitted){patch.days_to_reimburse=Math.round((new Date(dv)-new Date(dr.date_submitted))/(864e5));}
   }
   try{
