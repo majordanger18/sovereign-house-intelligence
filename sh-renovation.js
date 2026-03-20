@@ -82,15 +82,14 @@ async function renderRenoView(){
 
 async function loadRenoData(did){
   try{
-    const[ov,bl,ds,dr,ex,sw,di,fi]=await Promise.all([
+    const[ov,bl,ds,dr,ex,sw,di]=await Promise.all([
       sb("renovation_deal_overview?deal_id=eq."+did),
       sb("renovation_budget_summary?deal_id=eq."+did+"&order=line_number"),
       sb("renovation_draw_summary?deal_id=eq."+did),
       sb("renovation_draws?deal_id=eq."+did+"&order=draw_number"),
       sb("renovation_expenses?deal_id=eq."+did+"&order=expense_date.desc&select=*,renovation_sow_lines(line_number,category,description)"),
       sb("renovation_sow_lines?deal_id=eq."+did+"&order=line_number"),
-      sb("deals?id=eq."+did+"&select=id,address,status,lender_name,lender_max_draws,lender_holdback_pct,lender_draw_fee,lender_loan_number,lender_draw_turnaround_days,lender_draws_email,lender_change_order_email,reno_budget"),
-      sb("deal_financing?deal_id=eq."+did)
+      sb("deals?id=eq."+did+"&select=id,address,status,lender_name,lender_max_draws,lender_holdback_pct,lender_draw_fee,lender_loan_number,lender_draw_turnaround_days,lender_draws_email,lender_change_order_email,reno_budget")
     ]);
     renoOv=Array.isArray(ov)&&ov.length?ov[0]:null;
     renoBLines=Array.isArray(bl)?bl:[];
@@ -99,8 +98,13 @@ async function loadRenoData(did){
     renoExp=Array.isArray(ex)?ex:[];
     renoSOW=Array.isArray(sw)?sw:[];
     renoDeal=Array.isArray(di)&&di.length?di[0]:null;
-    renoFin=Array.isArray(fi)&&fi.length?fi[0]:null;
+    console.log("[SH] renoSOW loaded:",renoSOW.length,"lines");
   }catch(e){console.error("[SH] Reno load error:",e);}
+  // Financing fetch is non-fatal — don't let it break the core data
+  try{
+    const fi=await sb("deal_financing?deal_id=eq."+did);
+    renoFin=Array.isArray(fi)&&fi.length?fi[0]:null;
+  }catch(e){console.error("[SH] Financing load error (non-fatal):",e);renoFin=null;}
 }
 
 function switchRenoDeal(did){renoDealId=did;renoSub="budget";renoExpandedLine=null;renderRenoView();}
@@ -438,8 +442,10 @@ function renderExpV(el){
   // Quick entry form
   h+=`<div class="reno-ef"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:10px">LOG EXPENSE</div><div class="reno-eg">`;
   h+=`<div class="fld"><label>DATE</label><input id="exD" type="date" class="cinput" value="${new Date().toISOString().split("T")[0]}"/></div>`;
+  const sowFiltered=renoSOW.filter(l=>Number(l.lender_approved)>0||Number(l.planned_budget)>0);
+  console.log("[SH] Expense SOW dropdown: renoSOW="+renoSOW.length+", filtered="+sowFiltered.length,renoSOW.slice(0,3));
   h+=`<div class="fld"><label>SOW LINE</label><select id="exS" class="cinput">`;
-  renoSOW.filter(l=>l.lender_approved>0||l.planned_budget>0).forEach(l=>{h+=`<option value="${l.id}">#${l.line_number} — ${esc(l.description||l.category||"")} (${$r(l.planned_budget||l.lender_approved||0)})</option>`;});
+  sowFiltered.forEach(l=>{h+=`<option value="${l.id}">#${l.line_number} — ${esc(l.description||l.category||"")} (${$r(l.planned_budget||l.lender_approved||0)})</option>`;});
   h+=`</select></div>`;
   h+=`<div class="fld"><label>DESCRIPTION</label><input id="exDe" type="text" class="cinput" placeholder="What was purchased or paid for"/></div>`;
   h+=`<div class="fld"><label>AMOUNT</label><input id="exA" type="number" class="cinput" placeholder="$0.00" step="0.01"/></div>`;
