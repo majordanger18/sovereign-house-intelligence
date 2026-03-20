@@ -77,6 +77,15 @@ async function renderRenoView(){
   html+=`<div id="renoContent"><div style="text-align:center;padding:40px"><div style="width:24px;height:24px;border:2px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto"></div></div></div>`;
   html+='</div>';
   document.getElementById("listArea").innerHTML=html;
+  // Ensure renoModal exists in DOM
+  if(!document.getElementById("renoModal")){
+    const md=document.createElement("div");
+    md.id="renoModal";
+    md.className="overlay";
+    md.style.display="none";
+    md.onclick=function(e){if(e.target===md)closeRenoModal();};
+    document.body.appendChild(md);
+  }
   await loadRenoData(renoDealId);
   renderRenoSub();
 }
