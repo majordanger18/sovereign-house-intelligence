@@ -329,7 +329,7 @@ function renderDC(d){
   h+=`<div class="reno-pipe">`;
   DRAW_PIPE.forEach((s,i)=>{
     const sn=i+1,done=sn<cs,cur=sn===cs;
-    h+=`<div class="reno-ps"><div class="reno-pd${done?" done":""}${cur?" cur":""}">${done?"✓":""}</div><div class="reno-pl">${s.label}</div></div>`;
+    h+=`<div class="reno-ps" style="cursor:pointer" onclick="openDrawUpdateTo('${d.id}','${s.key}','${s.df}',${i})"><div class="reno-pd${done?" done":""}${cur?" cur":""}">${done?"✓":""}</div><div class="reno-pl">${s.label}</div></div>`;
     if(i<DRAW_PIPE.length-1)h+=`<div class="reno-pln${done?" done":""}"></div>`;
   });
   h+=`</div>`;
@@ -363,6 +363,38 @@ function renderDC(d){
 
   h+=`</div>`;
   return h;
+}
+
+async function openDrawUpdateTo(drawId,statusKey,dateField,stepIndex){
+  const dr=renoDraws.find(d=>d.id===drawId);if(!dr)return;
+  const label=DRAW_PIPE[stepIndex]?.label||statusKey;
+  const m=document.getElementById("renoModal");
+  let h=`<div class="sheet" style="position:relative;max-height:80vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeRenoModal()">✕</button>`;
+  h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">SET DRAW STATUS</div>`;
+  h+=`<div style="font-size:16px;font-weight:800;margin-bottom:16px">Draw #${dr.draw_number} → ${label}</div>`;
+  h+=`<div class="fld"><label>${label.toUpperCase()} DATE</label><input id="dsDate" type="date" class="cinput" value="${new Date().toISOString().split("T")[0]}"/></div>`;
+  if(statusKey==="disbursed"){
+    h+=`<div class="fld"><label>AMOUNT RECEIVED</label><input id="dsAmt" type="number" class="cinput" value="${(dr.amount_requested||0)-(dr.draw_fee||0)}" placeholder="Net amount after fee"/></div>`;
+  }
+  h+=`<button onclick="saveDrawDirect('${drawId}','${statusKey}','${dateField}')" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none">Set to ${label}</button>`;
+  h+=`</div>`;
+  m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
+}
+
+async function saveDrawDirect(drawId,statusKey,dateField){
+  const dv=document.getElementById("dsDate")?.value;if(!dv)return;
+  const dr=renoDraws.find(d=>d.id===drawId);
+  const patch={status:statusKey};
+  patch[dateField]=dv;
+  if(statusKey==="disbursed"){
+    const amt=Number(document.getElementById("dsAmt")?.value);if(amt)patch.amount_received=amt;
+    if(dr?.date_submitted){patch.days_to_reimburse=Math.round((new Date(dv)-new Date(dr.date_submitted))/(864e5));}
+  }
+  try{
+    await fetch(SB+"/rest/v1/renovation_draws?id=eq."+drawId,{method:"PATCH",headers:RENO_WH,body:JSON.stringify(patch)});
+    closeRenoModal();showRenoToast("Draw updated to "+statusKey.replace(/_/g," "));
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){console.error("Draw direct update failed:",e);showRenoToast("Failed to update draw");}
 }
 
 async function loadDrawLines(drawId){
@@ -596,11 +628,11 @@ function renderExpLog(){
 
   if(!f.length){le.innerHTML=`<div style="text-align:center;padding:40px 20px;color:#475569"><div style="font-size:32px;margin-bottom:8px">🧾</div><div style="font-size:14px;font-weight:600;color:#94a3b8">No expenses recorded.</div><div style="font-size:12px;color:#64748b;margin-top:6px">Log your first purchase above.</div></div>`;return;}
 
-  let h=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th>Date</th><th>SOW</th><th>Vendor</th><th>Description</th><th style="text-align:right">Amount</th><th>Type</th><th class="reno-hm">Payment</th></tr></thead><tbody>`;
+  let h=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th>Date</th><th>SOW</th><th>Vendor</th><th>Description</th><th style="text-align:right">Amount</th><th>Type</th><th class="reno-hm">Payment</th><th style="width:60px"></th></tr></thead><tbody>`;
   f.forEach(e=>{
     const tc=EXP_TYPE_COLORS[e.expense_type]||"#94a3b8";
     const sl=e.renovation_sow_lines;
-    h+=`<tr><td style="color:#94a3b8;white-space:nowrap">${e.expense_date?new Date(e.expense_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric"}):"—"}</td><td>${sl?`<span class="reno-chip" style="color:#94a3b8;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">#${sl.line_number}</span>`:"—"}</td><td style="color:#94a3b8">${esc(e.vendor_name||"—")}</td><td style="color:#e2e8f0;font-weight:600">${esc(e.description||"")}</td><td style="text-align:right;font-weight:700">${$r(e.amount)}</td><td><span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30">${e.expense_type||"other"}</span></td><td class="reno-hm" style="color:#64748b">${e.payment_method?e.payment_method.replace(/_/g," "):"—"}</td></tr>`;
+    h+=`<tr><td style="color:#94a3b8;white-space:nowrap">${e.expense_date?new Date(e.expense_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric"}):"—"}</td><td>${sl?`<span class="reno-chip" style="color:#94a3b8;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">#${sl.line_number}</span>`:"—"}</td><td style="color:#94a3b8">${esc(e.vendor_name||"—")}</td><td style="color:#e2e8f0;font-weight:600">${esc(e.description||"")}</td><td style="text-align:right;font-weight:700">${$r(e.amount)}</td><td><span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30">${e.expense_type||"other"}</span></td><td class="reno-hm" style="color:#64748b">${e.payment_method?e.payment_method.replace(/_/g," "):"—"}</td><td style="white-space:nowrap"><button onclick="event.stopPropagation();editExpense('${e.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;padding:2px 4px">Edit</button><button onclick="event.stopPropagation();deleteExpense('${e.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;padding:2px 4px">Del</button></td></tr>`;
   });
   h+=`</tbody></table></div>`;
 
@@ -638,6 +670,57 @@ async function saveExpense(){
     showRenoToast("Expense logged");
     await loadRenoData(renoDealId);renderRenoSub();
   }catch(e){console.error("Save expense failed:",e);showRenoToast("Failed to save expense");}
+}
+
+async function deleteExpense(expId){
+  if(!confirm("Delete this expense?"))return;
+  try{
+    await fetch(SB+"/rest/v1/renovation_expenses?id=eq."+expId,{method:"DELETE",headers:RENO_WH});
+    showRenoToast("Expense deleted");
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){console.error("Delete expense failed:",e);showRenoToast("Failed to delete expense");}
+}
+
+async function editExpense(expId){
+  const exp=renoExp.find(e=>e.id===expId);if(!exp)return;
+  const m=document.getElementById("renoModal");
+  const sowOpts=renoSOW.filter(l=>Number(l.lender_approved)>0||Number(l.planned_budget)>0).map(l=>`<option value="${l.id}"${l.id===exp.sow_line_id?" selected":""}>#${l.line_number} — ${esc(l.description||"")} (${$r(l.planned_budget||l.lender_approved||0)})</option>`).join("");
+  let h=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeRenoModal()">✕</button>`;
+  h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">EDIT EXPENSE</div>`;
+  h+=`<div style="font-size:16px;font-weight:800;margin-bottom:16px">${esc(exp.description||"")}</div>`;
+  h+=`<div class="reno-eg">`;
+  h+=`<div class="fld"><label>DATE</label><input id="eeD" type="date" class="cinput" value="${exp.expense_date||""}"/></div>`;
+  h+=`<div class="fld"><label>SOW LINE</label><select id="eeS" class="cinput">${sowOpts}</select></div>`;
+  h+=`<div class="fld"><label>DESCRIPTION</label><input id="eeDe" type="text" class="cinput" value="${esc(exp.description||"")}"/></div>`;
+  h+=`<div class="fld"><label>AMOUNT</label><input id="eeA" type="number" class="cinput" step="0.01" value="${exp.amount||""}"/></div>`;
+  h+=`<div class="fld"><label>TYPE</label><select id="eeT" class="cinput"><option value="material"${exp.expense_type==="material"?" selected":""}>Material</option><option value="labor"${exp.expense_type==="labor"?" selected":""}>Labor</option><option value="permit"${exp.expense_type==="permit"?" selected":""}>Permit</option><option value="fee"${exp.expense_type==="fee"?" selected":""}>Fee</option><option value="other"${exp.expense_type==="other"?" selected":""}>Other</option></select></div>`;
+  h+=`<div class="fld"><label>PAYMENT</label><select id="eePm" class="cinput"><option value="">—</option><option value="cash"${exp.payment_method==="cash"?" selected":""}>Cash</option><option value="check"${exp.payment_method==="check"?" selected":""}>Check</option><option value="card"${exp.payment_method==="card"?" selected":""}>Card</option><option value="transfer"${exp.payment_method==="transfer"?" selected":""}>Transfer</option><option value="zelle"${exp.payment_method==="zelle"?" selected":""}>Zelle</option></select></div>`;
+  h+=`<div class="fld"><label>VENDOR</label><input id="eeV" type="text" class="cinput" value="${esc(exp.vendor_name||"")}"/></div>`;
+  h+=`<div class="fld"><label>NOTES</label><input id="eeN" type="text" class="cinput" value="${esc(exp.notes||"")}"/></div>`;
+  h+=`</div>`;
+  h+=`<button onclick="saveEditedExpense('${exp.id}')" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;margin-top:8px">Save Changes</button>`;
+  h+=`</div>`;
+  m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
+}
+
+async function saveEditedExpense(expId){
+  const p={};
+  const gv=id=>(document.getElementById(id)?.value||"").trim();
+  const gn=id=>Number(document.getElementById(id)?.value)||0;
+  if(gv("eeD"))p.expense_date=gv("eeD");
+  if(gv("eeS"))p.sow_line_id=gv("eeS");
+  if(gv("eeDe"))p.description=gv("eeDe");
+  if(gn("eeA"))p.amount=gn("eeA");
+  p.expense_type=gv("eeT")||"other";
+  p.payment_method=gv("eePm")||null;
+  p.vendor_name=gv("eeV")||null;
+  p.notes=gv("eeN")||null;
+  try{
+    const res=await fetch(SB+"/rest/v1/renovation_expenses?id=eq."+expId,{method:"PATCH",headers:RENO_WH,body:JSON.stringify(p)});
+    if(!res.ok){showRenoToast("Failed to save expense");return;}
+    closeRenoModal();showRenoToast("Expense updated");
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){console.error("Edit expense failed:",e);showRenoToast("Failed to save expense");}
 }
 
 // ═══ HELPERS ═══
