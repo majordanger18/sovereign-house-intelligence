@@ -71,20 +71,18 @@ async function openDetail(id){
   const m=document.getElementById("detailModal");
   m.innerHTML=`<div class="sheet" style="position:relative"><div class="handle"></div><button class="close-x" onclick="closeDetail()">✕</button>
     <div style="display:flex;gap:14px;align-items:center;padding-right:40px">${ring(p.sovereign_score,56)}<div style="flex:1;min-width:0"><div style="font-size:18px;font-weight:800">${esc(p.address)}</div><div style="font-size:12px;color:#64748b">${(p.subdivision_name&&truncSub(p.subdivision_name))?`<span style="color:#d4af37;font-weight:600">${esc(truncSub(p.subdivision_name))}</span> · `:""}${p.city}, NV ${p.zip_code} · MLS# ${p.mls_number}</div></div></div>
-    <div style="font-size:26px;font-weight:800;margin-top:16px">${$(p.list_price)}</div>
-    ${red?`<div style="font-size:12px;color:#22c55e;font-weight:600;margin-top:2px">↓ From ${$(p.original_list_price)} (${Math.round(((p.original_list_price-p.list_price)/p.original_list_price)*100)}%)</div>`:""}
-    <div class="dgrid" style="margin-top:16px">${[["Beds",p.bedrooms],["Baths",p.bathrooms],["Sqft",p.sqft?.toLocaleString()],["Lot",p.lot_sqft?.toLocaleString()],["Built",p.year_built],["Garage",p.garage_spaces?`${p.garage_spaces}-car`:"—"],["$/Sqft",p.price_per_sqft?`$${p.price_per_sqft}`:"—"],["DOM",p.days_on_market]].map(([l,v])=>`<div style="background:rgba(255,255,255,0.02);border-radius:10px;padding:10px;text-align:center"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:1px">${l}</div><div style="font-size:15px;font-weight:700;color:#e2e8f0;margin-top:2px">${v||"—"}</div></div>`).join("")}</div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:12px">${dtags}</div>
-    ${(()=>{
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">${(()=>{
       const ai=analysisMap[p.id];
       const hasVerdict=ai&&(ai.verdict==="GO"||ai.verdict==="CONDITIONAL_GO");
       const reasonMap={visited_passed:"Visited & Passed",price_too_high:"Price Too High",condition_worse:"Condition Worse",layout_doesnt_work:"Layout Issue",neighborhood_issue:"Neighborhood",already_sold:"Already Sold",other:"Other"};
-      if(p.disposition==="passed"){
-        return`<div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px 14px;border-radius:10px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.12)"><span class="passed-badge" style="font-size:10px;padding:4px 8px">PASSED</span><span style="font-size:11px;color:#94a3b8;flex:1">${reasonMap[p.disposition_reason]||p.disposition_reason||""}</span><button class="undo-pass" onclick="undoPass('${p.id}')" style="min-height:44px;padding:0 12px">Undo Pass</button></div>`;
-      }
-      if(hasVerdict) return`<div style="margin-top:10px"><button class="pass-btn" onclick="event.stopPropagation();showPassModal('${p.id}')" style="min-height:44px;padding:10px 20px;font-size:13px">✕ Pass on this property</button></div>`;
-      return"";
-    })()}
+      const price=`<div style="font-size:26px;font-weight:800">${$(p.list_price)}</div>`;
+      if(p.disposition==="passed") return price+`<div style="display:flex;align-items:center;gap:8px"><span class="passed-badge">PASSED</span><button class="undo-pass" onclick="undoPass('${p.id}')">Undo</button></div>`;
+      if(hasVerdict) return price+`<button class="pass-btn" onclick="event.stopPropagation();showPassModal('${p.id}')">✕ Pass</button>`;
+      return price;
+    })()}</div>
+    ${red?`<div style="font-size:12px;color:#22c55e;font-weight:600;margin-top:2px">↓ From ${$(p.original_list_price)} (${Math.round(((p.original_list_price-p.list_price)/p.original_list_price)*100)}%)</div>`:""}
+    <div class="dgrid" style="margin-top:16px">${[["Beds",p.bedrooms],["Baths",p.bathrooms],["Sqft",p.sqft?.toLocaleString()],["Lot",p.lot_sqft?.toLocaleString()],["Built",p.year_built],["Garage",p.garage_spaces?`${p.garage_spaces}-car`:"—"],["$/Sqft",p.price_per_sqft?`$${p.price_per_sqft}`:"—"],["DOM",p.days_on_market]].map(([l,v])=>`<div style="background:rgba(255,255,255,0.02);border-radius:10px;padding:10px;text-align:center"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:1px">${l}</div><div style="font-size:15px;font-weight:700;color:#e2e8f0;margin-top:2px">${v||"—"}</div></div>`).join("")}</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:12px">${dtags}</div>
     ${(p.occupant_type||p.access_code)?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04)">${p.occupant_type?`<span style="font-size:11px;color:#94a3b8"><span style="color:#64748b">Occupant:</span> <span style="font-weight:600;color:#e2e8f0">${esc(p.occupant_type)}</span></span>`:""} ${p.access_code?`<span style="font-size:11px;color:#94a3b8"><span style="color:#64748b">Access:</span> <span style="font-weight:600;color:#e2e8f0">${esc(p.access_code)}</span></span>`:""}</div>`:""}
     ${p.description?`<div style="margin-top:14px;padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);font-size:12px;color:#94a3b8;line-height:1.6;max-height:100px;overflow-y:auto">${esc(p.description)}</div>`:""}
 
