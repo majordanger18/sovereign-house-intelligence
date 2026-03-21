@@ -42,8 +42,8 @@ function renderDashboard(){
     pool:activeProps.filter(p=>p.pool).length,
     golf:activeProps.filter(p=>isGolf(p)).length,
     fresh:activeProps.filter(p=>p.days_on_market!=null&&p.days_on_market<=7).length,
-    aiGo:props.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="GO"&&p.disposition!=="passed").length,
-    aiMaybe:props.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="CONDITIONAL_GO"&&p.disposition!=="passed").length,
+    aiGo:props.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="GO"&&!["passed","pursuing","acquired"].includes(p.disposition)).length,
+    aiMaybe:props.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="CONDITIONAL_GO"&&!["passed","pursuing","acquired"].includes(p.disposition)).length,
     aiNo:activeProps.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="NO_GO").length,
     aiScreened:activeProps.filter(p=>!!analysisMap[p.id]).length,
     avgScore:props.length?Math.round(props.reduce((a,p)=>a+(p.sovereign_score||0),0)/props.length):0,
@@ -132,11 +132,11 @@ function renderList(){
     if(p.listing_status==='Gone')return false;
     if(view==="pending"){if(!isPend(p))return false;if(q)return(p.address||"").toLowerCase().includes(q)||(p.mls_number||"").toLowerCase().includes(q)||(p.zip_code||"").includes(q);return true;}
     if(view!=="pending"&&view!=="go"&&view!=="maybe"&&isPend(p))return false;
-    if(view==="watched"&&(!watchIds.has(p.id)||p.disposition==="passed"))return false;
+    if(view==="watched"&&(!watchIds.has(p.id)||["passed","pursuing","acquired"].includes(p.disposition)))return false;
     if(view==="reduced"&&!(p.original_list_price&&p.list_price<p.original_list_price))return false;
     if(view==="golf"&&!isGolf(p))return false;
-    if(view==="go"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="GO"||p.disposition==="passed"))return false;
-    if(view==="maybe"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="CONDITIONAL_GO"||p.disposition==="passed"))return false;
+    if(view==="go"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="GO"||["passed","pursuing","acquired"].includes(p.disposition)))return false;
+    if(view==="maybe"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="CONDITIONAL_GO"||["passed","pursuing","acquired"].includes(p.disposition)))return false;
     if(view==="queued"&&!!analysisMap[p.id])return false;
     if(view==="fresh"&&!(p.days_on_market!=null&&p.days_on_market<=7))return false;
     if(view==="passed"&&p.disposition!=="passed")return false;

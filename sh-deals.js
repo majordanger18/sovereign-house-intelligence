@@ -20,6 +20,17 @@ const DEAL_STAGES={
 const DEAD_STATUSES=["closed","rejected","withdrawn","expired"];
 const LOST_STATUSES=["rejected","withdrawn","expired"];
 
+async function setPropertyDisposition(propertyId,disposition){
+  if(!propertyId)return;
+  const patch={disposition:disposition||null,disposition_date:disposition?new Date().toISOString():null,disposition_by:window.SH_USER?.email||null};
+  if(!disposition)patch.disposition_reason=null;
+  try{
+    await fetch(`${SB}/rest/v1/properties?id=eq.${propertyId}`,{method:'PATCH',headers:HD,body:JSON.stringify(patch)});
+    const p=props.find(x=>x.id===propertyId);
+    if(p)Object.assign(p,patch);
+  }catch(e){console.error("Set disposition failed:",e);}
+}
+
 function fireConfetti(){
   const canvas=document.createElement("canvas");
   canvas.style.cssText="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:99999";
@@ -393,6 +404,9 @@ async function updateDealStatus(dealId,newStatus){
   try{
     await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:newStatus,timeline:tl,kill_reason:null,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null})});
     d.status=newStatus;d.timeline=tl;d.kill_reason=null;
+    // Auto-set disposition on linked property
+    const disp=DEAD_STATUSES.includes(newStatus)?(newStatus==='closed'?'acquired':null):'pursuing';
+    await setPropertyDisposition(d.property_id,disp);
     // Full re-render if transitioning from dead status (layout changes entirely)
     if(DEAD_STATUSES.includes(oldStatus)){
       openDeal(dealId);
@@ -416,6 +430,7 @@ async function winDeal(dealId){
   try{
     await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:'closed',timeline:tl,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null})});
     d.status='closed';d.timeline=tl;
+    await setPropertyDisposition(d.property_id,'acquired');
     closeDeal();
     renderDashboard();
     fireConfetti();
@@ -432,6 +447,7 @@ async function killDeal(dealId,status){
   try{
     await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:status,kill_reason:reason||null,timeline:tl,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null})});
     d.status=status;d.kill_reason=reason;d.timeline=tl;
+    await setPropertyDisposition(d.property_id,null);
     openDeal(dealId);
     renderDashboard();
   }catch(e){console.error("Kill deal failed:",e);}
@@ -473,6 +489,7 @@ async function logCounter(dealId){
     patch.updated_by_email=window.SH_USER?.email||null;
     await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify(patch)});
     Object.assign(d,patch);
+    await setPropertyDisposition(d.property_id,'pursuing');
     openDeal(dealId);
     renderDashboard();
   }catch(e){console.error("Counter log failed:",e);}
