@@ -86,7 +86,8 @@ function renderDashboard(){
   const queuedCount=activeProps.filter(p=>!analysisMap[p.id]).length;
 
   // Bottom nav active state
-  const feedViews=["all","fresh","go","maybe","watched","reduced","golf","pending"];
+  const passedCount=props.filter(p=>p.disposition==="passed").length;
+  const feedViews=["all","fresh","go","maybe","watched","reduced","golf","pending","passed"];
   const isFeed=feedViews.includes(view);
   document.querySelectorAll(".bnav-tab").forEach(b=>{
     const t=b.dataset.tab;
@@ -101,8 +102,12 @@ function renderDashboard(){
 
   // Feed filter pills — only visible on feed views
   const feedFilters=document.getElementById("feedFilters");
-  const fD=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["watched",`★ (${st.watched})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${props.filter(p=>isPend(p)).length})`]];
-  feedFilters.innerHTML=fD.map(([v,l])=>`<button class="filt${view===v?" on":""}" onclick="setView('${v}')">${l}</button>`).join("");
+  const fD=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["watched",`★ (${st.watched})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${props.filter(p=>isPend(p)).length})`],["passed",`Passed (${passedCount})`]];
+  feedFilters.innerHTML=fD.map(([v,l])=>{
+    const isOn=view===v;
+    if(v==="passed")return`<button class="filt${isOn?" on-red":""}" onclick="setView('${v}')">${l}</button>`;
+    return`<button class="filt${isOn?" on":""}" onclick="setView('${v}')">${l}</button>`;
+  }).join("");
   feedFilters.style.display=isFeed?"":"none";
 
   renderList();
@@ -134,10 +139,16 @@ function renderList(){
     if(view==="maybe"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="CONDITIONAL_GO"||p.disposition==="passed"))return false;
     if(view==="queued"&&!!analysisMap[p.id])return false;
     if(view==="fresh"&&!(p.days_on_market!=null&&p.days_on_market<=7))return false;
+    if(view==="passed"&&p.disposition!=="passed")return false;
     if(q)return(p.address||"").toLowerCase().includes(q)||(p.mls_number||"").toLowerCase().includes(q)||(p.zip_code||"").includes(q);
     return true;
   });
-  list.sort((a,b)=>{
+  // In "passed" view, sort by disposition_date desc; in "all" view, push passed to bottom
+  if(view==="passed"){list.sort((a,b)=>((b.disposition_date||"")<(a.disposition_date||"")?-1:1));}
+  else{list.sort((a,b)=>{
+    // In all/other views, push passed properties to the bottom
+    if(a.disposition==="passed"&&b.disposition!=="passed")return 1;
+    if(b.disposition==="passed"&&a.disposition!=="passed")return -1;
     if(sortBy==="sovereign_score")return(b.sovereign_score||0)-(a.sovereign_score||0);
     if(sortBy==="price_asc")return(a.list_price||0)-(b.list_price||0);
     if(sortBy==="price_desc")return(b.list_price||0)-(a.list_price||0);
@@ -146,7 +157,7 @@ function renderList(){
     if(sortBy==="oldest")return(a.year_built||0)-(b.year_built||0);
     if(sortBy==="newest")return(b.year_built||0)-(a.year_built||0);
     return 0;
-  });
+  });}
   document.getElementById("countLabel").textContent=`${list.length} properties`;
   if(!list.length){document.getElementById("listArea").innerHTML=`<div style="text-align:center;padding:40px;color:#475569;grid-column:1/-1"><div style="font-size:32px;margin-bottom:8px">🏠</div><div style="font-size:14px;font-weight:600">No properties match</div></div>`;return;}
 
@@ -168,8 +179,11 @@ function renderList(){
     const aiRow=ai?`<div style="display:flex;align-items:center;gap:6px;margin-top:5px">${aiBadge}${ai.verdict!=="NO_GO"&&ai.profit_target?`<span style="font-size:10px;color:#94a3b8">Target: <span style="color:${ai.profit_target>=100000?"#22c55e":"#f59e0b"};font-weight:700">${$k(ai.profit_target)}</span></span>`:""} ${(ai.max_offer_price||ai.max_offer_raw)?`<span style="font-size:10px;color:#94a3b8">Offer: <span style="color:${offerColor};font-weight:700">${$k(ai.max_offer_price||ai.max_offer_raw)}</span></span>`:""}</div>`:"";
     const pendingBadge=isPend(p)?`<div style="margin-top:5px"><span style="font-size:10px;font-weight:800;letter-spacing:1px;color:#a855f7;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);padding:3px 8px;border-radius:6px">${p.status==="ActiveUnderContract"?"📋 UNDER CONTRACT":"⏳ PENDING"}</span></div>`:"";
     const isPassed=p.disposition==="passed";
+    const passedDim=isPassed&&view!=="passed";
     const isPending=isPend(p);
-    return`<div class="card${isW?" watched":""}" onclick="openDetail('${p.id}')" style="animation:fadeUp .3s ease ${i*30}ms both;${isPassed?"opacity:0.5;":isPending?"opacity:0.6":""}"><div style="display:flex;gap:12px;align-items:center">${ring(p.sovereign_score)}<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;gap:6px"><div style="min-width:0;flex:1"><div style="font-size:14px;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isW?'<span style="color:#d4af37">★ </span>':""}${esc(p.address)}</div><div style="font-size:10px;color:#64748b;margin-top:1px">${(p.subdivision_name&&truncSub(p.subdivision_name))?`<span style="color:#94a3b8">${esc(truncSub(p.subdivision_name))}</span> · `:""}${p.zip_code}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:17px;font-weight:800">${$(p.list_price)}</div>${p.price_per_sqft?`<div style="font-size:10px;color:#64748b">$${p.price_per_sqft}/sf</div>`:""}${isPassed?`<span class="passed-badge" style="margin-top:2px">PASSED</span>`:""}</div></div><div style="font-size:10px;color:#64748b;margin-top:4px">${stats}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${flags.join("")}</div>${aiRow}${pendingBadge}</div></div></div>`;
+    const passReasonMap={visited_passed:"Visited & Passed",price_too_high:"Price Too High",condition_worse:"Condition Worse",layout_doesnt_work:"Layout Issue",neighborhood_issue:"Neighborhood",already_sold:"Already Sold",other:"Other"};
+    const passInfo=isPassed?`<div style="font-size:10px;color:#64748b;margin-top:2px">Passed: ${passReasonMap[p.disposition_reason]||"—"}${p.disposition_date?" · "+new Date(p.disposition_date).toLocaleDateString():""}</div>`:"";
+    return`<div class="card${isW?" watched":""}" onclick="openDetail('${p.id}')" style="animation:fadeUp .3s ease ${i*30}ms both;${passedDim?"opacity:0.5;":isPending?"opacity:0.6":""}"><div style="display:flex;gap:12px;align-items:center">${ring(p.sovereign_score)}<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;gap:6px"><div style="min-width:0;flex:1"><div style="font-size:14px;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isW?'<span style="color:#d4af37">★ </span>':""}${esc(p.address)}</div><div style="font-size:10px;color:#64748b;margin-top:1px">${(p.subdivision_name&&truncSub(p.subdivision_name))?`<span style="color:#94a3b8">${esc(truncSub(p.subdivision_name))}</span> · `:""}${p.zip_code}</div>${passInfo}</div><div style="text-align:right;flex-shrink:0"><div style="font-size:17px;font-weight:800">${$(p.list_price)}</div>${p.price_per_sqft?`<div style="font-size:10px;color:#64748b">$${p.price_per_sqft}/sf</div>`:""}${isPassed?`<span class="passed-badge" style="margin-top:2px">PASSED</span>`:""}</div></div><div style="font-size:10px;color:#64748b;margin-top:4px">${stats}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${flags.join("")}</div>${aiRow}${pendingBadge}</div></div></div>`;
   }).join("");
 }
 
