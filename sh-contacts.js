@@ -30,18 +30,14 @@ renderList=function(){
 
 function injectCtTab(){
   const nt=document.getElementById("navTabs");if(!nt)return;
-  const btns=nt.querySelectorAll(".nav-tab");
-  // Find reno tab or deals tab to insert after
-  let anchor=null;
-  btns.forEach(b=>{if(b.textContent.includes("Reno"))anchor=b;});
-  if(!anchor)btns.forEach(b=>{if(b.textContent.includes("Deals"))anchor=b;});
+  // Insert after Reno (or Deals), before Feed
+  const feedBtn=Array.from(nt.querySelectorAll(".nav-tab")).find(b=>b.textContent.includes("Feed"));
   const cb=document.createElement("button");
   cb.className="nav-tab"+(view==="contacts"?" active":"");
   cb.onclick=()=>setView("contacts");
   const cnt=ctList.length;
   cb.innerHTML=`Contacts${cnt?` (${cnt})`:""}`;
-  if(anchor&&anchor.nextSibling)nt.insertBefore(cb,anchor.nextSibling);
-  else if(anchor)nt.appendChild(cb);
+  if(feedBtn)nt.insertBefore(cb,feedBtn);
   else nt.appendChild(cb);
 }
 

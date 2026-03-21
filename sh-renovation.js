@@ -34,18 +34,15 @@ function getRenoDeals(){return deals.filter(d=>RENO_QUALIFYING.includes(d.status
 function injectRenoTab(){
   const nt=document.getElementById("navTabs");if(!nt)return;
   const rd=getRenoDeals();if(!rd.length)return;
-  const btns=nt.querySelectorAll(".nav-tab");
-  let dealsBtn=null;
-  btns.forEach(b=>{if(b.textContent.includes("Deals"))dealsBtn=b;});
+  // Insert after Deals, before Feed
+  const feedBtn=Array.from(nt.querySelectorAll(".nav-tab")).find(b=>b.textContent.includes("Feed"));
   const rb=document.createElement("button");
   rb.className="nav-tab"+(view==="renovation"?" active":"");
   rb.onclick=()=>setView("renovation");
   let dot="";
   if(renoOv){const h=renoOv.budget_health;const dc=h==="over_budget"?"#ef4444":h==="warning"?"#eab308":"#22c55e";dot=` <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dc};vertical-align:middle"></span>`;}
   rb.innerHTML=`Reno${dot}`;
-  if(dealsBtn&&dealsBtn.nextSibling)nt.insertBefore(rb,dealsBtn.nextSibling);
-  else if(dealsBtn)nt.appendChild(rb);
-  else if(btns.length>1)nt.insertBefore(rb,btns[1]);
+  if(feedBtn)nt.insertBefore(rb,feedBtn);
   else nt.appendChild(rb);
 }
 
