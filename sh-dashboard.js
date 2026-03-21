@@ -85,16 +85,23 @@ function renderDashboard(){
   const deadDeals=deals.filter(d=>["closed","rejected","withdrawn","expired"].includes(d.status));
   const queuedCount=activeProps.filter(p=>!analysisMap[p.id]).length;
 
-  // Nav tabs (row 1) — Deals | Reno | Contacts | Feed
-  const feedViews=["all","fresh","go","maybe","watched","reduced","pending"];
+  // Bottom nav active state
+  const feedViews=["all","fresh","go","maybe","watched","reduced","golf","pending"];
   const isFeed=feedViews.includes(view);
-  const navTabs=document.getElementById("navTabs");
-  navTabs.innerHTML=`<button class="nav-tab${view==="deals"?" active":""}" onclick="setView('deals')">Deals (${activeDeals.length})</button>`+
-    `<button class="nav-tab${isFeed?" active":""}" onclick="setView('all')">Feed</button>`;
+  document.querySelectorAll(".bnav-tab").forEach(b=>{
+    const t=b.dataset.tab;
+    b.classList.toggle("active",(t==="properties"&&isFeed)||(t==="deals"&&view==="deals")||(t==="reno"&&view==="renovation")||(t==="contacts"&&view==="contacts"));
+  });
+  // Properties tab count
+  const propTab=document.querySelector('[data-tab="properties"]');
+  if(propTab)propTab.innerHTML=`<span class="bnav-icon">🏠</span>Properties (${st.total})`;
+  // Deals dot
+  const dd=document.getElementById("dealsDot");
+  if(dd)dd.style.display=activeDeals.length>0?"block":"none";
 
-  // Feed filter pills (row 2) — only visible on feed views
+  // Feed filter pills — only visible on feed views
   const feedFilters=document.getElementById("feedFilters");
-  const fD=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["watched",`★ (${st.watched})`],["reduced",`Reduced (${st.reduced})`],["pending",`Pending (${props.filter(p=>isPend(p)).length})`]];
+  const fD=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["watched",`★ (${st.watched})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${props.filter(p=>isPend(p)).length})`]];
   feedFilters.innerHTML=fD.map(([v,l])=>`<button class="filt${view===v?" on":""}" onclick="setView('${v}')">${l}</button>`).join("");
   feedFilters.style.display=isFeed?"":"none";
 

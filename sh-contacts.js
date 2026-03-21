@@ -29,16 +29,7 @@ renderList=function(){
 };
 
 function injectCtTab(){
-  const nt=document.getElementById("navTabs");if(!nt)return;
-  // Insert after Reno (or Deals), before Feed
-  const feedBtn=Array.from(nt.querySelectorAll(".nav-tab")).find(b=>b.textContent.includes("Feed"));
-  const cb=document.createElement("button");
-  cb.className="nav-tab"+(view==="contacts"?" active":"");
-  cb.onclick=()=>setView("contacts");
-  const cnt=ctList.length;
-  cb.innerHTML=`Contacts${cnt?` (${cnt})`:""}`;
-  if(feedBtn)nt.insertBefore(cb,feedBtn);
-  else nt.appendChild(cb);
+  // Bottom nav handles contacts tab — nothing to inject
 }
 
 // ═══ MAIN RENDER ═══
