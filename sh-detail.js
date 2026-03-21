@@ -74,7 +74,16 @@ async function openDetail(id){
     <div style="font-size:26px;font-weight:800;margin-top:16px">${$(p.list_price)}</div>
     ${red?`<div style="font-size:12px;color:#22c55e;font-weight:600;margin-top:2px">↓ From ${$(p.original_list_price)} (${Math.round(((p.original_list_price-p.list_price)/p.original_list_price)*100)}%)</div>`:""}
     <div class="dgrid" style="margin-top:16px">${[["Beds",p.bedrooms],["Baths",p.bathrooms],["Sqft",p.sqft?.toLocaleString()],["Lot",p.lot_sqft?.toLocaleString()],["Built",p.year_built],["Garage",p.garage_spaces?`${p.garage_spaces}-car`:"—"],["$/Sqft",p.price_per_sqft?`$${p.price_per_sqft}`:"—"],["DOM",p.days_on_market]].map(([l,v])=>`<div style="background:rgba(255,255,255,0.02);border-radius:10px;padding:10px;text-align:center"><div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:1px">${l}</div><div style="font-size:15px;font-weight:700;color:#e2e8f0;margin-top:2px">${v||"—"}</div></div>`).join("")}</div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:12px">${dtags}</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:12px;align-items:center">${dtags}${(()=>{
+      const ai=analysisMap[p.id];
+      const hasVerdict=ai&&(ai.verdict==="GO"||ai.verdict==="CONDITIONAL_GO");
+      if(p.disposition==="passed"){
+        const reasonMap={visited_passed:"Visited & Passed",price_too_high:"Price Too High",condition_worse:"Condition Worse",layout_doesnt_work:"Layout Issue",neighborhood_issue:"Neighborhood",already_sold:"Already Sold",other:"Other"};
+        return`<span class="passed-badge">PASSED</span><button class="undo-pass" onclick="undoPass('${p.id}')">Undo</button>`;
+      }
+      if(hasVerdict) return`<button class="pass-btn" onclick="event.stopPropagation();showPassModal('${p.id}')">✕ Pass</button>`;
+      return"";
+    })()}</div>
     ${(p.occupant_type||p.access_code)?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04)">${p.occupant_type?`<span style="font-size:11px;color:#94a3b8"><span style="color:#64748b">Occupant:</span> <span style="font-weight:600;color:#e2e8f0">${esc(p.occupant_type)}</span></span>`:""} ${p.access_code?`<span style="font-size:11px;color:#94a3b8"><span style="color:#64748b">Access:</span> <span style="font-weight:600;color:#e2e8f0">${esc(p.access_code)}</span></span>`:""}</div>`:""}
     ${p.description?`<div style="margin-top:14px;padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);font-size:12px;color:#94a3b8;line-height:1.6;max-height:100px;overflow-y:auto">${esc(p.description)}</div>`:""}
 
@@ -123,3 +132,51 @@ async function saveNote(id){const input=document.getElementById("noteInput");con
 async function deleteNote(id,idx){const p=props.find(x=>x.id===id);if(!p||!p.notes)return;const lines=p.notes.split("\n").filter(l=>l.trim());lines.splice(idx,1);const updated=lines.join("\n")||null;await fetch(`${SB}/rest/v1/properties?id=eq.${id}`,{method:"PATCH",headers:HD,body:JSON.stringify({notes:updated})});p.notes=updated;const nc=document.getElementById("notesContainer");if(nc)nc.innerHTML=renderNotes(id,updated);}
 function renderNotes(id,notes){if(!notes)return"";const lines=notes.split("\n").filter(l=>l.trim());return lines.map((l,i)=>`<div style="display:flex;align-items:start;gap:8px;padding:8px 10px;margin-bottom:4px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04)"><div style="flex:1;font-size:12px;color:#94a3b8;line-height:1.5">${esc(l)}</div><button onclick="deleteNote('${id}',${i})" style="flex-shrink:0;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:6px;color:#ef4444;font-size:11px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button></div>`).join("");}
 function copyLisa(id){const p=props.find(x=>x.id===id);if(!p)return;const zUrl=`https://www.zillow.com/homes/${encodeURIComponent(p.address+' '+p.city+' NV '+p.zip_code)}_rb/`;const t=`Check this out:\n${p.address}, ${p.city} NV ${p.zip_code}\n${$(p.list_price)} · ${p.bedrooms}bd/${p.bathrooms}ba · ${p.sqft?.toLocaleString()}sf\nBuilt ${p.year_built} · ${p.pool?"Pool":"No Pool"}\nMLS# ${p.mls_number} · Score: ${p.sovereign_score}\n\n${zUrl}`;const smsUrl=`sms:?&body=${encodeURIComponent(t)}`;if(/iPhone|iPad|Android/i.test(navigator.userAgent)){window.location.href=smsUrl;}else if(navigator.share){navigator.share({text:t}).catch(()=>{});}else{const ta=document.createElement("textarea");ta.value=t;ta.style.cssText="position:fixed;opacity:0";document.body.appendChild(ta);ta.focus();ta.select();document.execCommand("copy");document.body.removeChild(ta);alert("Copied!");}}
+
+// ═══ PASS / DISPOSITION ═══
+function showPassModal(propId){
+  const d=document.createElement("div");d.className="pass-overlay";d.id="passOverlay";
+  d.onclick=function(e){if(e.target===this)this.remove();};
+  d.innerHTML=`<div class="pass-sheet">
+    <div style="font-size:14px;font-weight:800;color:#e2e8f0;margin-bottom:12px">Pass on this property</div>
+    <div class="fld"><label>REASON</label><select id="passReason" class="cinput" style="font-size:13px;min-height:36px">
+      <option value="">Select reason...</option>
+      <option value="visited_passed">Visited & Passed</option>
+      <option value="price_too_high">Price Too High</option>
+      <option value="condition_worse">Condition Worse Than Photos</option>
+      <option value="layout_doesnt_work">Layout Doesn't Work</option>
+      <option value="neighborhood_issue">Neighborhood Issue</option>
+      <option value="already_sold">Already Sold / Under Contract</option>
+      <option value="other">Other</option>
+    </select></div>
+    <div class="fld"><label>QUICK NOTE (optional)</label><input id="passNote" type="text" class="cinput" placeholder="e.g. Backyard too small" style="font-size:13px;min-height:36px"/></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="document.getElementById('passOverlay').remove()" class="btn" style="flex:1;padding:10px;font-size:12px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8">Cancel</button>
+      <button onclick="confirmPass('${propId}')" class="btn" style="flex:1;padding:10px;font-size:12px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);color:#ef4444">Confirm Pass</button>
+    </div>
+  </div>`;
+  document.body.appendChild(d);
+}
+
+async function confirmPass(propId){
+  const reason=document.getElementById("passReason").value;
+  if(!reason){document.getElementById("passReason").style.borderColor="#ef4444";return;}
+  const note=document.getElementById("passNote")?.value?.trim()||"";
+  const btn=event.target;btn.textContent="Saving...";btn.disabled=true;
+  const body={disposition:"passed",disposition_reason:reason,disposition_date:new Date().toISOString().split("T")[0],disposition_by:SH_USER?.email||"unknown"};
+  if(note){const p=props.find(x=>x.id===propId);const ts=new Date().toLocaleDateString();const entry=ts+": [PASSED] "+note;body.notes=p?.notes?p.notes+"\n"+entry:entry;}
+  await fetch(`${SB}/rest/v1/properties?id=eq.${propId}`,{method:"PATCH",headers:HD,body:JSON.stringify(body)});
+  const p=props.find(x=>x.id===propId);if(p){p.disposition="passed";p.disposition_reason=reason;if(body.notes)p.notes=body.notes;}
+  document.getElementById("passOverlay")?.remove();
+  closeDetail();
+  const t=document.createElement("div");t.textContent="Property passed";t.style.cssText="position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#ef4444;color:#fff;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:700;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,0.4)";document.body.appendChild(t);setTimeout(()=>t.remove(),2000);
+  renderDashboard();
+}
+
+async function undoPass(propId){
+  await fetch(`${SB}/rest/v1/properties?id=eq.${propId}`,{method:"PATCH",headers:HD,body:JSON.stringify({disposition:null,disposition_reason:null,disposition_date:null,disposition_by:null})});
+  const p=props.find(x=>x.id===propId);if(p){p.disposition=null;p.disposition_reason=null;}
+  closeDetail();
+  const t=document.createElement("div");t.textContent="Pass removed";t.style.cssText="position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#3b82f6;color:#fff;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:700;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,0.4)";document.body.appendChild(t);setTimeout(()=>t.remove(),2000);
+  renderDashboard();
+}

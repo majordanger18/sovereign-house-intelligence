@@ -42,8 +42,8 @@ function renderDashboard(){
     pool:activeProps.filter(p=>p.pool).length,
     golf:activeProps.filter(p=>isGolf(p)).length,
     fresh:activeProps.filter(p=>p.days_on_market!=null&&p.days_on_market<=7).length,
-    aiGo:props.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="GO").length,
-    aiMaybe:props.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="CONDITIONAL_GO").length,
+    aiGo:props.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="GO"&&p.disposition!=="passed").length,
+    aiMaybe:props.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="CONDITIONAL_GO"&&p.disposition!=="passed").length,
     aiNo:activeProps.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="NO_GO").length,
     aiScreened:activeProps.filter(p=>!!analysisMap[p.id]).length,
     avgScore:props.length?Math.round(props.reduce((a,p)=>a+(p.sovereign_score||0),0)/props.length):0,
@@ -127,11 +127,11 @@ function renderList(){
     if(p.listing_status==='Gone')return false;
     if(view==="pending"){if(!isPend(p))return false;if(q)return(p.address||"").toLowerCase().includes(q)||(p.mls_number||"").toLowerCase().includes(q)||(p.zip_code||"").includes(q);return true;}
     if(view!=="pending"&&view!=="go"&&view!=="maybe"&&isPend(p))return false;
-    if(view==="watched"&&!watchIds.has(p.id))return false;
+    if(view==="watched"&&(!watchIds.has(p.id)||p.disposition==="passed"))return false;
     if(view==="reduced"&&!(p.original_list_price&&p.list_price<p.original_list_price))return false;
     if(view==="golf"&&!isGolf(p))return false;
-    if(view==="go"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="GO"))return false;
-    if(view==="maybe"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="CONDITIONAL_GO"))return false;
+    if(view==="go"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="GO"||p.disposition==="passed"))return false;
+    if(view==="maybe"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="CONDITIONAL_GO"||p.disposition==="passed"))return false;
     if(view==="queued"&&!!analysisMap[p.id])return false;
     if(view==="fresh"&&!(p.days_on_market!=null&&p.days_on_market<=7))return false;
     if(q)return(p.address||"").toLowerCase().includes(q)||(p.mls_number||"").toLowerCase().includes(q)||(p.zip_code||"").includes(q);
@@ -167,8 +167,9 @@ function renderList(){
     const offerColor=ai?.max_offer_tier==="realistic"?"#22c55e":ai?.max_offer_tier==="aggressive"?"#f59e0b":"#ef4444";
     const aiRow=ai?`<div style="display:flex;align-items:center;gap:6px;margin-top:5px">${aiBadge}${ai.verdict!=="NO_GO"&&ai.profit_target?`<span style="font-size:10px;color:#94a3b8">Target: <span style="color:${ai.profit_target>=100000?"#22c55e":"#f59e0b"};font-weight:700">${$k(ai.profit_target)}</span></span>`:""} ${(ai.max_offer_price||ai.max_offer_raw)?`<span style="font-size:10px;color:#94a3b8">Offer: <span style="color:${offerColor};font-weight:700">${$k(ai.max_offer_price||ai.max_offer_raw)}</span></span>`:""}</div>`:"";
     const pendingBadge=isPend(p)?`<div style="margin-top:5px"><span style="font-size:10px;font-weight:800;letter-spacing:1px;color:#a855f7;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);padding:3px 8px;border-radius:6px">${p.status==="ActiveUnderContract"?"📋 UNDER CONTRACT":"⏳ PENDING"}</span></div>`:"";
+    const isPassed=p.disposition==="passed";
     const isPending=isPend(p);
-    return`<div class="card${isW?" watched":""}" onclick="openDetail('${p.id}')" style="animation:fadeUp .3s ease ${i*30}ms both;${isPending?"opacity:0.6":""}"><div style="display:flex;gap:12px;align-items:center">${ring(p.sovereign_score)}<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;gap:6px"><div style="min-width:0;flex:1"><div style="font-size:14px;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isW?'<span style="color:#d4af37">★ </span>':""}${esc(p.address)}</div><div style="font-size:10px;color:#64748b;margin-top:1px">${(p.subdivision_name&&truncSub(p.subdivision_name))?`<span style="color:#94a3b8">${esc(truncSub(p.subdivision_name))}</span> · `:""}${p.zip_code}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:17px;font-weight:800">${$(p.list_price)}</div>${p.price_per_sqft?`<div style="font-size:10px;color:#64748b">$${p.price_per_sqft}/sf</div>`:""}</div></div><div style="font-size:10px;color:#64748b;margin-top:4px">${stats}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${flags.join("")}</div>${aiRow}${pendingBadge}</div></div></div>`;
+    return`<div class="card${isW?" watched":""}" onclick="openDetail('${p.id}')" style="animation:fadeUp .3s ease ${i*30}ms both;${isPassed?"opacity:0.5;":isPending?"opacity:0.6":""}"><div style="display:flex;gap:12px;align-items:center">${ring(p.sovereign_score)}<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;gap:6px"><div style="min-width:0;flex:1"><div style="font-size:14px;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isW?'<span style="color:#d4af37">★ </span>':""}${esc(p.address)}</div><div style="font-size:10px;color:#64748b;margin-top:1px">${(p.subdivision_name&&truncSub(p.subdivision_name))?`<span style="color:#94a3b8">${esc(truncSub(p.subdivision_name))}</span> · `:""}${p.zip_code}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:17px;font-weight:800">${$(p.list_price)}</div>${p.price_per_sqft?`<div style="font-size:10px;color:#64748b">$${p.price_per_sqft}/sf</div>`:""}${isPassed?`<span class="passed-badge" style="margin-top:2px">PASSED</span>`:""}</div></div><div style="font-size:10px;color:#64748b;margin-top:4px">${stats}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${flags.join("")}</div>${aiRow}${pendingBadge}</div></div></div>`;
   }).join("");
 }
 
