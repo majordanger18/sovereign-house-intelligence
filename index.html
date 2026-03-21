@@ -54,12 +54,12 @@
     <div id="alertToast"></div>
     <div id="pulseArea"></div>
     <div id="feedFilters" class="filters"></div>
-    <div style="padding:4px 20px 0;display:flex;gap:6px">
+    <div class="search-row">
       <div style="flex:1;position:relative">
-        <input id="searchBox" type="text" placeholder="Search address, MLS#, zip..." style="width:100%;padding:8px 32px 8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.04);color:#f1f5f9;font-size:13px;outline:none;min-height:36px"/>
+        <input id="searchBox" type="text" placeholder="Search address, MLS#, zip..."/>
         <button id="searchClear" onclick="document.getElementById('searchBox').value='';document.getElementById('searchBox').dispatchEvent(new Event('input'));this.style.display='none';" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,0.08);border:none;color:#94a3b8;font-size:12px;cursor:pointer;align-items:center;justify-content:center">✕</button>
       </div>
-      <select id="sortBox" style="padding:4px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:#131316;color:#f1f5f9;font-size:10px;font-weight:700;min-height:28px;min-width:90px;cursor:pointer">
+      <select id="sortBox">
         <option value="sovereign_score">Score ↓</option>
         <option value="price_asc">Price ↑</option>
         <option value="price_desc">Price ↓</option>
@@ -69,8 +69,7 @@
         <option value="newest">Newest</option>
       </select>
     </div>
-    <div style="padding:4px 20px 2px"><span id="countLabel" style="font-size:11px;color:#475569;font-weight:600"></span></div>
-    <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(212,175,55,0.15),transparent);margin:0 20px"></div>
+    <div style="padding:0 20px 2px"><span id="countLabel" style="font-size:11px;color:#475569;font-weight:600"></span></div>
   </div>
   <div id="listArea" class="list-area" style="padding:4px 20px 100px;gap:8px"></div>
 </div>
