@@ -710,8 +710,9 @@ async function parseBid(){
 // ═══ SECTION-TO-SOW COMPARISON (hardcoded map) ═══
 const BID_SOW_MAP={
   'DEMOLITION':['Demo'],
-  'FOYER / ENTRY':['Framing','Carpentry','Other'],
+  'FOYER / ENTRY':['Framing','Carpentry','Other','Slider'],
   'BAR FEATURE WALL':['Other'],
+  'CONVERT DINING ROOM NICHE INTO BAR FEATURE WALL':['Other'],
   'KITCHEN RENOVATION':['Kitchen','Plumbing','Appliances'],
   'KITCHEN RENOVATION / CABINETRY & APPLIANCES':['Kitchen','Plumbing','Appliances'],
   'FAMILY ROOM':['Electrical'],
@@ -734,15 +735,20 @@ function buildSectionComparison(parsed,sowLines){
   const _firstOwner={};
   return(parsed.sections||[]).map(section=>{
     const secName=(section.section_name||'').toUpperCase().trim();
-    const mapCats=BID_SOW_MAP[secName]||[];
+    let mapCats=BID_SOW_MAP[secName];
+    if(!mapCats){const keys=Object.keys(BID_SOW_MAP).sort((a,b)=>b.length-a.length);for(const key of keys){if(secName.includes(key)){mapCats=BID_SOW_MAP[key];break;}}}
+    mapCats=mapCats||[];
     // Find matching SOW lines by category from hardcoded map
     const allMatches=[];
     mapCats.forEach(cat=>{
       const catLower=cat.toLowerCase();
-      const match=(sowLines||[]).find(s=>(s.category||'').toLowerCase()===catLower||(s.description||'').toLowerCase()===catLower);
-      if(match&&!allMatches.some(m=>m.line_number===match.line_number)){
-        allMatches.push({line_number:match.line_number,description:match.description||match.category,budget:match.lender_approved||0});
-      }
+      let matches=(sowLines||[]).filter(s=>(s.category||'').toLowerCase()===catLower||(s.description||'').toLowerCase()===catLower);
+      if(!matches.length)matches=(sowLines||[]).filter(s=>(s.category||'').toLowerCase().includes(catLower)||(s.description||'').toLowerCase().includes(catLower));
+      matches.forEach(match=>{
+        if(!allMatches.some(m=>m.line_number===match.line_number)){
+          allMatches.push({line_number:match.line_number,description:match.description||match.category,budget:match.lender_approved||0});
+        }
+      });
     });
     // De-duplicate: only count SOW budget on the FIRST section that maps to it
     const newMatches=[];const dupeMatches=[];
