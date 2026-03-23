@@ -692,6 +692,7 @@ async function parseBid(){
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
     const parsed=await robustParseJSON(data,apiKey);
+    console.log("Parsed bid data:", parsed);
 
     // Build comparison from Claude's sow_line_matches
     const comparison=buildSectionComparison(parsed);
@@ -756,7 +757,9 @@ function renderBidComparisonBody(parsed,comparison,unmatchedSOW){
   const overhead=parsed.overhead_amount||0;
   const overheadPct=parsed.overhead_pct||0;
   const totalBid=parsed.total_bid||subtotal+overhead;
-  const totalSOW=comparison.reduce((s,c)=>s+c.sow_total,0);
+  const matchedSOW=comparison.reduce((s,c)=>s+c.sow_total,0);
+  const unmatchedSOWTotal=(unmatchedSOW||[]).reduce((s,u)=>s+(u.lender_approved||u.budget||0),0);
+  const totalSOW=matchedSOW+unmatchedSOWTotal;
   const totalDelta=totalBid-totalSOW;
   const unmatchedBidTotal=comparison.filter(c=>!c.has_sow_match).reduce((s,c)=>s+c.bid_total,0);
   const tbd=parsed.tbd_items||[];
@@ -852,7 +855,7 @@ function renderBidReview(parsed,comparison,unmatchedSOW,dealId,contactId){
 async function saveParsedBid(){
   const m=document.getElementById("contactsModal");
   const d=m._parsedBid;if(!d)return;
-  const{parsed,comparison,dealId,contactId}=d;
+  const{parsed,comparison,unmatchedSOW,dealId,contactId}=d;
 
   const payload={
     deal_id:dealId,contact_id:contactId,
@@ -860,7 +863,7 @@ async function saveParsedBid(){
     scope_description:(parsed.sections||[]).map(s=>s.section_name+': $'+s.section_total.toLocaleString()).join(' | '),
     bid_date:parsed.bid_date||new Date().toISOString().split("T")[0],
     status:"received",
-    parsed_line_items:parsed,
+    parsed_line_items:{...parsed,_unmatchedSOW:unmatchedSOW||[]},
     sow_comparison:comparison
   };
   if(_pendingBidUrl){payload.bid_document_url=_pendingBidUrl;payload.bid_document_name=_pendingBidName;}
@@ -885,6 +888,7 @@ function viewBidComparison(bidId){
   const parsed=b.parsed_line_items||{};
   const comparison=Array.isArray(b.sow_comparison)?b.sow_comparison:[];
   if(!comparison.length&&!parsed.sections)return;
+  const unmatchedSOW=parsed._unmatchedSOW||null;
   const ctrName=b.contacts?.display_name||"Contractor";
   const subtotal=parsed.subtotal||comparison.reduce((s,c)=>s+(c.bid_total||0),0);
   const overhead=parsed.overhead_amount||0;
@@ -896,7 +900,7 @@ function viewBidComparison(bidId){
   h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">BID COMPARISON</div>`;
   h+=`<div style="font-size:18px;font-weight:800;margin-bottom:4px">${esc(ctrName)}</div>`;
   h+=`<div style="font-size:13px;color:#94a3b8;margin-bottom:16px">Subtotal: ${$r(subtotal)} + ${overheadPct}% Overhead: ${$r(overhead)} = <strong style="color:#f1f5f9">${$r(totalBid)}</strong></div>`;
-  h+=renderBidComparisonBody(parsed,comparison,null);
+  h+=renderBidComparisonBody(parsed,comparison,unmatchedSOW);
   h+=`</div>`;
   m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
 }
