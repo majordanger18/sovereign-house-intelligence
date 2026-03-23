@@ -16,8 +16,12 @@ const DRAW_PIPE=[
   {key:"disbursed",label:"Disbursed",df:"date_disbursed"}
 ];
 
-let renoDealId=null,renoSub="budget",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null;
+let renoDealId=null,renoSub="budget",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null,renoTasks=[];
 let renoExpF={sow:"all",type:"all",from:"",to:""};
+let renoTaskFilter={cat:"all",assignee:"all"};
+let renoEditingTask=null,renoShowDone=false;
+const TASK_CAT_COLORS={financing:"#22c55e",contractor:"#f97316",materials:"#3b82f6",design:"#ec4899",permits:"#6366f1",administrative:"#64748b",listing_prep:"#a855f7"};
+const TASK_ASSIGNEES={"j@jmarshallhunt.com":"King J","lisa@lisaahunt.com":"Lisa"};
 const RENO_WH={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=representation"};
 
 // ═══ CURRENCY ═══
@@ -63,7 +67,8 @@ async function renderRenoView(){
     html+=`<div style="font-size:14px;font-weight:700;color:#f1f5f9;margin-bottom:12px">${esc(rd[0].address)}</div>`;
   }
   // Sub-view pills
-  html+=`<div class="reno-pills"><button class="reno-pill${renoSub==="budget"?" active":""}" onclick="switchRenoSub('budget')">Budget</button><button class="reno-pill${renoSub==="draws"?" active":""}" onclick="switchRenoSub('draws')">Draws</button><button class="reno-pill${renoSub==="expenses"?" active":""}" onclick="switchRenoSub('expenses')">Expenses</button></div>`;
+  const tkOpen=renoTasks.filter(t=>t.status!=='done').length;
+  html+=`<div class="reno-pills"><button class="reno-pill${renoSub==="budget"?" active":""}" onclick="switchRenoSub('budget')">Budget</button><button class="reno-pill${renoSub==="draws"?" active":""}" onclick="switchRenoSub('draws')">Draws</button><button class="reno-pill${renoSub==="expenses"?" active":""}" onclick="switchRenoSub('expenses')">Expenses</button><button class="reno-pill${renoSub==="tasks"?" active":""}" onclick="switchRenoSub('tasks')">Tasks${tkOpen?' ('+tkOpen+')':''}</button></div>`;
   // Content placeholder
   html+=`<div id="renoContent"><div style="text-align:center;padding:40px"><div style="width:24px;height:24px;border:2px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto"></div></div></div>`;
   html+='</div>';
@@ -108,6 +113,11 @@ async function loadRenoData(did){
     const fi=await sb("deal_financing?deal_id=eq."+did);
     renoFin=Array.isArray(fi)&&fi.length?fi[0]:null;
   }catch(e){console.error("[SH] Financing load error (non-fatal):",e);renoFin=null;}
+  // Tasks fetch
+  try{
+    const tk=await sb("deal_tasks?deal_id=eq."+did+"&order=sort_order,created_at");
+    renoTasks=Array.isArray(tk)?tk:[];
+  }catch(e){console.error("[SH] Tasks load error (non-fatal):",e);renoTasks=[];}
 }
 
 function switchRenoDeal(did){renoDealId=did;renoSub="budget";renoExpandedLine=null;renderRenoView();}
@@ -115,10 +125,11 @@ function switchRenoSub(s){renoSub=s;renoExpandedLine=null;renderRenoSub();}
 
 function renderRenoSub(){
   const el=document.getElementById("renoContent");if(!el)return;
-  document.querySelectorAll(".reno-pill").forEach(p=>{p.classList.toggle("active",p.textContent.toLowerCase()===renoSub);});
+  document.querySelectorAll(".reno-pill").forEach(p=>{p.classList.toggle("active",p.textContent.toLowerCase().startsWith(renoSub));});
   if(renoSub==="budget")renderBudget(el);
   else if(renoSub==="draws")renderDrawsV(el);
   else if(renoSub==="expenses")renderExpV(el);
+  else if(renoSub==="tasks")renderTasksV(el);
 }
 
 // ═══ BUDGET VIEW ═══
@@ -131,6 +142,15 @@ function renderBudget(el){
   const sc=pct>100?"#ef4444":pct>80?"#eab308":"#22c55e";
   const rc=rem<0?"#ef4444":"#22c55e";
   let h='';
+
+  // Task warning bar
+  const urgTasks=renoTasks.filter(t=>t.status!=='done'&&t.priority==='urgent').length;
+  const now=new Date();now.setHours(0,0,0,0);
+  const overdueTasks=renoTasks.filter(t=>t.status!=='done'&&t.due_date&&new Date(t.due_date+"T00:00:00")<now).length;
+  if(urgTasks||overdueTasks){
+    const parts=[];if(urgTasks)parts.push(urgTasks+" urgent task"+(urgTasks>1?"s":""));if(overdueTasks)parts.push(overdueTasks+" overdue");
+    h+=`<div onclick="switchRenoSub('tasks')" style="padding:8px 12px;border-radius:10px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);margin-bottom:10px;cursor:pointer;font-size:12px;color:#f97316;font-weight:600">⚠️ ${parts.join(" · ")} → Tasks tab</div>`;
+  }
 
   // Big Three
   const tla=ov?.total_lender_approved||0;
@@ -1302,6 +1322,210 @@ async function deleteSOWLine(lid){
     await loadRenoData(renoDealId);
     renderRenoSub();
   }catch(e){console.error('Delete SOW line failed:',e);showRenoToast('Failed to delete line');}
+}
+
+// ═══ TASKS VIEW ═══
+function taskAssigneeName(email){return TASK_ASSIGNEES[email]||email||"Unassigned";}
+
+function renderTasksV(el){
+  const all=renoTasks;
+  const todo=all.filter(t=>t.status==='todo').length;
+  const inp=all.filter(t=>t.status==='in_progress').length;
+  const blk=all.filter(t=>t.status==='blocked').length;
+  const done=all.filter(t=>t.status==='done').length;
+
+  let h='';
+
+  // Summary cards
+  h+=`<div class="reno-sgrid"><div class="reno-scard"><div class="reno-sl">TO DO</div><div class="reno-sv" style="color:#94a3b8">${todo}</div></div><div class="reno-scard"><div class="reno-sl">IN PROGRESS</div><div class="reno-sv" style="color:#3b82f6">${inp}</div></div><div class="reno-scard"><div class="reno-sl">BLOCKED</div><div class="reno-sv" style="color:#ef4444">${blk}</div></div><div class="reno-scard"><div class="reno-sl">DONE</div><div class="reno-sv" style="color:#22c55e">${done}</div></div></div>`;
+
+  // Filter row — categories
+  const cats=[{k:"all",l:"All"},{k:"financing",l:"Financing"},{k:"contractor",l:"Contractor"},{k:"materials",l:"Materials"},{k:"design",l:"Design"},{k:"permits",l:"Permits"},{k:"administrative",l:"Admin"},{k:"listing_prep",l:"Listing"}];
+  h+=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">`;
+  cats.forEach(c=>{h+=`<button class="filt${renoTaskFilter.cat===c.k?' on':''}" onclick="renoTaskFilter.cat='${c.k}';renderRenoSub()">${c.l}</button>`;});
+  h+=`</div>`;
+
+  // Filter row — assignee
+  h+=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px">`;
+  h+=`<button class="filt${renoTaskFilter.assignee==='all'?' on':''}" onclick="renoTaskFilter.assignee='all';renderRenoSub()">All</button>`;
+  h+=`<button class="filt${renoTaskFilter.assignee==='mine'?' on':''}" onclick="renoTaskFilter.assignee='mine';renderRenoSub()">My Tasks</button>`;
+  h+=`<button class="filt${renoTaskFilter.assignee==='lisa'?' on':''}" onclick="renoTaskFilter.assignee='lisa';renderRenoSub()">Lisa's Tasks</button>`;
+  h+=`</div>`;
+
+  // Add task button + inline form
+  h+=`<button onclick="renoEditingTask='new';renderRenoSub()" class="btn" style="width:100%;padding:10px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;margin-bottom:12px">+ Add Task</button>`;
+
+  if(renoEditingTask==='new')h+=renderTaskForm(null);
+
+  // Filter tasks
+  let ft=all.filter(t=>t.status!=='done');
+  if(renoTaskFilter.cat!=='all')ft=ft.filter(t=>t.category===renoTaskFilter.cat);
+  if(renoTaskFilter.assignee==='mine')ft=ft.filter(t=>t.assigned_to_email===SH_USER?.email);
+  else if(renoTaskFilter.assignee==='lisa')ft=ft.filter(t=>t.assigned_to_email==='lisa@lisaahunt.com');
+
+  // Sort: urgent first, then by status order, then sort_order
+  const statOrd={todo:1,in_progress:2,blocked:3};
+  const priOrd={urgent:0,high:1,normal:2,low:3};
+  ft.sort((a,b)=>(priOrd[a.priority]??2)-(priOrd[b.priority]??2)||(statOrd[a.status]??4)-(statOrd[b.status]??4)||(a.sort_order||0)-(b.sort_order||0));
+
+  if(!ft.length&&!done)h+=`<div style="text-align:center;padding:40px 20px;color:#475569"><div style="font-size:32px;margin-bottom:8px">✅</div><div style="font-size:14px;font-weight:600;color:#94a3b8">No tasks yet.</div><div style="font-size:12px;color:#64748b;margin-top:6px">Add your first task to start tracking what needs to happen.</div></div>`;
+
+  ft.forEach(t=>{h+=renderTaskCard(t);});
+
+  // Done tasks (collapsed)
+  let doneTasks=all.filter(t=>t.status==='done');
+  if(renoTaskFilter.cat!=='all')doneTasks=doneTasks.filter(t=>t.category===renoTaskFilter.cat);
+  if(renoTaskFilter.assignee==='mine')doneTasks=doneTasks.filter(t=>t.assigned_to_email===SH_USER?.email);
+  else if(renoTaskFilter.assignee==='lisa')doneTasks=doneTasks.filter(t=>t.assigned_to_email==='lisa@lisaahunt.com');
+
+  if(doneTasks.length){
+    h+=`<button onclick="renoShowDone=!renoShowDone;renderRenoSub()" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:700;cursor:pointer;padding:8px 0;margin-top:8px">${renoShowDone?'▾':'▸'} Show completed (${doneTasks.length})</button>`;
+    if(renoShowDone)doneTasks.forEach(t=>{h+=renderTaskCard(t);});
+  }
+
+  el.innerHTML=h;
+}
+
+function renderTaskCard(t){
+  const isDone=t.status==='done';
+  const isBlocked=t.status==='blocked';
+  const isUrgent=t.priority==='urgent';
+  const cc=TASK_CAT_COLORS[t.category]||"#64748b";
+  const name=taskAssigneeName(t.assigned_to_email);
+  const now=new Date();now.setHours(0,0,0,0);
+  let dueTxt='',dueColor='#64748b';
+  if(t.due_date){
+    const dd=new Date(t.due_date+"T00:00:00");
+    dueTxt="Due "+dd.toLocaleDateString("en-US",{month:"numeric",day:"numeric"});
+    if(!isDone){
+      const diff=(dd-now)/(864e5);
+      if(diff<0)dueColor="#ef4444";
+      else if(diff<=3)dueColor="#f97316";
+    }
+  }
+
+  let h=`<div class="task-card${isDone?' done':''}${isUrgent&&!isDone?' urgent':''}">`;
+
+  // Checkbox
+  h+=`<div class="task-check${isDone?' done':''}${isBlocked?' blocked':''}" onclick="event.stopPropagation();toggleTaskDone('${t.id}','${t.status}')">${isDone?'✓':isBlocked?'!':''}</div>`;
+
+  // Content
+  h+=`<div style="flex:1;min-width:0">`;
+  h+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">`;
+  h+=`<div onclick="event.stopPropagation();openTaskEdit('${t.id}')" style="font-size:13px;font-weight:700;color:${isDone?'#64748b':'#e2e8f0'};cursor:pointer;${isDone?'text-decoration:line-through;':''}">${esc(t.title||"")}</div>`;
+  // Priority + status menu
+  h+=`<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">`;
+  if(t.priority==='urgent')h+=`<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;background:rgba(239,68,68,0.15);color:#ef4444">URGENT</span>`;
+  else if(t.priority==='high')h+=`<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;background:rgba(249,115,22,0.15);color:#f97316">HIGH</span>`;
+  else if(t.priority==='low')h+=`<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;background:rgba(100,116,139,0.15);color:#64748b">LOW</span>`;
+  // Status dropdown
+  h+=`<select onchange="event.stopPropagation();changeTaskStatus('${t.id}',this.value)" style="font-size:9px;padding:2px 4px;border-radius:4px;border:1px solid rgba(255,255,255,0.08);background:#131316;color:#94a3b8;cursor:pointer;min-height:0">`;
+  ['todo','in_progress','blocked','done'].forEach(s=>{h+=`<option value="${s}"${t.status===s?' selected':''}>${s==='in_progress'?'In Progress':s.charAt(0).toUpperCase()+s.slice(1)}</option>`;});
+  h+=`</select>`;
+  h+=`</div></div>`;
+
+  // Meta line
+  h+=`<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:3px;font-size:11px">`;
+  h+=`<span style="padding:1px 6px;border-radius:4px;background:${cc}15;color:${cc};font-size:9px;font-weight:700;border:1px solid ${cc}30">${(t.category||"").replace(/_/g," ")}</span>`;
+  h+=`<span style="color:#64748b">${name}</span>`;
+  if(dueTxt)h+=`<span style="color:${dueColor};font-weight:600">${dueTxt}</span>`;
+  if(isDone&&t.completed_at)h+=`<span style="color:#22c55e;font-size:10px">Completed ${new Date(t.completed_at).toLocaleDateString("en-US",{month:"numeric",day:"numeric"})}</span>`;
+  h+=`</div>`;
+
+  if(t.notes)h+=`<div style="font-size:11px;color:#475569;margin-top:4px">${esc(t.notes)}</div>`;
+
+  // Inline edit form
+  if(renoEditingTask===t.id)h+=renderTaskForm(t);
+
+  h+=`</div></div>`;
+  return h;
+}
+
+function renderTaskForm(task){
+  const isNew=!task;
+  const t=task||{};
+  let h=`<div class="task-form" style="margin-top:8px" onclick="event.stopPropagation()">`;
+  h+=`<div class="fld"><label>TITLE</label><input id="tfTitle" type="text" class="cinput" style="min-height:36px;font-size:13px;padding:8px" value="${esc(t.title||'')}" placeholder="What needs to happen?"/></div>`;
+  h+=`<div class="reno-eg">`;
+  h+=`<div class="fld"><label>CATEGORY</label><select id="tfCat" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px">`;
+  ['financing','contractor','materials','design','permits','administrative','listing_prep'].forEach(c=>{h+=`<option value="${c}"${(t.category||'financing')===c?' selected':''}>${c.replace(/_/g,' ')}</option>`;});
+  h+=`</select></div>`;
+  h+=`<div class="fld"><label>ASSIGNED TO</label><select id="tfAssign" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px"><option value="j@jmarshallhunt.com"${(t.assigned_to_email||'j@jmarshallhunt.com')==='j@jmarshallhunt.com'?' selected':''}>King J</option><option value="lisa@lisaahunt.com"${t.assigned_to_email==='lisa@lisaahunt.com'?' selected':''}>Lisa</option></select></div>`;
+  h+=`<div class="fld"><label>PRIORITY</label><select id="tfPri" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px">`;
+  ['urgent','high','normal','low'].forEach(p=>{h+=`<option value="${p}"${(t.priority||'normal')===p?' selected':''}>${p.charAt(0).toUpperCase()+p.slice(1)}</option>`;});
+  h+=`</select></div>`;
+  h+=`<div class="fld"><label>DUE DATE</label><input id="tfDue" type="date" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${t.due_date||''}"/></div>`;
+  h+=`</div>`;
+  h+=`<div class="fld"><label>NOTES</label><input id="tfNotes" type="text" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${esc(t.notes||'')}" placeholder="Optional notes"/></div>`;
+
+  h+=`<div style="display:flex;gap:8px;margin-top:6px">`;
+  if(isNew){
+    h+=`<button onclick="saveNewTask()" class="btn" style="flex:1;padding:10px;font-size:12px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none">Add Task</button>`;
+  }else{
+    h+=`<button onclick="saveEditTask('${t.id}')" class="btn" style="flex:1;padding:10px;font-size:12px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none">Save</button>`;
+    h+=`<button onclick="deleteTask('${t.id}')" style="padding:10px 16px;font-size:12px;background:none;border:none;color:#ef4444;font-weight:700;cursor:pointer">Delete</button>`;
+  }
+  h+=`<button onclick="renoEditingTask=null;renderRenoSub()" style="padding:10px 16px;font-size:12px;background:none;border:none;color:#64748b;font-weight:700;cursor:pointer">Cancel</button>`;
+  h+=`</div></div>`;
+  return h;
+}
+
+function openTaskEdit(taskId){renoEditingTask=renoEditingTask===taskId?null:taskId;renderRenoSub();}
+
+async function toggleTaskDone(taskId,curStatus){
+  const isDone=curStatus==='done';
+  const patch=isDone?{status:"todo",completed_at:null,completed_by:null}:{status:"done",completed_at:new Date().toISOString(),completed_by:SH_USER?.email||"unknown"};
+  try{
+    await fetch(SB+"/rest/v1/deal_tasks?id=eq."+taskId,{method:"PATCH",headers:RENO_WH,body:JSON.stringify(patch)});
+    showRenoToast(isDone?"Task reopened":"Task completed ✓");
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){console.error("Toggle task failed:",e);showRenoToast("Failed to update task");}
+}
+
+async function changeTaskStatus(taskId,newStatus){
+  const patch={status:newStatus};
+  if(newStatus==='done'){patch.completed_at=new Date().toISOString();patch.completed_by=SH_USER?.email||"unknown";}
+  else{patch.completed_at=null;patch.completed_by=null;}
+  try{
+    await fetch(SB+"/rest/v1/deal_tasks?id=eq."+taskId,{method:"PATCH",headers:RENO_WH,body:JSON.stringify(patch)});
+    showRenoToast("Status → "+newStatus.replace(/_/g," "));
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){console.error("Change task status failed:",e);showRenoToast("Failed to update task");}
+}
+
+async function saveNewTask(){
+  const title=(document.getElementById("tfTitle")?.value||"").trim();
+  if(!title){alert("Enter a task title.");return;}
+  const payload={deal_id:renoDealId,title:title,category:document.getElementById("tfCat")?.value||"financing",assigned_to_email:document.getElementById("tfAssign")?.value||"j@jmarshallhunt.com",priority:document.getElementById("tfPri")?.value||"normal",due_date:document.getElementById("tfDue")?.value||null,notes:(document.getElementById("tfNotes")?.value||"").trim()||null,status:"todo",created_by_email:SH_USER?.email||"unknown",sort_order:renoTasks.length};
+  try{
+    const res=await fetch(SB+"/rest/v1/deal_tasks",{method:"POST",headers:RENO_WH,body:JSON.stringify(payload)});
+    if(!res.ok){showRenoToast("Failed to add task");return;}
+    renoEditingTask=null;
+    showRenoToast("Task added");
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){console.error("Save task failed:",e);showRenoToast("Failed to add task");}
+}
+
+async function saveEditTask(taskId){
+  const title=(document.getElementById("tfTitle")?.value||"").trim();
+  if(!title){alert("Enter a task title.");return;}
+  const patch={title:title,category:document.getElementById("tfCat")?.value||"financing",assigned_to_email:document.getElementById("tfAssign")?.value||"j@jmarshallhunt.com",priority:document.getElementById("tfPri")?.value||"normal",due_date:document.getElementById("tfDue")?.value||null,notes:(document.getElementById("tfNotes")?.value||"").trim()||null};
+  try{
+    await fetch(SB+"/rest/v1/deal_tasks?id=eq."+taskId,{method:"PATCH",headers:RENO_WH,body:JSON.stringify(patch)});
+    renoEditingTask=null;
+    showRenoToast("Task updated");
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){console.error("Edit task failed:",e);showRenoToast("Failed to update task");}
+}
+
+async function deleteTask(taskId){
+  if(!confirm("Delete this task?"))return;
+  try{
+    await fetch(SB+"/rest/v1/deal_tasks?id=eq."+taskId,{method:"DELETE",headers:RENO_WH});
+    renoEditingTask=null;
+    showRenoToast("Task deleted");
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){console.error("Delete task failed:",e);showRenoToast("Failed to delete task");}
 }
 
 // Restore search bar when leaving reno view

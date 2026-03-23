@@ -179,4 +179,15 @@ input[type="range"]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;b
 .ct-metric{padding:8px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);text-align:center}
 .ct-ml{font-size:8px;color:#64748b;font-weight:700;letter-spacing:0.5px}
 .ct-mv{font-size:14px;font-weight:800;color:#f1f5f9;margin-top:2px}
+/* ═══ TASK CARDS ═══ */
+.task-card{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.05);margin-bottom:6px;transition:background 0.15s}
+.task-card:hover{background:rgba(255,255,255,0.03)}
+.task-card.done{opacity:0.5}
+.task-card.urgent{border-left:3px solid #ef4444}
+.task-check{width:20px;height:20px;border-radius:50%;border:2px solid #475569;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;transition:all 0.15s;font-size:11px;color:transparent}
+.task-check:hover{border-color:#22c55e;background:rgba(34,197,94,0.1)}
+.task-check.done{border-color:#22c55e;background:rgba(34,197,94,0.15);color:#22c55e}
+.task-check.blocked{border-color:#ef4444;background:rgba(239,68,68,0.15);color:#ef4444}
+.task-form{padding:12px;border-radius:12px;background:rgba(212,175,55,0.03);border:1px solid rgba(212,175,55,0.1);margin-bottom:12px}
+
 .reno-r{cursor:pointer;transition:background .2s}.reno-r:hover{background:rgba(212,175,55,.04)}.reno-r.expanded{background:rgba(212,175,55,.06)}.reno-xrow td{padding:0!important;border-top:none!important}.reno-xrow>td>div{border-left:3px solid #d4af37;background:rgba(255,255,255,.02);padding:16px;margin:4px 0 8px;border-radius:0 12px 12px 0}.reno-exp-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}@media(max-width:768px){.reno-exp-grid{grid-template-columns:1fr}}.reno-exp-col{min-width:0}.reno-lx{display:flex;flex-direction:column;gap:4px}.reno-lx-row{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04);flex-wrap:wrap}input[type="date"]{cursor:pointer}input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;filter:invert(.7)}select option{background-color:#1a1a2e;color:#e0e0e0}
