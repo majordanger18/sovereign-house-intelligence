@@ -694,8 +694,8 @@ async function parseBid(){
     const parsed=await robustParseJSON(data,apiKey);
     console.log("Parsed bid data:", parsed);
 
-    // Build comparison from Claude's sow_line_matches
-    const comparison=buildSectionComparison(parsed);
+    // Build comparison from hardcoded BID_SOW_MAP
+    const comparison=buildSectionComparison(parsed,sowLines);
     const unmatchedSOW=sowLines.filter(s=>!_bidUsedSOW.has(s.line_number)&&(s.lender_approved||0)>0);
 
     renderBidReview(parsed,comparison,unmatchedSOW,dealId,contactId);
@@ -706,14 +706,43 @@ async function parseBid(){
   }
 }
 
-// ═══ SECTION-TO-SOW COMPARISON (Claude-driven) ═══
+// ═══ SECTION-TO-SOW COMPARISON (hardcoded map) ═══
+const BID_SOW_MAP={
+  'DEMOLITION':['Demo'],
+  'FOYER / ENTRY':['Framing','Carpentry','Other'],
+  'BAR FEATURE WALL':['Other'],
+  'KITCHEN RENOVATION':['Kitchen','Plumbing','Appliances'],
+  'KITCHEN RENOVATION / CABINETRY & APPLIANCES':['Kitchen','Plumbing','Appliances'],
+  'FAMILY ROOM':['Electrical'],
+  'PRIMARY BEDROOM':['Other','Framing'],
+  'PRIMARY BATHROOM':['Bathrooms','Windows'],
+  'LAUNDRY ROOM':['Bathrooms'],
+  'SECONDARY BATHROOMS':['Bathrooms'],
+  'FLOORING':['Flooring'],
+  'WHOLE HOUSE IMPROVEMENTS':['Carpentry','Paint','Drywall'],
+  'ELECTRICAL':['Electrical'],
+  'EXTERIOR IMPROVEMENTS':['Exterior'],
+  'LANDSCAPING':['Landscape'],
+  'POOL AREA':['Other'],
+  'MECHANICAL':['HVAC']
+};
 let _bidUsedSOW=new Set();
 
-function buildSectionComparison(parsed){
+function buildSectionComparison(parsed,sowLines){
   _bidUsedSOW=new Set();
-  const _firstOwner={};// track which section first claimed each SOW line
+  const _firstOwner={};
   return(parsed.sections||[]).map(section=>{
-    const allMatches=section.sow_line_matches||[];
+    const secName=(section.section_name||'').toUpperCase().trim();
+    const mapCats=BID_SOW_MAP[secName]||[];
+    // Find matching SOW lines by category from hardcoded map
+    const allMatches=[];
+    mapCats.forEach(cat=>{
+      const catLower=cat.toLowerCase();
+      const match=(sowLines||[]).find(s=>(s.category||'').toLowerCase()===catLower||(s.description||'').toLowerCase()===catLower);
+      if(match&&!allMatches.some(m=>m.line_number===match.line_number)){
+        allMatches.push({line_number:match.line_number,description:match.description||match.category,budget:match.lender_approved||0});
+      }
+    });
     // De-duplicate: only count SOW budget on the FIRST section that maps to it
     const newMatches=[];const dupeMatches=[];
     allMatches.forEach(m=>{
@@ -738,7 +767,7 @@ function buildSectionComparison(parsed){
       sow_total:sowTotal,
       delta:delta,
       delta_pct:deltaPct,
-      has_sow_match:newMatches.length>0||dupeMatches.length>0
+      has_sow_match:mapCats.length>0
     };
   });
 }
