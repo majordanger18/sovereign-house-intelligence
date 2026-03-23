@@ -590,6 +590,9 @@ async function saveNewDraw(num){
 // ═══ EXPENSES VIEW ═══
 function renderExpV(el){
   let h='';
+  // Receipt upload
+  h+=`<div style="margin-bottom:12px"><button onclick="openReceiptUpload()" class="btn" style="width:100%;padding:12px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">📸 Upload Receipt or Invoice</button></div>`;
+  h+=`<div style="font-size:10px;color:#475569;text-align:center;margin-bottom:10px">Or enter manually below</div>`;
   // Quick entry form
   h+=`<div class="reno-ef"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:10px">LOG EXPENSE</div><div class="reno-eg">`;
   h+=`<div class="fld"><label>DATE</label><input id="exD" type="date" class="cinput" value="${new Date().toISOString().split("T")[0]}"/></div>`;
@@ -741,6 +744,96 @@ async function saveEditedExpense(expId){
     closeRenoModal();showRenoToast("Expense updated");
     await loadRenoData(renoDealId);renderRenoSub();
   }catch(e){console.error("Edit expense failed:",e);showRenoToast("Failed to save expense");}
+}
+
+// ═══ RECEIPT PARSER ═══
+async function openReceiptUpload(){
+  const input=document.createElement('input');
+  input.type='file';input.accept='image/*,.pdf';input.capture='environment';
+  input.onchange=async function(){const file=input.files[0];if(!file)return;await parseReceipt(file);};
+  input.click();
+}
+
+async function parseReceipt(file){
+  const formArea=document.querySelector('.reno-ef');
+  const origHTML=formArea?.innerHTML;
+  if(formArea)formArea.innerHTML='<div style="text-align:center;padding:24px"><div style="width:24px;height:24px;border:2px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px"></div><div style="font-size:12px;color:#d4af37;font-weight:700">Reading receipt...</div></div>';
+
+  let apiKey=localStorage.getItem("sh_claude_key");
+  if(!apiKey){
+    apiKey=prompt("Enter your Claude API key:");
+    if(!apiKey){if(formArea)formArea.innerHTML=origHTML;return;}
+    localStorage.setItem("sh_claude_key",apiKey);
+  }
+
+  const buf=await file.arrayBuffer();
+  const bytes=new Uint8Array(buf);
+  let binary="";const chunk=8192;
+  for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+  const b64=btoa(binary);
+
+  const mediaType=file.type.startsWith('image/')?file.type:'application/pdf';
+  const docType=file.type.startsWith('image/')?'image':'document';
+
+  const sowContext=renoSOW.filter(l=>Number(l.lender_approved)>0||Number(l.planned_budget)>0).map(l=>"Line "+l.line_number+": "+l.category+" - "+l.description+" ("+l.lender_approved+" approved)").join("\n");
+
+  const content=[
+    {type:docType,source:{type:"base64",media_type:mediaType,data:b64}},
+    {type:"text",text:"Parse this receipt or invoice. Extract ALL of the following and return ONLY a JSON object, no markdown, no explanation:\n\n{\"vendor\":\"Store or company name\",\"date\":\"YYYY-MM-DD\",\"items\":[{\"description\":\"Item description\",\"amount\":123.45,\"expense_type\":\"material or labor or permit or fee or other\",\"unit_cost\":null,\"unit_type\":null,\"quantity\":null,\"product_name\":\"Specific product name if visible\"}],\"subtotal\":123.45,\"tax\":12.34,\"total\":135.79,\"payment_method\":\"cash or credit_card or check or other\",\"suggested_sow_line\":\"best matching SOW line number\"}\n\nHere are the SOW lines for this project — pick the best match for each item:\n"+sowContext+"\n\nIf multiple items on the receipt, include all in the items array. Return ONLY the JSON."}
+  ];
+
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:content}]})
+    });
+    if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
+    const data=await res.json();
+    const text=data.content?.[0]?.text||"";
+    const jm=text.match(/\{[\s\S]*\}/);
+    if(!jm)throw new Error("Could not parse response");
+    const parsed=JSON.parse(jm[0]);
+    prefillExpenseForm(parsed);
+  }catch(e){
+    console.error("Receipt parse error:",e);
+    showRenoToast("Failed to parse receipt: "+e.message);
+    renderRenoSub();
+  }
+}
+
+function prefillExpenseForm(parsed){
+  const el=document.getElementById("renoContent");
+  if(el)renderExpV(el);
+  setTimeout(()=>{
+    if(parsed.date){const d=document.getElementById("exD");if(d)d.value=parsed.date;}
+    if(parsed.suggested_sow_line){
+      const sel=document.getElementById("exS");
+      if(sel){const sowLine=renoSOW.find(l=>l.line_number==parsed.suggested_sow_line);if(sowLine)sel.value=sowLine.id;}
+    }
+    const items=parsed.items||[];
+    if(items.length===1){
+      const item=items[0];
+      const de=document.getElementById("exDe");if(de)de.value=item.description||"";
+      const a=document.getElementById("exA");if(a)a.value=parsed.total||item.amount||"";
+      const t=document.getElementById("exT");if(t)t.value=item.expense_type||"material";
+      if(item.product_name){const pn=document.getElementById("exPn");if(pn)pn.value=item.product_name;}
+      if(item.unit_cost){const uc=document.getElementById("exUC");if(uc)uc.value=item.unit_cost;}
+      if(item.unit_type){const ut=document.getElementById("exUT");if(ut)ut.value=item.unit_type;}
+      if(item.quantity){const q=document.getElementById("exQ");if(q)q.value=item.quantity;}
+    }else if(items.length>1){
+      const de=document.getElementById("exDe");if(de)de.value=items.map(i=>i.description).join(", ");
+      const a=document.getElementById("exA");if(a)a.value=parsed.total||items.reduce((s,i)=>s+(i.amount||0),0);
+      const t=document.getElementById("exT");if(t)t.value=items[0]?.expense_type||"material";
+    }
+    if(parsed.vendor){
+      const more=document.getElementById("exMore");if(more)more.style.display="block";
+      const btn=document.getElementById("exMoreBtn");if(btn)btn.textContent="Less Details ▾";
+      const v=document.getElementById("exV");if(v)v.value=parsed.vendor;
+    }
+    if(parsed.payment_method){const pm=document.getElementById("exPm");if(pm)pm.value=parsed.payment_method;}
+    showRenoToast("Receipt parsed — review and save");
+  },100);
 }
 
 // ═══ HELPERS ═══
