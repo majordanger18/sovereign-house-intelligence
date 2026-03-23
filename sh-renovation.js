@@ -224,7 +224,7 @@ function renderBudget(el){
   }
 
   // SOW action buttons + table
-  h+=`<div style="margin-top:20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">SCOPE OF WORK</div><div style="display:flex;gap:6px"><button onclick="event.stopPropagation();openSOWUpload()" class="btn" style="padding:6px 14px;font-size:11px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:700;min-height:32px">📄 Upload Lender SOW</button><button onclick="event.stopPropagation();openAddLineForm()" class="btn" style="padding:6px 14px;font-size:11px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700;min-height:32px">+ Add Line</button></div></div>`;
+  h+=`<div style="margin-top:20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">SCOPE OF WORK</div><div style="display:flex;gap:6px"><button onclick="event.stopPropagation();openSOWUpload()" class="btn" style="padding:6px 14px;font-size:11px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:700;min-height:32px">📄 Upload Lender SOW</button><button onclick="event.stopPropagation();openAddLineForm()" class="btn" style="padding:6px 14px;font-size:11px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700;min-height:32px">+ Add Line</button><button onclick="exportCPAReport()" class="btn" style="padding:6px 14px;font-size:11px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700;min-height:32px">📊 CPA Report</button></div></div>`;
   h+=`<div id="sowUploadArea"></div><div id="sowAddLineArea"></div>`;
   const fl=renoBLines.filter(l=>l.lender_approved>0||l.planned_budget>0||l.total_spent>0);
   if(fl.length){
@@ -858,6 +858,208 @@ function prefillExpenseForm(parsed){
     if(parsed.payment_method){const pm=document.getElementById("exPm");if(pm)pm.value=parsed.payment_method;}
     showRenoToast("Receipt parsed — review and save");
   },100);
+}
+
+// ═══ CPA REPORT EXPORT ═══
+function exportCPAReport(){
+  const d=deals.find(x=>x.id===renoDealId);if(!d){showRenoToast("No deal selected");return;}
+  const f=renoFin;const ov=renoOv;
+  const now=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const pct=n=>(Number(n||0)).toFixed(2)+'%';
+  const dt=v=>v?new Date(v+'T00:00:00').toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'}):'—';
+  const e=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  const purchasePrice=f?.purchase_price||d.accepted_price||d.offer_price||0;
+
+  // --- Section 4: Budget vs Actual ---
+  const budgetLines=renoBLines.filter(l=>(l.lender_approved||0)>0||(l.planned_budget||0)>0||(l.total_spent||0)>0);
+  let budgetRows='';
+  let totApp=0,totPlan=0,totSpent=0,totDrawn=0;
+  budgetLines.forEach(l=>{
+    const app=l.lender_approved||0,plan=l.planned_budget||0,spent=l.total_spent||0,drawn=l.total_drawn||0;
+    const variance=plan-spent;
+    const vc=variance<0?'color:#c00':'color:#060';
+    totApp+=app;totPlan+=plan;totSpent+=spent;totDrawn+=drawn;
+    budgetRows+=`<tr><td>${l.line_number||''}</td><td>${e(l.category||'')}</td><td>${e(l.description||'')}</td><td style="text-align:right">${fmt(app)}</td><td style="text-align:right">${fmt(plan)}</td><td style="text-align:right">${fmt(spent)}</td><td style="text-align:right">${fmt(drawn)}</td><td style="text-align:right;${variance!==0?vc:''}">${fmt(variance)}</td></tr>`;
+  });
+  const totVar=totPlan-totSpent;
+  const totVc=totVar<0?'color:#c00;font-weight:700':'color:#060;font-weight:700';
+  budgetRows+=`<tr style="border-top:2px solid #333;font-weight:700"><td colspan="3">TOTAL</td><td style="text-align:right">${fmt(totApp)}</td><td style="text-align:right">${fmt(totPlan)}</td><td style="text-align:right">${fmt(totSpent)}</td><td style="text-align:right">${fmt(totDrawn)}</td><td style="text-align:right;${totVar!==0?totVc:''}">${fmt(totVar)}</td></tr>`;
+
+  // --- Section 5: Expenses by Category ---
+  const catMap={};
+  renoExp.forEach(ex=>{
+    const cat=(ex.renovation_sow_lines?.category||'uncategorized').replace(/_/g,' ');
+    if(!catMap[cat])catMap[cat]={material:0,labor:0,other:0,total:0};
+    const amt=ex.amount||0;
+    if(ex.expense_type==='material')catMap[cat].material+=amt;
+    else if(ex.expense_type==='labor')catMap[cat].labor+=amt;
+    else catMap[cat].other+=amt;
+    catMap[cat].total+=amt;
+  });
+  const catEntries=Object.entries(catMap).sort((a,b)=>b[1].total-a[1].total);
+  let catRows='';
+  let gMat=0,gLab=0,gOth=0,gTot=0;
+  catEntries.forEach(([cat,v])=>{
+    gMat+=v.material;gLab+=v.labor;gOth+=v.other;gTot+=v.total;
+    catRows+=`<tr><td style="text-transform:capitalize">${e(cat)}</td><td style="text-align:right">${fmt(v.material)}</td><td style="text-align:right">${fmt(v.labor)}</td><td style="text-align:right">${fmt(v.other)}</td><td style="text-align:right;font-weight:600">${fmt(v.total)}</td></tr>`;
+  });
+  catRows+=`<tr style="border-top:2px solid #333;font-weight:700"><td>GRAND TOTAL</td><td style="text-align:right">${fmt(gMat)}</td><td style="text-align:right">${fmt(gLab)}</td><td style="text-align:right">${fmt(gOth)}</td><td style="text-align:right">${fmt(gTot)}</td></tr>`;
+
+  // --- Section 6: Top Vendors ---
+  const vendMap={};
+  renoExp.forEach(ex=>{
+    const v=(ex.vendor_name||'Unknown').trim();
+    vendMap[v]=(vendMap[v]||0)+(ex.amount||0);
+  });
+  const topVendors=Object.entries(vendMap).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  let vendRows='';
+  topVendors.forEach(([name,total])=>{vendRows+=`<tr><td>${e(name)}</td><td style="text-align:right">${fmt(total)}</td></tr>`;});
+
+  // --- Section 7: Draw History ---
+  let drawRows='';
+  let dReq=0,dFee=0,dRec=0;
+  renoDraws.forEach(dr=>{
+    const req=dr.amount_requested||0,fee=dr.draw_fee||0,rec=dr.amount_received||0;
+    dReq+=req;dFee+=fee;dRec+=rec;
+    const subD=dr.date_submitted?dt(dr.date_submitted):'—';
+    const disD=dr.date_disbursed?dt(dr.date_disbursed):'—';
+    let days='—';
+    if(dr.date_submitted&&dr.date_disbursed){days=Math.round((new Date(dr.date_disbursed+'T00:00:00')-new Date(dr.date_submitted+'T00:00:00'))/(864e5));}
+    drawRows+=`<tr><td>#${dr.draw_number}</td><td>${(dr.status||'preparing').replace(/_/g,' ')}</td><td style="text-align:right">${fmt(req)}</td><td style="text-align:right">${fmt(fee)}</td><td style="text-align:right">${fmt(rec)}</td><td>${subD}</td><td>${disD}</td><td style="text-align:center">${days}</td></tr>`;
+  });
+  drawRows+=`<tr style="border-top:2px solid #333;font-weight:700"><td colspan="2">TOTAL</td><td style="text-align:right">${fmt(dReq)}</td><td style="text-align:right">${fmt(dFee)}</td><td style="text-align:right">${fmt(dRec)}</td><td colspan="3"></td></tr>`;
+
+  // --- Section 8: Expense Ledger ---
+  let ledgerRows='';
+  let ledgerTotal=0;
+  const sortedExp=[...renoExp].sort((a,b)=>(a.expense_date||'').localeCompare(b.expense_date||''));
+  sortedExp.forEach(ex=>{
+    const amt=ex.amount||0;ledgerTotal+=amt;
+    const sl=ex.renovation_sow_lines;
+    ledgerRows+=`<tr><td>${dt(ex.expense_date)}</td><td>${sl?'#'+sl.line_number:'—'}</td><td>${e(ex.vendor_name||'—')}</td><td>${e(ex.description||'')}</td><td>${ex.expense_type||'other'}</td><td>${(ex.payment_method||'—').replace(/_/g,' ')}</td><td style="text-align:right">${fmt(amt)}</td></tr>`;
+  });
+  ledgerRows+=`<tr style="border-top:2px solid #333;font-weight:700"><td colspan="6">TOTAL</td><td style="text-align:right">${fmt(ledgerTotal)}</td></tr>`;
+
+  // --- Section 9: P&L ---
+  const renoActual=ov?.total_spent||totSpent;
+  const finCosts=(f?.total_interest_paid||0)+(f?.origination_fee_amount||0)+(f?.service_fee||0)+(f?.prorated_interest||0)+(f?.other_lender_fees||0);
+  const closingCosts=(f?.escrow_fee||0)+(f?.lenders_title_insurance||0)+(f?.recording_fees||0)+(f?.notary_doc_prep||0)+(f?.wire_fee||0);
+  const allIn=purchasePrice+renoActual+finCosts+closingCosts;
+  const targetArv=d.target_arv||d.arv||0;
+
+  // --- Build HTML ---
+  let html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>CPA Report — ${e(d.address)}</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:11px;color:#1a1a1a;line-height:1.5;padding:20px}
+.wrap{max-width:800px;margin:0 auto}
+h1{font-size:18px;font-weight:800;color:#1a1a1a;margin:0}
+h2{font-size:13px;font-weight:800;color:#d4af37;letter-spacing:2px;text-transform:uppercase;border-bottom:2px solid #d4af37;padding-bottom:4px;margin:24px 0 10px}
+table{width:100%;border-collapse:collapse;margin-bottom:16px}
+th,td{padding:4px 6px;border-bottom:1px solid #e5e5e5;text-align:left;font-size:10px}
+th{font-size:9px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #ccc}
+.hdr{text-align:center;padding:20px 0 16px;border-bottom:2px solid #1a1a1a;margin-bottom:20px}
+.hdr .co{font-size:10px;font-weight:800;letter-spacing:4px;color:#d4af37;margin-bottom:4px}
+.hdr .sub{font-size:11px;color:#666;margin-top:4px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.two .col{padding:8px 12px}
+.two .col+.col{border-left:1px solid #e5e5e5}
+.row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f0f0f0;font-size:10px}
+.row .lbl{color:#666}
+.row .val{font-weight:600}
+.box{border:1px solid #ddd;border-radius:4px;margin-bottom:16px;overflow:hidden}
+.sumbox{border:2px solid #1a1a1a;border-radius:4px;padding:12px 16px;margin-bottom:16px}
+.sumrow{display:flex;justify-content:space-between;padding:4px 0;font-size:11px}
+.sumrow.total{border-top:2px solid #1a1a1a;font-weight:800;font-size:12px;margin-top:4px;padding-top:8px}
+.sumrow.profit{color:#060;font-weight:800;font-size:13px}
+.footer{text-align:center;padding:16px 0;border-top:1px solid #ddd;margin-top:24px;font-size:9px;color:#999;letter-spacing:1px}
+@media print{body{padding:0}h2{break-after:avoid}table{break-inside:auto}tr{break-inside:avoid}}
+</style></head><body><div class="wrap">`;
+
+  // 1. Header
+  html+=`<div class="hdr"><div class="co">SOVEREIGN HOUSE LLC</div><h1>Deal Financial Report</h1><div class="sub">${e(d.address)}<br>Generated ${now}</div></div>`;
+
+  // 2. Property Summary
+  html+=`<h2>Property Summary</h2><div class="box"><div class="two"><div class="col">`;
+  html+=`<div class="row"><span class="lbl">Address</span><span class="val">${e(d.address||'')}</span></div>`;
+  if(d.community)html+=`<div class="row"><span class="lbl">Community</span><span class="val">${e(d.community)}</span></div>`;
+  if(d.mls_number)html+=`<div class="row"><span class="lbl">MLS#</span><span class="val">${e(d.mls_number)}</span></div>`;
+  if(d.sqft)html+=`<div class="row"><span class="lbl">Size</span><span class="val">${Number(d.sqft).toLocaleString()} sf</span></div>`;
+  if(d.beds||d.baths)html+=`<div class="row"><span class="lbl">Beds / Baths</span><span class="val">${d.beds||'—'} / ${d.baths||'—'}</span></div>`;
+  html+=`</div><div class="col">`;
+  if(d.list_price)html+=`<div class="row"><span class="lbl">List Price</span><span class="val">${fmt(d.list_price)}</span></div>`;
+  if(purchasePrice)html+=`<div class="row"><span class="lbl">Purchase Price</span><span class="val">${fmt(purchasePrice)}</span></div>`;
+  html+=`<div class="row"><span class="lbl">Status</span><span class="val">${(d.status||'').replace(/_/g,' ')}</span></div>`;
+  if(d.coe_date)html+=`<div class="row"><span class="lbl">COE Date</span><span class="val">${dt(d.coe_date)}</span></div>`;
+  html+=`</div></div></div>`;
+
+  // 3. Financing
+  if(f){
+    html+=`<h2>Financing</h2><div class="box"><div class="two"><div class="col">`;
+    if(f.lender_name)html+=`<div class="row"><span class="lbl">Lender</span><span class="val">${e(f.lender_name)}</span></div>`;
+    if(f.loan_number)html+=`<div class="row"><span class="lbl">Loan #</span><span class="val">${e(f.loan_number)}</span></div>`;
+    if(f.interest_rate)html+=`<div class="row"><span class="lbl">Rate</span><span class="val">${pct(f.interest_rate)} ${f.interest_rate_type||''}</span></div>`;
+    if(f.loan_term_months)html+=`<div class="row"><span class="lbl">Term</span><span class="val">${f.loan_term_months} months</span></div>`;
+    if(f.maturity_date)html+=`<div class="row"><span class="lbl">Maturity</span><span class="val">${dt(f.maturity_date)}</span></div>`;
+    if(f.funded_date)html+=`<div class="row"><span class="lbl">Funded</span><span class="val">${dt(f.funded_date)}</span></div>`;
+    if(f.funded_principal)html+=`<div class="row"><span class="lbl">Funded Principal</span><span class="val">${fmt(f.funded_principal)}</span></div>`;
+    html+=`</div><div class="col">`;
+    if(f.rehab_holdback)html+=`<div class="row"><span class="lbl">Rehab Holdback</span><span class="val">${fmt(f.rehab_holdback)}</span></div>`;
+    if(f.total_loan_amount)html+=`<div class="row"><span class="lbl">Total Loan</span><span class="val">${fmt(f.total_loan_amount)}</span></div>`;
+    if(f.down_payment)html+=`<div class="row"><span class="lbl">Down Payment</span><span class="val">${fmt(f.down_payment)}</span></div>`;
+    if(f.total_cash_to_close)html+=`<div class="row"><span class="lbl">Cash to Close</span><span class="val">${fmt(f.total_cash_to_close)}</span></div>`;
+    if(f.origination_fee_amount)html+=`<div class="row"><span class="lbl">Origination Fee</span><span class="val">${fmt(f.origination_fee_amount)}</span></div>`;
+    if(f.monthly_interest_payment)html+=`<div class="row"><span class="lbl">Monthly Payment</span><span class="val">${fmt(f.monthly_interest_payment)}</span></div>`;
+    if(f.total_interest_paid)html+=`<div class="row"><span class="lbl">Total Interest Paid</span><span class="val">${fmt(f.total_interest_paid)}</span></div>`;
+    html+=`</div></div></div>`;
+  }
+
+  // 4. Budget vs Actual
+  html+=`<h2>Renovation Budget vs Actual</h2>`;
+  html+=`<table><thead><tr><th>#</th><th>Category</th><th>Description</th><th style="text-align:right">Lender Approved</th><th style="text-align:right">Planned</th><th style="text-align:right">Actual Spent</th><th style="text-align:right">Drawn</th><th style="text-align:right">Variance</th></tr></thead><tbody>${budgetRows}</tbody></table>`;
+
+  // 5. Expenses by Category
+  html+=`<h2>Expenses by Category</h2>`;
+  html+=`<table><thead><tr><th>Category</th><th style="text-align:right">Materials</th><th style="text-align:right">Labor</th><th style="text-align:right">Other</th><th style="text-align:right">Total</th></tr></thead><tbody>${catRows}</tbody></table>`;
+
+  // 6. Top Vendors
+  if(topVendors.length){
+    html+=`<h2>Top Vendors</h2>`;
+    html+=`<table><thead><tr><th>Vendor</th><th style="text-align:right">Total Paid</th></tr></thead><tbody>${vendRows}</tbody></table>`;
+  }
+
+  // 7. Draw History
+  if(renoDraws.length){
+    html+=`<h2>Draw History</h2>`;
+    html+=`<table><thead><tr><th>Draw</th><th>Status</th><th style="text-align:right">Requested</th><th style="text-align:right">Fee</th><th style="text-align:right">Received</th><th>Submitted</th><th>Disbursed</th><th style="text-align:center">Days</th></tr></thead><tbody>${drawRows}</tbody></table>`;
+  }
+
+  // 8. Complete Expense Ledger
+  html+=`<h2>Complete Expense Ledger</h2>`;
+  html+=`<table><thead><tr><th>Date</th><th>SOW#</th><th>Vendor</th><th>Description</th><th>Type</th><th>Payment</th><th style="text-align:right">Amount</th></tr></thead><tbody>${ledgerRows}</tbody></table>`;
+
+  // 9. Deal Summary P&L
+  html+=`<h2>Deal Summary</h2><div class="sumbox">`;
+  html+=`<div class="sumrow"><span>Purchase Price</span><span>${fmt(purchasePrice)}</span></div>`;
+  html+=`<div class="sumrow"><span>Renovation (Actual)</span><span>${fmt(renoActual)}</span></div>`;
+  html+=`<div class="sumrow"><span>Financing Costs</span><span>${fmt(finCosts)}</span></div>`;
+  html+=`<div class="sumrow"><span>Closing Costs</span><span>${fmt(closingCosts)}</span></div>`;
+  html+=`<div class="sumrow total"><span>All-In Cost</span><span>${fmt(allIn)}</span></div>`;
+  if(targetArv){
+    html+=`<div class="sumrow" style="margin-top:8px"><span>Target ARV</span><span>${fmt(targetArv)}</span></div>`;
+    html+=`<div class="sumrow profit"><span>Estimated Profit</span><span>${fmt(targetArv-allIn)}</span></div>`;
+  }
+  html+=`</div>`;
+
+  // 10. Footer
+  html+=`<div class="footer">SOVEREIGN HOUSE LLC &middot; CONFIDENTIAL &middot; ${now}</div>`;
+  html+=`</div></body></html>`;
+
+  const win=window.open('','_blank');
+  win.document.write(html);
+  win.document.close();
+  setTimeout(()=>win.print(),500);
 }
 
 // ═══ HELPERS ═══
