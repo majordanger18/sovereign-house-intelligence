@@ -687,10 +687,11 @@ async function parseBid(){
     const res=await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:content}]})
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:8192,messages:[{role:"user",content:content}]})
     });
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
+    if(data.stop_reason==="max_tokens"){console.warn("Bid response truncated at max_tokens — sections may be missing");showCtToast("Warning: bid response was truncated, some sections may be missing");}
     const parsed=await robustParseJSON(data,apiKey);
     console.log("Parsed bid data:", parsed);
 
