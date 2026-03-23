@@ -749,7 +749,7 @@ async function saveEditedExpense(expId){
 // ═══ RECEIPT PARSER ═══
 async function openReceiptUpload(){
   const input=document.createElement('input');
-  input.type='file';input.accept='image/*,.pdf';input.capture='environment';
+  input.type='file';input.accept='image/*,.pdf';
   input.onchange=async function(){const file=input.files[0];if(!file)return;await parseReceipt(file);};
   input.click();
 }
