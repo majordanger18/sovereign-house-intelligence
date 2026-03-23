@@ -81,7 +81,7 @@ function renderDirectory(el){
   h+=`<select id="ctSF" class="cinput ct-fsel" onchange="ctStatusF=this.value;renderCtSub()"><option value="active"${ctStatusF==="active"?" selected":""}>Active</option><option value="inactive"${ctStatusF==="inactive"?" selected":""}>Inactive</option><option value="do_not_use"${ctStatusF==="do_not_use"?" selected":""}>Do Not Use</option><option value="all"${ctStatusF==="all"?" selected":""}>All</option></select></div>`;
 
   // + Add Contact button
-  h+=`<div style="margin:12px 0"><button onclick="openCtForm()" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">+ Add Contact</button></div>`;
+  h+=`<div style="margin:12px 0;display:flex;gap:8px"><button onclick="openCtForm()" class="btn" style="flex:1;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">+ Add Contact</button><button onclick="openContactUpload()" class="btn" style="padding:8px 16px;font-size:12px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:700">📷 Scan Contact</button></div>`;
 
   // Filter contacts
   let list=[...ctList];
@@ -524,6 +524,72 @@ async function saveBid(editId){
     closeCtModal();showCtToast(editId?"Bid updated":"Bid logged");
     await loadCtData();renderCtSub();
   }catch(e){console.error("Save bid failed:",e);alert("Failed to save bid.");}
+}
+
+// ═══ CONTACT SCANNER ═══
+function openContactUpload(){
+  const input=document.createElement('input');
+  input.type='file';input.accept='image/*,.pdf';
+  input.onchange=async function(){const file=input.files[0];if(!file)return;await parseContact(file);};
+  input.click();
+}
+
+async function parseContact(file){
+  showCtToast("Reading contact info...");
+
+  let apiKey=localStorage.getItem("sh_claude_key");
+  if(!apiKey){
+    apiKey=prompt("Enter your Claude API key:");
+    if(!apiKey)return;
+    localStorage.setItem("sh_claude_key",apiKey);
+  }
+
+  const buf=await file.arrayBuffer();
+  const bytes=new Uint8Array(buf);
+  let binary="";const chunk=8192;
+  for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+  const b64=btoa(binary);
+
+  const mediaType=file.type.startsWith('image/')?file.type:'application/pdf';
+  const docType=file.type.startsWith('image/')?'image':'document';
+
+  const content=[
+    {type:docType,source:{type:"base64",media_type:mediaType,data:b64}},
+    {type:"text",text:"Extract contact information from this image or document. Return ONLY a JSON object, no markdown, no explanation:\n\n{\"first_name\":\"First name\",\"last_name\":\"Last name\",\"company\":\"Company name\",\"contact_type\":\"best guess from: contractor, subcontractor, supplier, lender, agent, inspector, insurance, title_escrow, designer, other\",\"phone\":\"Phone number formatted as (XXX) XXX-XXXX\",\"email\":\"Email address\",\"address\":\"Street address if visible\",\"city\":\"City\",\"state\":\"State abbreviation\",\"zip\":\"ZIP code\",\"website\":\"Website if visible\",\"license_number\":\"License number if visible\",\"specialty_tags\":[\"best guess tags like: general_contractor, plumbing, electrical, tile, etc.\"],\"notes\":\"Any other relevant info found\"}\n\nExtract everything you can find. If a field isn't visible, use null. Make your best guess on contact_type and specialty_tags based on context clues. Return ONLY the JSON."}
+  ];
+
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:content}]})
+    });
+    if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
+    const data=await res.json();
+    const text=data.content?.[0]?.text||"";
+    const jm=text.match(/\{[\s\S]*\}/);
+    if(!jm)throw new Error("Could not parse response");
+    const parsed=JSON.parse(jm[0]);
+    prefillContactForm(parsed);
+  }catch(e){
+    console.error("Contact parse error:",e);
+    showCtToast("Failed to parse contact: "+e.message);
+    openCtForm();
+  }
+}
+
+function prefillContactForm(parsed){
+  openCtForm();
+  setTimeout(()=>{
+    const fields={cfFirst:parsed.first_name,cfLast:parsed.last_name,cfCo:parsed.company,cfType:parsed.contact_type,cfPhone:parsed.phone,cfEmail:parsed.email,cfAddr:parsed.address,cfCity:parsed.city,cfState:parsed.state,cfZip:parsed.zip,cfWeb:parsed.website,cfLic:parsed.license_number,cfRef:null,cfNotes:parsed.notes};
+    for(const[id,val]of Object.entries(fields)){
+      if(val!=null){const el=document.getElementById(id);if(el)el.value=val;}
+    }
+    if(parsed.specialty_tags&&parsed.specialty_tags.length){
+      const el=document.getElementById("cfTags");if(el)el.value=parsed.specialty_tags.join(", ");
+    }
+    showCtToast("Contact info parsed — review and save");
+  },200);
 }
 
 // ═══ BID UPLOAD + AI PARSER ═══
