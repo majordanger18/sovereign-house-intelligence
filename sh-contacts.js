@@ -425,7 +425,7 @@ function renderBidsV(el){
         h+=`<td class="reno-hm">${b.bid_accuracy_pct!=null?`<span style="color:${baC};font-weight:700">${Math.round(b.bid_accuracy_pct)}%</span>`:"—"}</td>`;
         h+=`<td class="reno-hm">${b.overall_rating?renderStars(b.overall_rating):"—"}</td>`;
       }
-      h+=`<td style="white-space:nowrap">${b.bid_document_url?`<a href="${esc(b.bid_document_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none;margin-right:6px">📄 Bid</a>`:""}${hasCmp?`<button onclick="event.stopPropagation();viewBidComparison('${b.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">View SOW</button>`:""}</td>`;
+      h+=`<td style="white-space:nowrap">${b.bid_document_url?`<a href="${esc(b.bid_document_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none;margin-right:6px">📄 Bid</a>`:""}${hasCmp?`<button onclick="event.stopPropagation();viewBidComparison('${b.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">View SOW</button>`:""}<button onclick="event.stopPropagation();deleteBid('${b.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;opacity:0.7;padding:4px 8px">Delete</button></td>`;
       h+=`</tr>`;
     });
     h+=`</tbody></table></div></div>`;
@@ -672,9 +672,15 @@ async function parseBid(){
   const mediaType=file.type.startsWith('image/')?file.type:'application/pdf';
   const docType=file.type.startsWith('image/')?'image':'document';
 
+  // Fetch SOW lines BEFORE Claude call so we can include them in the prompt
+  let sowLines=[];
+  try{const sw=await sb("renovation_sow_lines?deal_id=eq."+dealId+"&order=line_number&lender_approved=gt.0");sowLines=Array.isArray(sw)?sw:[];}catch(e){}
+
+  const sowContext=sowLines.length?"\n\nALSO: Here are the lender-approved SOW budget lines for this project. For each section in the bid, tell me which SOW line(s) it maps to. A section can map to one or more SOW lines. Multiple bid sections CAN map to the same SOW line (e.g. Primary Bathroom and Secondary Bathrooms both map to the Bathrooms SOW line). Include the mapping in each section object.\n\nSOW LINES:\n"+sowLines.map(l=>"#"+l.line_number+" "+l.category+" — "+l.description+" ($"+l.lender_approved+")").join("\n")+"\n\nAdd to each section object in your response:\n  \"sow_line_matches\": [{\"line_number\": 14, \"description\": \"Bathrooms\", \"budget\": 34000}]\n\nIf a section has NO matching SOW line, set sow_line_matches to an empty array [].\nIf a section spans multiple SOW lines (like Kitchen + Appliances), include all matches.":"";
+
   const content=[
     {type:docType,source:{type:"base64",media_type:mediaType,data:b64}},
-    {type:"text",text:"Parse this contractor bid document. The bid is organized into SECTIONS (bold headers like DEMOLITION, KITCHEN RENOVATION, etc.) with individual line items under each section.\n\nReturn ONLY a JSON object — no markdown, no backticks, no explanation:\n\n{\"contractor_name\":\"Company name\",\"contractor_address\":\"Address if visible\",\"contractor_phone\":\"Phone if visible\",\"bid_date\":\"YYYY-MM-DD or null\",\"project_address\":\"Project address if visible\",\"sections\":[{\"section_name\":\"DEMOLITION\",\"items\":[{\"item_number\":1,\"description\":\"Dumpster Rental and Debris Removal\",\"amount\":1800},{\"item_number\":2,\"description\":\"Remove all Existing Flooring\",\"amount\":3200}],\"section_total\":12100}],\"subtotal\":350800,\"overhead_pct\":15,\"overhead_amount\":52620,\"total_bid\":403420,\"tbd_items\":[\"description of any TBD items\"],\"notes\":\"Any payment terms or conditions\"}\n\nRULES:\n- Preserve EXACT section groupings from the document bold headers\n- section_total = sum of all item amounts in that section\n- Items marked TBD get amount: 0 and go in tbd_items array\n- Overhead/profit is separate, NOT inside any section\n- subtotal = sum of all section_totals before overhead\n- total_bid = subtotal + overhead_amount\n- Return ONLY valid JSON"}
+    {type:"text",text:"Parse this contractor bid document. The bid is organized into SECTIONS (bold headers like DEMOLITION, KITCHEN RENOVATION, etc.) with individual line items under each section.\n\nReturn ONLY a JSON object — no markdown, no backticks, no explanation:\n\n{\"contractor_name\":\"Company name\",\"contractor_address\":\"Address if visible\",\"contractor_phone\":\"Phone if visible\",\"bid_date\":\"YYYY-MM-DD or null\",\"project_address\":\"Project address if visible\",\"sections\":[{\"section_name\":\"DEMOLITION\",\"items\":[{\"item_number\":1,\"description\":\"Dumpster Rental and Debris Removal\",\"amount\":1800},{\"item_number\":2,\"description\":\"Remove all Existing Flooring\",\"amount\":3200}],\"section_total\":12100,\"sow_line_matches\":[{\"line_number\":2,\"description\":\"Demolition\",\"budget\":12000}]}],\"subtotal\":350800,\"overhead_pct\":15,\"overhead_amount\":52620,\"total_bid\":403420,\"tbd_items\":[\"description of any TBD items\"],\"notes\":\"Any payment terms or conditions\"}\n\nRULES:\n- Preserve EXACT section groupings from the document bold headers\n- section_total = sum of all item amounts in that section\n- Items marked TBD get amount: 0 and go in tbd_items array\n- Overhead/profit is separate, NOT inside any section\n- subtotal = sum of all section_totals before overhead\n- total_bid = subtotal + overhead_amount\n- Return ONLY valid JSON"+sowContext}
   ];
 
   try{
@@ -687,12 +693,8 @@ async function parseBid(){
     const data=await res.json();
     const parsed=await robustParseJSON(data,apiKey);
 
-    // Fetch SOW lines for comparison
-    let sowLines=[];
-    try{const sw=await sb("renovation_sow_lines?deal_id=eq."+dealId+"&order=line_number&lender_approved=gt.0");sowLines=Array.isArray(sw)?sw:[];}catch(e){}
-
-    // Section-to-SOW mapping
-    const comparison=buildSectionComparison(parsed,sowLines);
+    // Build comparison from Claude's sow_line_matches
+    const comparison=buildSectionComparison(parsed);
     const unmatchedSOW=sowLines.filter(s=>!_bidUsedSOW.has(s.line_number)&&(s.lender_approved||0)>0);
 
     renderBidReview(parsed,comparison,unmatchedSOW,dealId,contactId);
@@ -703,75 +705,39 @@ async function parseBid(){
   }
 }
 
-// ═══ SECTION-TO-SOW MAPPING ═══
+// ═══ SECTION-TO-SOW COMPARISON (Claude-driven) ═══
 let _bidUsedSOW=new Set();
 
-const BID_SOW_MAP={
-  'demolition':[2],'demo':[2],
-  'foyer':[8,9,10],'entry':[8,9,10],
-  'bar':[21],'feature wall':[21],'niche':[21],
-  'kitchen':[13],'pantry':[13],'cabinetry':[13,18],'cabinetry & appliance':[13,18],
-  'appliance':[18],
-  'family room':[21,16],'family':[21,16],
-  'primary bedroom':[21],
-  'primary bathroom':[14,6],
-  'secondary bathroom':[14],
-  'laundry':[14,21],
-  'flooring':[12],
-  'whole house':[9,11,8],
-  'electrical':[16],
-  'exterior':[5],
-  'landscaping':[19],'landscape':[19],
-  'pool':[19],
-  'mechanical':[17],'hvac':[17],
-  'plumbing':[15],
-  'window':[6],'windows':[6],
-  'paint':[11],'painting':[11],
-  'roof':[4],'roofing':[4],
-  'garage':[7],
-  'foundation':[3],
-  'permits':[1],
-  'insulation':[10],
-  'drywall':[9],
-  'framing':[8],
-  'doors':[21],'hardware':[21],
-  'cleaning':[21],
-  'cabinets':[13],'countertops':[13],
-  'tile':[14]
-};
-
-function mapSectionToSOW(sectionName,sowLines){
-  const name=sectionName.toLowerCase();
-  const matched=[];
-  for(const[keyword,lineNums]of Object.entries(BID_SOW_MAP)){
-    if(name.includes(keyword)){
-      lineNums.forEach(num=>{
-        const sow=sowLines.find(s=>s.line_number===num);
-        if(sow&&!matched.find(m=>m.line_number===num))matched.push(sow);
-      });
-    }
-  }
-  return matched;
-}
-
-function buildSectionComparison(parsed,sowLines){
+function buildSectionComparison(parsed){
   _bidUsedSOW=new Set();
+  const _firstOwner={};// track which section first claimed each SOW line
   return(parsed.sections||[]).map(section=>{
-    const sowMatches=mapSectionToSOW(section.section_name,sowLines).filter(s=>!_bidUsedSOW.has(s.line_number));
-    sowMatches.forEach(s=>_bidUsedSOW.add(s.line_number));
-    const sowTotal=sowMatches.reduce((sum,s)=>sum+(s.lender_approved||0),0);
-    const delta=section.section_total-sowTotal;
+    const allMatches=section.sow_line_matches||[];
+    // De-duplicate: only count SOW budget on the FIRST section that maps to it
+    const newMatches=[];const dupeMatches=[];
+    allMatches.forEach(m=>{
+      if(!_bidUsedSOW.has(m.line_number)){
+        _bidUsedSOW.add(m.line_number);
+        _firstOwner[m.line_number]=section.section_name;
+        newMatches.push(m);
+      }else{
+        dupeMatches.push({...m,counted_in:_firstOwner[m.line_number]});
+      }
+    });
+    const sowTotal=newMatches.reduce((sum,m)=>sum+(m.budget||0),0);
+    const delta=(section.section_total||0)-sowTotal;
     const deltaPct=sowTotal>0?Math.round((delta/sowTotal)*100):null;
     return{
       section_name:section.section_name,
-      bid_total:section.section_total,
+      bid_total:section.section_total||0,
       item_count:(section.items||[]).length,
       items:section.items||[],
-      sow_matches:sowMatches.map(s=>({line_number:s.line_number,description:s.description,lender_approved:s.lender_approved})),
+      sow_matches:newMatches,
+      sow_dupes:dupeMatches,
       sow_total:sowTotal,
       delta:delta,
       delta_pct:deltaPct,
-      has_sow_match:sowMatches.length>0
+      has_sow_match:newMatches.length>0||dupeMatches.length>0
     };
   });
 }
@@ -784,10 +750,8 @@ function bidDeltaDisplay(c){
   return{color:'#64748b',text:'≈ '+$r(c.delta)};
 }
 
-// ═══ BID REVIEW DISPLAY ═══
-function renderBidReview(parsed,comparison,unmatchedSOW,dealId,contactId){
-  const m=document.getElementById("contactsModal");
-  const ctrName=parsed.contractor_name||ctList.find(c=>c.id===contactId)?.display_name||"Contractor";
+// ═══ SHARED BID COMPARISON RENDERER ═══
+function renderBidComparisonBody(parsed,comparison,unmatchedSOW){
   const subtotal=parsed.subtotal||0;
   const overhead=parsed.overhead_amount||0;
   const overheadPct=parsed.overhead_pct||0;
@@ -796,34 +760,33 @@ function renderBidReview(parsed,comparison,unmatchedSOW,dealId,contactId){
   const totalDelta=totalBid-totalSOW;
   const unmatchedBidTotal=comparison.filter(c=>!c.has_sow_match).reduce((s,c)=>s+c.bid_total,0);
   const tbd=parsed.tbd_items||[];
-
-  let h=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button>`;
-
-  // Header
-  h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">BID COMPARISON</div>`;
-  h+=`<div style="font-size:18px;font-weight:800;margin-bottom:4px">${esc(ctrName)}</div>`;
-  h+=`<div style="font-size:13px;color:#94a3b8;margin-bottom:16px">Subtotal: ${$r(subtotal)} + ${overheadPct}% Overhead: ${$r(overhead)} = <strong style="color:#f1f5f9">${$r(totalBid)}</strong></div>`;
+  let h='';
 
   // Section rows
   comparison.forEach(c=>{
     const dd=bidDeltaDisplay(c);
     const noMatch=!c.has_sow_match;
-    const sowNums=c.sow_matches.map(s=>'#'+s.line_number).join(', ')||'—';
+    const sowNums=(c.sow_matches||[]).map(s=>'#'+s.line_number).join(', ')||'—';
     h+=`<div style="border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-bottom:6px;overflow:hidden${noMatch?';border-left:3px solid #f59e0b':''}">`;
     h+=`<div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:rgba(255,255,255,0.02)">`;
     h+=`<div style="flex:1"><div style="font-size:12px;font-weight:700;color:#e2e8f0">${esc(c.section_name)}</div>`;
     h+=`<div style="font-size:10px;color:#64748b;margin-top:2px">${c.item_count} items → SOW ${noMatch?'<span style="color:#f59e0b">NOT IN SOW</span>':esc(sowNums)}</div></div>`;
     h+=`<div style="text-align:right"><div style="font-size:13px;font-weight:700;color:#f1f5f9">${$r(c.bid_total)}</div>`;
     h+=`<div style="font-size:10px;color:${dd.color};font-weight:700">${dd.text}</div></div>`;
-    if(c.has_sow_match)h+=`<div style="text-align:right;min-width:60px;margin-left:8px"><div style="font-size:10px;color:#64748b">SOW</div><div style="font-size:12px;color:#94a3b8">${$r(c.sow_total)}</div></div>`;
+    if(c.sow_matches&&c.sow_matches.length)h+=`<div style="text-align:right;min-width:60px;margin-left:8px"><div style="font-size:10px;color:#64748b">SOW</div><div style="font-size:12px;color:#94a3b8">${$r(c.sow_total)}</div></div>`;
     h+=`</div>`;
     // Expandable items
     h+=`<div style="display:none;padding:8px 12px;border-top:1px solid rgba(255,255,255,0.04)">`;
     (c.items||[]).forEach(item=>{
       h+=`<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px;color:#94a3b8"><span>${esc(item.description||'')}</span><span>${item.amount?$r(item.amount):'TBD'}</span></div>`;
     });
-    if(c.sow_matches.length){
-      h+=`<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.04);font-size:10px;color:#64748b">SOW matches: ${c.sow_matches.map(s=>'#'+s.line_number+' '+esc(s.description)+' ('+$r(s.lender_approved)+')').join(' · ')}</div>`;
+    if(c.sow_matches&&c.sow_matches.length){
+      h+=`<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.04);font-size:10px;color:#64748b">SOW matches: ${c.sow_matches.map(s=>'#'+s.line_number+' '+esc(s.description||'')+' ('+$r(s.budget||s.lender_approved)+')').join(' · ')}</div>`;
+    }
+    if(c.sow_dupes&&c.sow_dupes.length){
+      c.sow_dupes.forEach(d=>{
+        h+=`<div style="font-size:10px;color:#475569;margin-top:2px">SOW #${d.line_number} (${$r(d.budget||0)} — counted in ${esc(d.counted_in||'earlier section')})</div>`;
+      });
     }
     h+=`</div></div>`;
   });
@@ -842,10 +805,10 @@ function renderBidReview(parsed,comparison,unmatchedSOW,dealId,contactId){
   }
 
   // Unmatched SOW lines
-  if(unmatchedSOW.length){
+  if(unmatchedSOW&&unmatchedSOW.length){
     h+=`<div style="margin-top:8px"><div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:1px;margin-bottom:4px">SOW LINES NOT IN THIS BID</div>`;
     unmatchedSOW.forEach(s=>{
-      h+=`<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px"><span style="color:#64748b">#${s.line_number} ${esc(s.description||'')}</span><span style="color:#64748b">${$r(s.lender_approved)}</span></div>`;
+      h+=`<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px"><span style="color:#64748b">#${s.line_number} ${esc(s.description||'')}</span><span style="color:#64748b">${$r(s.lender_approved||s.budget)}</span></div>`;
     });
     h+=`</div>`;
   }
@@ -862,8 +825,23 @@ function renderBidReview(parsed,comparison,unmatchedSOW,dealId,contactId){
   if(unmatchedBidTotal>0)h+=`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span style="color:#64748b">Items NOT in SOW</span><span style="color:#f59e0b">${$r(unmatchedBidTotal)}</span></div>`;
   if(tbd.length)h+=`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span style="color:#64748b">TBD (unpriced)</span><span style="color:#eab308">${tbd.length} item${tbd.length>1?'s':''}</span></div>`;
   h+=`</div>`;
+  return h;
+}
 
-  // Save button
+// ═══ BID REVIEW DISPLAY (after fresh parse) ═══
+function renderBidReview(parsed,comparison,unmatchedSOW,dealId,contactId){
+  const m=document.getElementById("contactsModal");
+  const ctrName=parsed.contractor_name||ctList.find(c=>c.id===contactId)?.display_name||"Contractor";
+  const subtotal=parsed.subtotal||0;
+  const overhead=parsed.overhead_amount||0;
+  const overheadPct=parsed.overhead_pct||0;
+  const totalBid=parsed.total_bid||subtotal+overhead;
+
+  let h=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button>`;
+  h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">BID COMPARISON</div>`;
+  h+=`<div style="font-size:18px;font-weight:800;margin-bottom:4px">${esc(ctrName)}</div>`;
+  h+=`<div style="font-size:13px;color:#94a3b8;margin-bottom:16px">Subtotal: ${$r(subtotal)} + ${overheadPct}% Overhead: ${$r(overhead)} = <strong style="color:#f1f5f9">${$r(totalBid)}</strong></div>`;
+  h+=renderBidComparisonBody(parsed,comparison,unmatchedSOW);
   h+=`<button onclick="saveParsedBid()" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;margin-top:12px">Save Bid</button>`;
   h+=`</div>`;
 
@@ -903,11 +881,11 @@ async function saveParsedBid(){
 
 // ═══ VIEW SAVED BID COMPARISON ═══
 function viewBidComparison(bidId){
-  const b=ctBids.find(x=>x.id===bidId);if(!b||!b.sow_comparison)return;
-  const comparison=Array.isArray(b.sow_comparison)?b.sow_comparison:[];
-  if(!comparison.length)return;
-  const ctrName=b.contacts?.display_name||"Contractor";
+  const b=ctBids.find(x=>x.id===bidId);if(!b)return;
   const parsed=b.parsed_line_items||{};
+  const comparison=Array.isArray(b.sow_comparison)?b.sow_comparison:[];
+  if(!comparison.length&&!parsed.sections)return;
+  const ctrName=b.contacts?.display_name||"Contractor";
   const subtotal=parsed.subtotal||comparison.reduce((s,c)=>s+(c.bid_total||0),0);
   const overhead=parsed.overhead_amount||0;
   const overheadPct=parsed.overhead_pct||0;
@@ -918,37 +896,8 @@ function viewBidComparison(bidId){
   h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">BID COMPARISON</div>`;
   h+=`<div style="font-size:18px;font-weight:800;margin-bottom:4px">${esc(ctrName)}</div>`;
   h+=`<div style="font-size:13px;color:#94a3b8;margin-bottom:16px">Subtotal: ${$r(subtotal)} + ${overheadPct}% Overhead: ${$r(overhead)} = <strong style="color:#f1f5f9">${$r(totalBid)}</strong></div>`;
-
-  // Render section rows from saved comparison
-  comparison.forEach(c=>{
-    const dd=bidDeltaDisplay(c);
-    const noMatch=!c.has_sow_match;
-    const sowNums=(c.sow_matches||[]).map(s=>'#'+s.line_number).join(', ')||'—';
-    h+=`<div style="border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-bottom:6px;overflow:hidden${noMatch?';border-left:3px solid #f59e0b':''}">`;
-    h+=`<div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:rgba(255,255,255,0.02)">`;
-    h+=`<div style="flex:1"><div style="font-size:12px;font-weight:700;color:#e2e8f0">${esc(c.section_name||'')}</div>`;
-    h+=`<div style="font-size:10px;color:#64748b;margin-top:2px">${c.item_count||0} items → SOW ${noMatch?'<span style="color:#f59e0b">NOT IN SOW</span>':esc(sowNums)}</div></div>`;
-    h+=`<div style="text-align:right"><div style="font-size:13px;font-weight:700;color:#f1f5f9">${$r(c.bid_total)}</div>`;
-    h+=`<div style="font-size:10px;color:${dd.color};font-weight:700">${dd.text}</div></div>`;
-    if(c.has_sow_match)h+=`<div style="text-align:right;min-width:60px;margin-left:8px"><div style="font-size:10px;color:#64748b">SOW</div><div style="font-size:12px;color:#94a3b8">${$r(c.sow_total)}</div></div>`;
-    h+=`</div>`;
-    h+=`<div style="display:none;padding:8px 12px;border-top:1px solid rgba(255,255,255,0.04)">`;
-    (c.items||[]).forEach(item=>{
-      h+=`<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px;color:#94a3b8"><span>${esc(item.description||'')}</span><span>${item.amount?$r(item.amount):'TBD'}</span></div>`;
-    });
-    h+=`</div></div>`;
-  });
-
-  // Summary
-  const totalSOW=comparison.reduce((s,c)=>s+(c.sow_total||0),0);
-  const totalDelta=totalBid-totalSOW;
-  const dc=totalDelta>0?'#ef4444':totalDelta<0?'#22c55e':'#64748b';
-  h+=`<div style="margin-top:12px;padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08)">`;
-  h+=`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-top:1px solid rgba(255,255,255,0.06);padding-top:8px"><span style="color:#f1f5f9;font-weight:800">CONTRACTOR TOTAL</span><span style="color:#f1f5f9;font-weight:800">${$r(totalBid)}</span></div>`;
-  h+=`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span style="color:#64748b">Lender SOW Approved</span><span style="color:#94a3b8">${$r(totalSOW)}</span></div>`;
-  h+=`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span style="color:#64748b">Delta</span><span style="color:${dc};font-weight:700">${totalDelta>0?'+':''}${$r(totalDelta)}</span></div>`;
-  h+=`</div></div>`;
-
+  h+=renderBidComparisonBody(parsed,comparison,null);
+  h+=`</div>`;
   m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
 }
 
@@ -1007,6 +956,16 @@ function compareDealBids(dealId){
   h+=`</tr></tbody></table></div></div>`;
 
   m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
+}
+
+// ═══ DELETE BID ═══
+async function deleteBid(bidId){
+  if(!confirm("Delete this bid?"))return;
+  try{
+    await fetch(SB+"/rest/v1/contractor_bids?id=eq."+bidId,{method:"DELETE",headers:HD});
+    showCtToast("Bid deleted");
+    await loadCtData();renderCtSub();
+  }catch(e){console.error("Delete bid failed:",e);}
 }
 
 // ═══ HELPERS ═══
