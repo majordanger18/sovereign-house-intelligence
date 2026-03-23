@@ -1331,13 +1331,13 @@ function renderTasksV(el){
   const all=renoTasks;
   const todo=all.filter(t=>t.status==='todo').length;
   const inp=all.filter(t=>t.status==='in_progress').length;
-  const blk=all.filter(t=>t.status==='blocked').length;
+  const blk=all.filter(t=>t.status==='waiting').length;
   const done=all.filter(t=>t.status==='done').length;
 
   let h='';
 
   // Summary cards
-  h+=`<div class="reno-sgrid"><div class="reno-scard"><div class="reno-sl">TO DO</div><div class="reno-sv" style="color:#94a3b8">${todo}</div></div><div class="reno-scard"><div class="reno-sl">IN PROGRESS</div><div class="reno-sv" style="color:#3b82f6">${inp}</div></div><div class="reno-scard"><div class="reno-sl">BLOCKED</div><div class="reno-sv" style="color:#ef4444">${blk}</div></div><div class="reno-scard"><div class="reno-sl">DONE</div><div class="reno-sv" style="color:#22c55e">${done}</div></div></div>`;
+  h+=`<div class="reno-sgrid"><div class="reno-scard"><div class="reno-sl">TO DO</div><div class="reno-sv" style="color:#94a3b8">${todo}</div></div><div class="reno-scard"><div class="reno-sl">IN PROGRESS</div><div class="reno-sv" style="color:#3b82f6">${inp}</div></div><div class="reno-scard"><div class="reno-sl">WAITING ON</div><div class="reno-sv" style="color:#ef4444">${blk}</div></div><div class="reno-scard"><div class="reno-sl">DONE</div><div class="reno-sv" style="color:#22c55e">${done}</div></div></div>`;
 
   // Filter row — categories
   const cats=[{k:"all",l:"All"},{k:"financing",l:"Financing"},{k:"contractor",l:"Contractor"},{k:"materials",l:"Materials"},{k:"design",l:"Design"},{k:"permits",l:"Permits"},{k:"administrative",l:"Admin"},{k:"listing_prep",l:"Listing"}];
@@ -1364,7 +1364,7 @@ function renderTasksV(el){
   else if(renoTaskFilter.assignee==='lisa')ft=ft.filter(t=>t.assigned_to_email==='lisa@lisaahunt.com');
 
   // Sort: urgent first, then by status order, then sort_order
-  const statOrd={todo:1,in_progress:2,blocked:3};
+  const statOrd={todo:1,in_progress:2,waiting:3};
   const priOrd={urgent:0,high:1,normal:2,low:3};
   ft.sort((a,b)=>(priOrd[a.priority]??2)-(priOrd[b.priority]??2)||(statOrd[a.status]??4)-(statOrd[b.status]??4)||(a.sort_order||0)-(b.sort_order||0));
 
@@ -1388,7 +1388,7 @@ function renderTasksV(el){
 
 function renderTaskCard(t){
   const isDone=t.status==='done';
-  const isBlocked=t.status==='blocked';
+  const isBlocked=t.status==='waiting';
   const isUrgent=t.priority==='urgent';
   const cc=TASK_CAT_COLORS[t.category]||"#64748b";
   const name=taskAssigneeName(t.assigned_to_email);
@@ -1407,7 +1407,7 @@ function renderTaskCard(t){
   let h=`<div class="task-card${isDone?' done':''}${isUrgent&&!isDone?' urgent':''}">`;
 
   // Checkbox
-  h+=`<div class="task-check${isDone?' done':''}${isBlocked?' blocked':''}" onclick="event.stopPropagation();toggleTaskDone('${t.id}','${t.status}')">${isDone?'✓':isBlocked?'!':''}</div>`;
+  h+=`<div class="task-check${isDone?' done':''}${isBlocked?' waiting':''}" onclick="event.stopPropagation();toggleTaskDone('${t.id}','${t.status}')">${isDone?'✓':isBlocked?'!':''}</div>`;
 
   // Content
   h+=`<div style="flex:1;min-width:0">`;
@@ -1420,7 +1420,7 @@ function renderTaskCard(t){
   else if(t.priority==='low')h+=`<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;background:rgba(100,116,139,0.15);color:#64748b">LOW</span>`;
   // Status dropdown
   h+=`<select onchange="event.stopPropagation();changeTaskStatus('${t.id}',this.value)" style="font-size:9px;padding:2px 4px;border-radius:4px;border:1px solid rgba(255,255,255,0.08);background:#131316;color:#94a3b8;cursor:pointer;min-height:0">`;
-  ['todo','in_progress','blocked','done'].forEach(s=>{h+=`<option value="${s}"${t.status===s?' selected':''}>${s==='in_progress'?'In Progress':s.charAt(0).toUpperCase()+s.slice(1)}</option>`;});
+  ['todo','in_progress','waiting','done'].forEach(s=>{h+=`<option value="${s}"${t.status===s?' selected':''}>${s==='in_progress'?'In Progress':s==='waiting'?'Waiting On':s.charAt(0).toUpperCase()+s.slice(1)}</option>`;});
   h+=`</select>`;
   h+=`</div></div>`;
 
