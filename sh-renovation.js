@@ -883,6 +883,9 @@ async function openFinancing(dealId){
   });
   h+=`</div>`;
 
+  // Upload closing docs button
+  h+=`<div style="margin-bottom:16px"><button onclick="openFinDocUpload()" class="btn" style="width:100%;padding:12px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">📄 Upload Closing Disclosure / Settlement Statement</button><div style="font-size:10px;color:#64748b;text-align:center;margin-top:4px">AI will read your loan docs and fill in everything</div></div>`;
+
   // Section 1: Loan Terms
   const s1sum=f?`${esc(f.lender_name||'—')} | ${f.interest_rate||'—'}% | ${f.loan_term_months||'—'}mo${f.maturity_date?' | Matures '+fmtDate(f.maturity_date):''}`:''
   const s1open=isNew||!f?.lender_name;
@@ -1068,6 +1071,95 @@ function finRunningTotals(f,d){
 
   h+=`</div></div>`;
   return h;
+}
+
+// ═══ FINANCING DOC PARSER ═══
+function openFinDocUpload(){
+  const input=document.createElement('input');
+  input.type='file';input.accept='.pdf';
+  input.onchange=async function(){const file=input.files[0];if(!file)return;await parseFinDoc(file);};
+  input.click();
+}
+
+async function parseFinDoc(file){
+  // Show loading in modal header area
+  const btn=document.querySelector('.fin-pipe');
+  const loadEl=document.createElement('div');
+  loadEl.id='finDocLoading';
+  loadEl.style.cssText='text-align:center;padding:16px;margin-bottom:12px;border-radius:10px;background:rgba(212,175,55,0.04);border:1px solid rgba(212,175,55,0.1)';
+  loadEl.innerHTML='<div style="width:24px;height:24px;border:2px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px"></div><div style="font-size:12px;color:#d4af37;font-weight:700">Reading loan documents...</div><div style="font-size:10px;color:#64748b;margin-top:4px">This may take 15-30 seconds</div>';
+  if(btn&&btn.parentElement)btn.parentElement.insertBefore(loadEl,btn.nextSibling);
+
+  let apiKey=localStorage.getItem("sh_claude_key");
+  if(!apiKey){
+    apiKey=prompt("Enter your Claude API key:");
+    if(!apiKey){const ld=document.getElementById('finDocLoading');if(ld)ld.remove();return;}
+    localStorage.setItem("sh_claude_key",apiKey);
+  }
+
+  const buf=await file.arrayBuffer();
+  const bytes=new Uint8Array(buf);
+  let binary="";const chunk=8192;
+  for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+  const b64=btoa(binary);
+
+  const content=[
+    {type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}},
+    {type:"text",text:"Parse this loan closing document (closing disclosure, settlement statement, or loan document). Extract ALL financial details and return ONLY a JSON object, no markdown, no explanation:\n\n{\"lender_name\":\"Lender company name\",\"loan_number\":\"Loan number\",\"loan_officer\":\"Loan officer name if visible\",\"purchase_price\":null,\"funded_principal\":null,\"rehab_holdback\":null,\"total_loan_amount\":null,\"down_payment\":null,\"interest_rate\":null,\"interest_rate_type\":\"fixed or variable\",\"origination_fee_pct\":null,\"origination_fee_amount\":null,\"service_fee\":null,\"prorated_interest\":null,\"monthly_interest_payment\":null,\"loan_term_months\":null,\"maturity_date\":\"YYYY-MM-DD or null\",\"first_payment_date\":\"YYYY-MM-DD or null\",\"payment_due_day\":null,\"escrow_fee\":null,\"lenders_title_insurance\":null,\"recording_fees\":null,\"notary_doc_prep\":null,\"wire_fee\":null,\"total_closing_costs\":null,\"total_cash_to_close\":null,\"max_draws\":null,\"holdback_pct\":null,\"draw_fee\":null,\"other_lender_fees\":null}\n\nExtract every number you can find. If a field isn't in the document, use null. Return ONLY the JSON."}
+  ];
+
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:content}]})
+    });
+    if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
+    const data=await res.json();
+    const text=data.content?.[0]?.text||"";
+    const jm=text.match(/\{[\s\S]*\}/);
+    if(!jm)throw new Error("Could not parse response");
+    const parsed=JSON.parse(jm[0]);
+    const ld=document.getElementById('finDocLoading');if(ld)ld.remove();
+    prefillFinancing(parsed);
+  }catch(e){
+    console.error("Fin doc parse error:",e);
+    const ld=document.getElementById('finDocLoading');if(ld)ld.remove();
+    showRenoToast("Failed to parse document: "+e.message);
+  }
+}
+
+function prefillFinancing(parsed){
+  const fields={
+    fin_lender_name:parsed.lender_name,fin_loan_number:parsed.loan_number,fin_loan_officer:parsed.loan_officer,
+    fin_interest_rate:parsed.interest_rate,fin_interest_rate_type:parsed.interest_rate_type,
+    fin_loan_term_months:parsed.loan_term_months,fin_maturity_date:parsed.maturity_date,
+    fin_first_payment_date:parsed.first_payment_date,fin_payment_due_day:parsed.payment_due_day,
+    fin_purchase_price:parsed.purchase_price,fin_funded_principal:parsed.funded_principal,
+    fin_rehab_holdback:parsed.rehab_holdback,fin_total_loan_amount:parsed.total_loan_amount,
+    fin_down_payment:parsed.down_payment,fin_monthly_interest_payment:parsed.monthly_interest_payment,
+    fin_origination_fee_pct:parsed.origination_fee_pct,fin_origination_fee_amount:parsed.origination_fee_amount,
+    fin_service_fee:parsed.service_fee,fin_prorated_interest:parsed.prorated_interest,
+    fin_other_lender_fees:parsed.other_lender_fees,
+    fin_escrow_fee:parsed.escrow_fee,fin_lenders_title_insurance:parsed.lenders_title_insurance,
+    fin_recording_fees:parsed.recording_fees,fin_notary_doc_prep:parsed.notary_doc_prep,
+    fin_wire_fee:parsed.wire_fee,
+    fin_max_draws:parsed.max_draws,fin_holdback_pct:parsed.holdback_pct,fin_draw_fee:parsed.draw_fee
+  };
+  for(const[id,val]of Object.entries(fields)){
+    if(val!=null){const el=document.getElementById(id);if(el){el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));}}
+  }
+  // Expand all sections so user can see filled values
+  ['fin1','fin2','fin3','fin4'].forEach(id=>{
+    const body=document.getElementById(id+'_body');
+    const chev=document.getElementById(id+'_chev');
+    const sum=document.getElementById(id+'_sum');
+    if(body)body.style.display='';
+    if(chev)chev.textContent='▼';
+    if(sum)sum.style.display='none';
+  });
+  finCalcTotal();finCalcClosing();finCalcCash();finCalcOrig();finCalcCSB();
+  showRenoToast("Loan docs parsed — review and save");
 }
 
 // ═══ FINANCING LIVE CALCULATIONS ═══
