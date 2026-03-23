@@ -647,7 +647,7 @@ async function parseBid(){
 
   // Show loading
   const m=document.getElementById("contactsModal");
-  m.innerHTML=`<div class="sheet" style="position:relative"><div class="handle"></div><div style="text-align:center;padding:40px"><div style="width:24px;height:24px;border:2px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px"></div><div style="font-size:12px;color:#d4af37;font-weight:700">Parsing bid with AI...</div><div style="font-size:10px;color:#64748b;margin-top:4px">This may take 15-30 seconds</div></div></div>`;
+  m.innerHTML=`<div class="sheet" style="position:relative"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button><div style="text-align:center;padding:40px"><div style="width:24px;height:24px;border:2px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px"></div><div style="font-size:12px;color:#d4af37;font-weight:700">Parsing bid with AI...</div><div style="font-size:10px;color:#64748b;margin-top:4px">This may take 30-60 seconds for large documents</div><div style="font-size:10px;color:#475569;margin-top:8px">Do not close this window</div></div></div>`;
 
   let apiKey=localStorage.getItem("sh_claude_key");
   if(!apiKey){
@@ -697,8 +697,8 @@ async function parseBid(){
     renderBidReview(parsed,comparison,dealId,contactId);
   }catch(e){
     console.error("Bid parse error:",e);
-    showCtToast("Failed to parse bid: "+e.message);
-    closeCtModal();
+    const errMsg=e.message||"Unknown error";
+    m.innerHTML=`<div class="sheet" style="position:relative"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button><div style="text-align:center;padding:40px"><div style="font-size:32px;margin-bottom:12px">⚠️</div><div style="font-size:14px;font-weight:700;color:#ef4444;margin-bottom:4px">Failed to parse bid</div><div style="font-size:12px;color:#94a3b8;margin-bottom:16px">${esc(errMsg)}</div><button onclick="openBidUpload()" class="btn" style="padding:12px 24px;font-size:13px;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:700">Try Again</button><button onclick="closeCtModal()" class="btn" style="padding:12px 24px;font-size:13px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700;margin-left:8px">Cancel</button></div></div>`;
   }
 }
 
@@ -890,3 +890,9 @@ function showCtToast(msg){
 }
 
 function closeCtModal(){document.getElementById("contactsModal").style.display="none";document.body.style.overflow="";}
+
+// Disable backdrop click on contactsModal — strip the listener added by index.html
+(function(){
+  const cm=document.getElementById("contactsModal");
+  if(cm){const cl=cm.cloneNode(true);cm.parentNode.replaceChild(cl,cm);}
+})();

@@ -79,7 +79,7 @@ async function renderRenoView(){
     md.id="renoModal";
     md.className="overlay";
     md.style.display="none";
-    md.onclick=function(e){if(e.target===md)closeRenoModal();};
+    md.onclick=function(){}; // Backdrop click disabled — use X button to close
     document.body.appendChild(md);
   }
   await loadRenoData(renoDealId);
@@ -846,6 +846,12 @@ function showRenoToast(msg,isErr){
 }
 
 function closeRenoModal(){document.getElementById("renoModal").style.display="none";document.body.style.overflow="";}
+
+// Disable backdrop click on renoModal — strip the listener added by index.html
+(function(){
+  const rm=document.getElementById("renoModal");
+  if(rm){const cl=rm.cloneNode(true);rm.parentNode.replaceChild(cl,rm);}
+})();
 
 // ═══ FINANCING MODULE ═══
 let finData=null,finDealId=null;
