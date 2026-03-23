@@ -753,10 +753,10 @@ function bidDeltaDisplay(c){
 
 // ═══ SHARED BID COMPARISON RENDERER ═══
 function renderBidComparisonBody(parsed,comparison,unmatchedSOW){
-  const subtotal=parsed.subtotal||0;
-  const overhead=parsed.overhead_amount||0;
-  const overheadPct=parsed.overhead_pct||0;
-  const totalBid=parsed.total_bid||subtotal+overhead;
+  const subtotal=parsed.subtotal||(parsed.sections||[]).reduce((s,sec)=>s+(sec.section_total||0),0);
+  const overhead=parsed.overhead_amount||parsed.overhead||0;
+  const overheadPct=parsed.overhead_pct||parsed.overhead_percent||0;
+  const totalBid=parsed.total_bid||parsed.total||subtotal+overhead;
   const matchedSOW=comparison.reduce((s,c)=>s+c.sow_total,0);
   const unmatchedSOWTotal=(unmatchedSOW||[]).reduce((s,u)=>s+(u.lender_approved||u.budget||0),0);
   const totalSOW=matchedSOW+unmatchedSOWTotal;
@@ -835,10 +835,10 @@ function renderBidComparisonBody(parsed,comparison,unmatchedSOW){
 function renderBidReview(parsed,comparison,unmatchedSOW,dealId,contactId){
   const m=document.getElementById("contactsModal");
   const ctrName=parsed.contractor_name||ctList.find(c=>c.id===contactId)?.display_name||"Contractor";
-  const subtotal=parsed.subtotal||0;
-  const overhead=parsed.overhead_amount||0;
-  const overheadPct=parsed.overhead_pct||0;
-  const totalBid=parsed.total_bid||subtotal+overhead;
+  const subtotal=parsed.subtotal||(parsed.sections||[]).reduce((s,sec)=>s+(sec.section_total||0),0);
+  const overhead=parsed.overhead_amount||parsed.overhead||0;
+  const overheadPct=parsed.overhead_pct||parsed.overhead_percent||0;
+  const totalBid=parsed.total_bid||parsed.total||subtotal+overhead;
 
   let h=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button>`;
   h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">BID COMPARISON</div>`;
@@ -859,7 +859,7 @@ async function saveParsedBid(){
 
   const payload={
     deal_id:dealId,contact_id:contactId,
-    initial_bid:parsed.total_bid||(parsed.subtotal||0)+(parsed.overhead_amount||0),
+    initial_bid:parsed.total_bid||parsed.total||(parsed.subtotal||0)+(parsed.overhead_amount||parsed.overhead||0),
     scope_description:(parsed.sections||[]).map(s=>s.section_name+': $'+s.section_total.toLocaleString()).join(' | '),
     bid_date:parsed.bid_date||new Date().toISOString().split("T")[0],
     status:"received",
@@ -890,10 +890,10 @@ function viewBidComparison(bidId){
   if(!comparison.length&&!parsed.sections)return;
   const unmatchedSOW=parsed._unmatchedSOW||null;
   const ctrName=b.contacts?.display_name||"Contractor";
-  const subtotal=parsed.subtotal||comparison.reduce((s,c)=>s+(c.bid_total||0),0);
-  const overhead=parsed.overhead_amount||0;
-  const overheadPct=parsed.overhead_pct||0;
-  const totalBid=b.initial_bid||parsed.total_bid||subtotal+overhead;
+  const subtotal=parsed.subtotal||(parsed.sections||[]).reduce((s,sec)=>s+(sec.section_total||0),0)||comparison.reduce((s,c)=>s+(c.bid_total||0),0);
+  const overhead=parsed.overhead_amount||parsed.overhead||0;
+  const overheadPct=parsed.overhead_pct||parsed.overhead_percent||0;
+  const totalBid=b.initial_bid||parsed.total_bid||parsed.total||subtotal+overhead;
 
   const m=document.getElementById("contactsModal");
   let h=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button>`;
