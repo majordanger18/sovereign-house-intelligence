@@ -571,12 +571,7 @@ async function parseContact(file){
     });
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
-    let text=data.content?.[0]?.text||"";
-    text=text.replace(/```json\s*/g,'').replace(/```\s*/g,'');
-    const jm=text.match(/\{[\s\S]*\}/);
-    if(!jm)throw new Error("No JSON found in response");
-    let jsonStr=jm[0].replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
-    const parsed=JSON.parse(jsonStr);
+    const parsed=await robustParseJSON(data,apiKey);
     prefillContactForm(parsed);
   }catch(e){
     console.error("Contact parse error:",e);
@@ -690,12 +685,7 @@ async function parseBid(){
     });
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
-    let text2=data.content?.[0]?.text||"";
-    text2=text2.replace(/```json\s*/g,'').replace(/```\s*/g,'');
-    const jm2=text2.match(/\{[\s\S]*\}/);
-    if(!jm2)throw new Error("No JSON found in response");
-    let jsonStr2=jm2[0].replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
-    const parsed=JSON.parse(jsonStr2);
+    const parsed=await robustParseJSON(data,apiKey);
 
     // Fetch SOW lines for comparison
     let sowLines=[];

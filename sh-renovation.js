@@ -32,6 +32,34 @@ async function uploadToStorage(file,bucket,path){
   }catch(e){console.error("Storage upload error:",e);return null;}
 }
 function storagePath(dealId,type,file){const ext=file.name.split('.').pop()||'pdf';return(dealId||'general')+"/"+type+"/"+Date.now()+"."+ext;}
+
+async function robustParseJSON(data,apiKey,matchArray){
+  let text=data.content?.[0]?.text||"";
+  text=text.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+  const regex=matchArray?/\[[\s\S]*\]/:(/\{[\s\S]*\}/);
+  let jm=text.match(regex);
+  if(!jm)throw new Error("No JSON found in response");
+  let jsonStr=jm[0];
+  jsonStr=jsonStr.replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
+  jsonStr=jsonStr.replace(/[\u201C\u201D]/g,'\\"');
+  jsonStr=jsonStr.replace(/[\u2018\u2019]/g,"'");
+  try{return JSON.parse(jsonStr);}catch(e1){}
+  const lastBrace=jsonStr.lastIndexOf(matchArray?']':'}');
+  jsonStr=jsonStr.substring(0,lastBrace+1);
+  try{return JSON.parse(jsonStr);}catch(e2){}
+  console.error("Raw response:",text.substring(0,500));
+  const fixRes=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
+    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:"This JSON has syntax errors. Fix it and return ONLY valid JSON, nothing else:\n\n"+text.substring(0,8000)}]})
+  });
+  const fixData=await fixRes.json();
+  let fixText=fixData.content?.[0]?.text||"";
+  fixText=fixText.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+  const fixMatch=fixText.match(regex);
+  if(!fixMatch)throw new Error("Could not fix JSON");
+  return JSON.parse(fixMatch[0]);
+}
 const RENO_WH={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=representation"};
 
 // ═══ CURRENCY ═══
@@ -812,12 +840,7 @@ async function parseReceipt(file){
     });
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
-    let text=data.content?.[0]?.text||"";
-    text=text.replace(/```json\s*/g,'').replace(/```\s*/g,'');
-    const jm=text.match(/\{[\s\S]*\}/);
-    if(!jm)throw new Error("No JSON found in response");
-    let jsonStr=jm[0].replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
-    const parsed=JSON.parse(jsonStr);
+    const parsed=await robustParseJSON(data,apiKey);
     prefillExpenseForm(parsed);
   }catch(e){
     console.error("Receipt parse error:",e);
@@ -1356,12 +1379,7 @@ async function parseFinDoc(file){
     });
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
-    let ftext=data.content?.[0]?.text||"";
-    ftext=ftext.replace(/```json\s*/g,'').replace(/```\s*/g,'');
-    const fjm=ftext.match(/\{[\s\S]*\}/);
-    if(!fjm)throw new Error("No JSON found in response");
-    let fjsonStr=fjm[0].replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
-    const parsed=JSON.parse(fjsonStr);
+    const parsed=await robustParseJSON(data,apiKey);
     const ld=document.getElementById('finDocLoading');if(ld)ld.remove();
     prefillFinancing(parsed);
   }catch(e){
@@ -1615,12 +1633,7 @@ async function parseSOWPDF(){
     }
 
     const data=await res.json();
-    let stext=data.content?.[0]?.text||"";
-    stext=stext.replace(/```json\s*/g,'').replace(/```\s*/g,'');
-    const sjm=stext.match(/\[[\s\S]*\]/);
-    if(!sjm){pa.innerHTML=`<div style="color:#ef4444;font-size:12px;padding:12px">❌ Could not parse AI response.<br><span style="color:#64748b;font-size:10px">${esc(stext.substring(0,300))}</span></div>`;return;}
-    let sjsonStr=sjm[0].replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
-    sowParsedLines=JSON.parse(sjsonStr);
+    sowParsedLines=await robustParseJSON(data,apiKey,true);
     if(!sowParsedLines.length){pa.innerHTML=`<div style="color:#ef4444;font-size:12px;padding:12px">❌ No line items found in document.</div>`;return;}
     renderSOWReview();
   }catch(e){
