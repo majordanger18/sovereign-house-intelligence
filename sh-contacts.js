@@ -12,6 +12,7 @@ const MAT_COLORS={contractor:"#f97316",owner:"#22c55e",split:"#eab308"};
 const SPEC_SUGGESTIONS=["general_contractor","kitchen","tile","electrical","plumbing","paint","flooring","cabinets","countertops","appliances","pool","landscape","hvac","drywall","framing","doors","windows","roofing","concrete","demolition","siding","gutters","fence","cleaning"];
 
 let ctList=[],ctPerf=[],ctBids=[],ctSub="directory",ctSearch="",ctTypeF="all",ctStatusF="active",ctDetailId=null;
+let _pendingBidUrl=null,_pendingBidName=null;
 
 // ═══ TAB INJECTION ═══
 // Wrap the already-wrapped renderDashboard from sh-renovation.js
@@ -424,7 +425,7 @@ function renderBidsV(el){
         h+=`<td class="reno-hm">${b.bid_accuracy_pct!=null?`<span style="color:${baC};font-weight:700">${Math.round(b.bid_accuracy_pct)}%</span>`:"—"}</td>`;
         h+=`<td class="reno-hm">${b.overall_rating?renderStars(b.overall_rating):"—"}</td>`;
       }
-      h+=`<td>${hasCmp?`<button onclick="event.stopPropagation();viewBidComparison('${b.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">View SOW</button>`:""}</td>`;
+      h+=`<td style="white-space:nowrap">${b.bid_document_url?`<a href="${esc(b.bid_document_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none;margin-right:6px">📄 Bid</a>`:""}${hasCmp?`<button onclick="event.stopPropagation();viewBidComparison('${b.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">View SOW</button>`:""}</td>`;
       h+=`</tr>`;
     });
     h+=`</tbody></table></div></div>`;
@@ -537,6 +538,10 @@ function openContactUpload(){
 async function parseContact(file){
   showCtToast("Reading contact info...");
 
+  // Upload to storage
+  const contactPath=storagePath(null,"contacts",file);
+  await uploadToStorage(file,"sovereign-docs",contactPath);
+
   let apiKey=localStorage.getItem("sh_claude_key");
   if(!apiKey){
     apiKey=prompt("Enter your Claude API key:");
@@ -566,10 +571,12 @@ async function parseContact(file){
     });
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
-    const text=data.content?.[0]?.text||"";
+    let text=data.content?.[0]?.text||"";
+    text=text.replace(/```json\s*/g,'').replace(/```\s*/g,'');
     const jm=text.match(/\{[\s\S]*\}/);
-    if(!jm)throw new Error("Could not parse response");
-    const parsed=JSON.parse(jm[0]);
+    if(!jm)throw new Error("No JSON found in response");
+    let jsonStr=jm[0].replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
+    const parsed=JSON.parse(jsonStr);
     prefillContactForm(parsed);
   }catch(e){
     console.error("Contact parse error:",e);
@@ -656,6 +663,11 @@ async function parseBid(){
     localStorage.setItem("sh_claude_key",apiKey);
   }
 
+  // Upload to storage
+  const bidPath=storagePath(dealId,"bids",file);
+  _pendingBidUrl=await uploadToStorage(file,"sovereign-docs",bidPath);
+  _pendingBidName=file.name;
+
   const buf=await file.arrayBuffer();
   const bytes=new Uint8Array(buf);
   let binary="";const chunk=8192;
@@ -678,10 +690,12 @@ async function parseBid(){
     });
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
-    const text=data.content?.[0]?.text||"";
-    const jm=text.match(/\{[\s\S]*\}/);
-    if(!jm)throw new Error("Could not parse response");
-    const parsed=JSON.parse(jm[0]);
+    let text2=data.content?.[0]?.text||"";
+    text2=text2.replace(/```json\s*/g,'').replace(/```\s*/g,'');
+    const jm2=text2.match(/\{[\s\S]*\}/);
+    if(!jm2)throw new Error("No JSON found in response");
+    let jsonStr2=jm2[0].replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
+    const parsed=JSON.parse(jsonStr2);
 
     // Fetch SOW lines for comparison
     let sowLines=[];
@@ -786,6 +800,7 @@ async function saveParsedBid(){
     parsed_line_items:parsed.line_items||[],
     sow_comparison:comparison
   };
+  if(_pendingBidUrl){payload.bid_document_url=_pendingBidUrl;payload.bid_document_name=_pendingBidName;}
 
   // Update contractor with any new info from the bid
   if(parsed.contractor_license||parsed.contractor_phone){
@@ -797,6 +812,7 @@ async function saveParsedBid(){
 
   try{
     await fetch(SB+"/rest/v1/contractor_bids",{method:"POST",headers:HD,body:JSON.stringify(payload)});
+    _pendingBidUrl=null;_pendingBidName=null;
     const ctr=ctList.find(c=>c.id===contactId);
     closeCtModal();showCtToast("Bid saved — "+(ctr?.display_name||"contractor")+" at "+$r(payload.initial_bid));
     await loadCtData();renderCtSub();

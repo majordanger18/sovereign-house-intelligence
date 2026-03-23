@@ -22,6 +22,16 @@ let renoTaskFilter={cat:"all",assignee:"all"};
 let renoEditingTask=null,renoShowDone=false;
 const TASK_CAT_COLORS={financing:"#22c55e",contractor:"#f97316",materials:"#3b82f6",design:"#ec4899",permits:"#6366f1",administrative:"#64748b",listing_prep:"#a855f7"};
 const TASK_ASSIGNEES={"j@jmarshallhunt.com":"King J","lisa@lisaahunt.com":"Lisa"};
+let _pendingReceiptUrl=null,_pendingFinUrl=null;
+
+async function uploadToStorage(file,bucket,path){
+  try{
+    const res=await fetch(SB+"/storage/v1/object/"+bucket+"/"+path,{method:"POST",headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":file.type,"x-upsert":"true"},body:file});
+    if(!res.ok){console.error("Storage upload failed:",res.status);return null;}
+    return SB+"/storage/v1/object/public/"+bucket+"/"+path;
+  }catch(e){console.error("Storage upload error:",e);return null;}
+}
+function storagePath(dealId,type,file){const ext=file.name.split('.').pop()||'pdf';return(dealId||'general')+"/"+type+"/"+Date.now()+"."+ext;}
 const RENO_WH={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=representation"};
 
 // ═══ CURRENCY ═══
@@ -655,7 +665,7 @@ function renderExpLog(){
   f.forEach(e=>{
     const tc=EXP_TYPE_COLORS[e.expense_type]||"#94a3b8";
     const sl=e.renovation_sow_lines;
-    h+=`<tr><td style="color:#94a3b8;white-space:nowrap">${e.expense_date?new Date(e.expense_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric"}):"—"}</td><td>${sl?`<span class="reno-chip" style="color:#94a3b8;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">#${sl.line_number}</span>`:"—"}</td><td style="color:#94a3b8">${esc(e.vendor_name||"—")}</td><td style="color:#e2e8f0;font-weight:600">${esc(e.description||"")}</td><td style="text-align:right;font-weight:700">${$r(e.amount)}</td><td><span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30">${e.expense_type||"other"}</span></td><td class="reno-hm" style="color:#64748b">${e.payment_method?e.payment_method.replace(/_/g," "):"—"}</td><td style="white-space:nowrap"><button onclick="event.stopPropagation();editExpense('${e.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;padding:2px 4px">Edit</button><button onclick="event.stopPropagation();deleteExpense('${e.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;padding:2px 4px">Del</button></td></tr>`;
+    h+=`<tr><td style="color:#94a3b8;white-space:nowrap">${e.expense_date?new Date(e.expense_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric"}):"—"}</td><td>${sl?`<span class="reno-chip" style="color:#94a3b8;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">#${sl.line_number}</span>`:"—"}</td><td style="color:#94a3b8">${esc(e.vendor_name||"—")}</td><td style="color:#e2e8f0;font-weight:600">${esc(e.description||"")}${e.receipt_photo_url?` <a href="${esc(e.receipt_photo_url)}" target="_blank" style="text-decoration:none" title="View receipt">📎</a>`:""}</td><td style="text-align:right;font-weight:700">${$r(e.amount)}</td><td><span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30">${e.expense_type||"other"}</span></td><td class="reno-hm" style="color:#64748b">${e.payment_method?e.payment_method.replace(/_/g," "):"—"}</td><td style="white-space:nowrap"><button onclick="event.stopPropagation();editExpense('${e.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;padding:2px 4px">Edit</button><button onclick="event.stopPropagation();deleteExpense('${e.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;padding:2px 4px">Del</button></td></tr>`;
   });
   h+=`</tbody></table></div>`;
 
@@ -688,6 +698,13 @@ async function saveExpense(){
   try{
     const res=await fetch(SB+"/rest/v1/renovation_expenses",{method:"POST",headers:RENO_WH,body:JSON.stringify(p)});
     if(!res.ok){const err=await res.text();console.error("Save expense error:",res.status,err);showRenoToast("Failed to save expense");return;}
+    // Attach receipt URL if pending
+    if(_pendingReceiptUrl){
+      const saved=await res.json();
+      const expId=Array.isArray(saved)?saved[0]?.id:saved?.id;
+      if(expId)await fetch(SB+"/rest/v1/renovation_expenses?id=eq."+expId,{method:"PATCH",headers:RENO_WH,body:JSON.stringify({receipt_photo_url:_pendingReceiptUrl})});
+      _pendingReceiptUrl=null;
+    }
     // Clear form (keep date and payment method)
     ["exDe","exA","exV","exPn","exUC","exQ","exN"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
     showRenoToast("Expense logged");
@@ -766,6 +783,11 @@ async function parseReceipt(file){
     localStorage.setItem("sh_claude_key",apiKey);
   }
 
+  // Upload to storage first
+  const filePath=storagePath(renoDealId,"receipts",file);
+  const pendingDocUrl=await uploadToStorage(file,"sovereign-docs",filePath);
+  _pendingReceiptUrl=pendingDocUrl;
+
   const buf=await file.arrayBuffer();
   const bytes=new Uint8Array(buf);
   let binary="";const chunk=8192;
@@ -790,10 +812,12 @@ async function parseReceipt(file){
     });
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
-    const text=data.content?.[0]?.text||"";
+    let text=data.content?.[0]?.text||"";
+    text=text.replace(/```json\s*/g,'').replace(/```\s*/g,'');
     const jm=text.match(/\{[\s\S]*\}/);
-    if(!jm)throw new Error("Could not parse response");
-    const parsed=JSON.parse(jm[0]);
+    if(!jm)throw new Error("No JSON found in response");
+    let jsonStr=jm[0].replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
+    const parsed=JSON.parse(jsonStr);
     prefillExpenseForm(parsed);
   }catch(e){
     console.error("Receipt parse error:",e);
@@ -1071,6 +1095,9 @@ function finRunningTotals(f,d){
   h+=`<button onclick="logInterestPayment()" class="btn" style="width:100%;padding:10px;font-size:12px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;margin-top:6px">Save Payment</button>`;
   h+=`</div></div>`;
 
+  // View Closing Docs link
+  if(f?.closing_disclosure_url)h+=`<div style="margin-top:12px"><a href="${esc(f.closing_disclosure_url)}" target="_blank" style="display:flex;align-items:center;gap:6px;padding:10px 12px;border-radius:10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);color:#60a5fa;font-size:12px;font-weight:700;text-decoration:none">📄 View Closing Docs</a></div>`;
+
   // Funded date
   h+=`<div class="fld" style="margin-top:12px"><label>FUNDED DATE</label><input id="fin_funded_date" type="date" class="cinput" value="${f?.funded_date||''}"/></div>`;
   h+=`<div class="fld"><label>NOTES</label><textarea id="fin_notes" class="cinput" rows="2" style="min-height:60px;font-size:13px">${esc(f?.notes||'')}</textarea></div>`;
@@ -1103,6 +1130,11 @@ async function parseFinDoc(file){
     localStorage.setItem("sh_claude_key",apiKey);
   }
 
+  // Upload to storage
+  const filePath=storagePath(renoDealId,"financing",file);
+  const pendingDocUrl=await uploadToStorage(file,"sovereign-docs",filePath);
+  _pendingFinUrl=pendingDocUrl;
+
   const buf=await file.arrayBuffer();
   const bytes=new Uint8Array(buf);
   let binary="";const chunk=8192;
@@ -1122,10 +1154,12 @@ async function parseFinDoc(file){
     });
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
-    const text=data.content?.[0]?.text||"";
-    const jm=text.match(/\{[\s\S]*\}/);
-    if(!jm)throw new Error("Could not parse response");
-    const parsed=JSON.parse(jm[0]);
+    let ftext=data.content?.[0]?.text||"";
+    ftext=ftext.replace(/```json\s*/g,'').replace(/```\s*/g,'');
+    const fjm=ftext.match(/\{[\s\S]*\}/);
+    if(!fjm)throw new Error("No JSON found in response");
+    let fjsonStr=fjm[0].replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
+    const parsed=JSON.parse(fjsonStr);
     const ld=document.getElementById('finDocLoading');if(ld)ld.remove();
     prefillFinancing(parsed);
   }catch(e){
@@ -1281,6 +1315,7 @@ async function saveFinancing(dealId){
     funded_date:gv("fin_funded_date")||null,notes:gv("fin_notes")||null,
     status:finData?.status||"application"
   };
+  if(_pendingFinUrl)payload.closing_disclosure_url=_pendingFinUrl;
 
   try{
     if(finData){
@@ -1301,6 +1336,7 @@ async function saveFinancing(dealId){
     const dl=deals.find(x=>x.id===dealId);
     if(dl)Object.assign(dl,dealSync);
 
+    _pendingFinUrl=null;
     showRenoToast("Financing saved");
     await loadFinancing(dealId);
     if(renoDealId===dealId){await loadRenoData(dealId);if(renoSub==="budget"){const el=document.getElementById("renoContent");if(el)renderBudget(el);}}
@@ -1347,6 +1383,10 @@ async function parseSOWPDF(){
   const pa=document.getElementById("sowParseArea");
   pa.innerHTML=`<div style="text-align:center;padding:24px"><div style="width:24px;height:24px;border:2px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px"></div><div style="font-size:12px;color:#d4af37;font-weight:700">Parsing SOW with Claude...</div><div style="font-size:10px;color:#64748b;margin-top:4px">This may take 10-30 seconds</div></div>`;
 
+  // Upload to storage
+  const filePath=storagePath(renoDealId,"sow",file);
+  await uploadToStorage(file,"sovereign-docs",filePath);
+
   try{
     const buf=await file.arrayBuffer();
     const bytes=new Uint8Array(buf);
@@ -1373,11 +1413,12 @@ async function parseSOWPDF(){
     }
 
     const data=await res.json();
-    const text=data.content?.[0]?.text||"";
-    const jm=text.match(/\[[\s\S]*\]/);
-    if(!jm){pa.innerHTML=`<div style="color:#ef4444;font-size:12px;padding:12px">❌ Could not parse AI response.<br><span style="color:#64748b;font-size:10px">${esc(text.substring(0,300))}</span></div>`;return;}
-
-    sowParsedLines=JSON.parse(jm[0]);
+    let stext=data.content?.[0]?.text||"";
+    stext=stext.replace(/```json\s*/g,'').replace(/```\s*/g,'');
+    const sjm=stext.match(/\[[\s\S]*\]/);
+    if(!sjm){pa.innerHTML=`<div style="color:#ef4444;font-size:12px;padding:12px">❌ Could not parse AI response.<br><span style="color:#64748b;font-size:10px">${esc(stext.substring(0,300))}</span></div>`;return;}
+    let sjsonStr=sjm[0].replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
+    sowParsedLines=JSON.parse(sjsonStr);
     if(!sowParsedLines.length){pa.innerHTML=`<div style="color:#ef4444;font-size:12px;padding:12px">❌ No line items found in document.</div>`;return;}
     renderSOWReview();
   }catch(e){
