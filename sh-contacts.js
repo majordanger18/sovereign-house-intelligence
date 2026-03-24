@@ -731,7 +731,31 @@ const BID_SOW_MAP={
   'EXTERIOR IMPROVEMENTS':['Exterior'],
   'LANDSCAPING':['Landscape'],
   'POOL AREA':[21],
-  'MECHANICAL':['HVAC']
+  'MECHANICAL':['HVAC'],
+  'GENERAL':[2,8,9,10,11],
+  'KITCHEN':[13,15,18],
+  'BATHROOM':[14],
+  'PRIMARY BATH':[14,6],
+  'SECONDARY BATH':[14],
+  'WALK IN':[14],
+  'LAUNDRY':[14],
+  'FLOORING':[12],
+  'ELECTRICAL':[16],
+  'PLUMBING':[15],
+  'HVAC':[17],
+  'EXTERIOR':[5],
+  'LANDSCAPE':[19],
+  'POOL':[21],
+  'FIREPLACE':[21],
+  'DOORS':[9,22],
+  'WINDOWS':[6],
+  'FRAMING':[8],
+  'PAINT':[11],
+  'DRYWALL':[10],
+  'DEMO':[2],
+  'FOYER':[8,9,21,22],
+  'BAR':[21],
+  'COFFEE':[21]
 };
 let _bidUsedSOW=new Set();
 
