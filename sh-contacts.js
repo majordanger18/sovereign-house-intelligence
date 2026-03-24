@@ -710,7 +710,7 @@ async function parseBid(){
 // ═══ SECTION-TO-SOW COMPARISON (hardcoded map) ═══
 const BID_SOW_MAP={
   'DEMOLITION':['Demo'],
-  'FOYER / ENTRY':['Framing','Carpentry','Other','Slider'],
+  'FOYER / ENTRY':[8,9,22],
   'BAR FEATURE WALL':['Other'],
   'CONVERT DINING ROOM NICHE INTO BAR FEATURE WALL':[21],
   'KITCHEN RENOVATION':['Kitchen','Plumbing','Appliances'],
@@ -812,7 +812,8 @@ function renderBidComparisonBody(parsed,comparison,unmatchedSOW){
   comparison.forEach(c=>{
     const dd=bidDeltaDisplay(c);
     const noMatch=!c.has_sow_match;
-    const sowNums=(c.sow_matches||[]).map(s=>'#'+s.line_number).join(', ')||'—';
+    const allSOWRefs=[...(c.sow_matches||[]),...(c.sow_dupes||[])];
+    const sowNums=allSOWRefs.map(s=>'#'+s.line_number).join(', ')||'—';
     h+=`<div style="border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-bottom:6px;overflow:hidden${noMatch?';border-left:3px solid #f59e0b':''}">`;
     h+=`<div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:rgba(255,255,255,0.02)">`;
     h+=`<div style="flex:1"><div style="font-size:12px;font-weight:700;color:#e2e8f0">${esc(c.section_name)}</div>`;
