@@ -398,7 +398,6 @@ function renderBidsV(el){
   Object.entries(byDeal).forEach(([did,group])=>{
     h+=`<div style="margin-top:16px"><div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(212,175,55,0.15);margin-bottom:8px"><div style="font-size:12px;font-weight:800;color:#f1f5f9">${esc(group.address)}</div>`;
     const compBids=group.bids.filter(b=>b.sow_comparison&&(Array.isArray(b.sow_comparison)?b.sow_comparison.length:true));
-    if(compBids.length>1)h+=`<button onclick="compareDealBids('${did}')" style="background:none;border:1px solid rgba(212,175,55,0.2);border-radius:8px;padding:4px 10px;color:#d4af37;font-size:10px;font-weight:700;cursor:pointer">Compare Bids</button>`;
     h+=`</div>`;
     h+=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th>Contractor</th><th style="text-align:right">Initial</th><th style="text-align:right">Negotiated</th><th style="text-align:right">Final</th><th>Materials</th><th class="reno-hm">Timeline</th><th>Status</th>`;
     const hasActual=group.bids.some(b=>b.actual_total_cost);
@@ -428,7 +427,12 @@ function renderBidsV(el){
       h+=`<td style="white-space:nowrap">${b.bid_document_url?`<a href="${esc(b.bid_document_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none;margin-right:6px">📄 Bid</a>`:""}${hasCmp?`<button onclick="event.stopPropagation();viewBidComparison('${b.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">View SOW</button>`:""}<button onclick="event.stopPropagation();deleteBid('${b.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;opacity:0.7;padding:4px 8px">Delete</button></td>`;
       h+=`</tr>`;
     });
-    h+=`</tbody></table></div></div>`;
+    h+=`</tbody></table></div>`;
+    if(compBids.length>1){
+      h+=`<div style="text-align:center;margin-top:10px"><span style="display:inline-block;padding:4px 12px;border-radius:20px;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.2);color:#d4af37;font-size:10px;font-weight:800;letter-spacing:1px">${compBids.length} BIDS ON THIS DEAL</span></div>`;
+      h+=`<button onclick="compareDealBids('${did}')" class="btn" style="width:100%;padding:12px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;border-radius:10px;margin-top:6px;cursor:pointer">Compare Bids</button>`;
+    }
+    h+=`</div>`;
   });
   el.innerHTML=h;
 }
