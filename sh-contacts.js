@@ -984,42 +984,36 @@ async function compareDealBids(dealId){
   const dealBids=ctBids.filter(b=>b.deal_id===dealId&&b.sow_comparison&&Array.isArray(b.sow_comparison)&&b.sow_comparison.length);
   if(dealBids.length<2)return;
 
-  // Fetch SOW lines for this deal
-  let sowLines=[];
-  try{sowLines=await sb("renovation_sow_lines?deal_id=eq."+dealId+"&order=line_number");}catch(e){console.error("SOW fetch:",e);}
-  if(!Array.isArray(sowLines))sowLines=[];
-  const activeSow=sowLines.filter(s=>Number(s.lender_approved)>0);
-
   const m=document.getElementById("contactsModal");
   let h=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button>`;
   h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">COMPARE BIDS</div>`;
   h+=`<div style="font-size:18px;font-weight:800;margin-bottom:16px">${esc(dealBids[0].deals?.address||"")}</div>`;
 
-  h+=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th>SOW Line</th><th style="text-align:right">Budget</th>`;
+  h+=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th>Section</th>`;
   dealBids.forEach(b=>{
     const name=b.contacts?.display_name||"?";
     h+=`<th style="text-align:right">${esc(name)}<div style="font-size:9px;color:#64748b">${$r(b.initial_bid)}</div></th>`;
   });
   h+=`</tr></thead><tbody>`;
 
-  activeSow.forEach(sow=>{
-    const ln=sow.line_number;
+  // Collect all section names across all bids, normalized
+  const allSections=[];
+  dealBids.forEach(b=>{
+    (b.sow_comparison||[]).forEach(c=>{
+      const norm=(c.section_name||'').trim();
+      if(norm&&!allSections.some(s=>s.toLowerCase()===norm.toLowerCase()))allSections.push(norm);
+    });
+  });
+
+  allSections.forEach(secName=>{
     const amounts=dealBids.map(b=>{
-      let sum=0;
-      b.sow_comparison.forEach(c=>{
-        if((c.sow_matches||[]).some(m=>m.line_number===ln)||(c.sow_dupes||[]).some(m=>m.line_number===ln))sum+=c.bid_total||0;
-      });
-      return sum;
+      const match=(b.sow_comparison||[]).find(c=>(c.section_name||'').toLowerCase()===secName.toLowerCase());
+      return match?match.bid_total||0:0;
     });
     const nonZero=amounts.filter(a=>a>0);
     const minAmt=nonZero.length?Math.min(...nonZero):0;
     const maxAmt=nonZero.length?Math.max(...nonZero):0;
-
-    const desc=(sow.description||sow.category||"");
-    const short=desc.length>40?desc.substring(0,40)+"…":desc;
-    h+=`<tr><td style="color:#e2e8f0;font-weight:600"><span style="color:#64748b">#${ln}</span> ${esc(short)}</td>`;
-    h+=`<td style="text-align:right;color:#94a3b8">${$r(sow.lender_approved)}</td>`;
-
+    h+=`<tr><td style="color:#e2e8f0;font-weight:600">${esc(secName)}</td><td></td>`;
     dealBids.forEach((b,i)=>{
       const amt=amounts[i];
       let color="#e2e8f0";
@@ -1032,7 +1026,7 @@ async function compareDealBids(dealId){
 
   // Totals row
   h+=`<tr style="border-top:2px solid rgba(212,175,55,0.2)"><td style="font-weight:800;color:#d4af37">TOTAL</td><td></td>`;
-  const totals=dealBids.map(b=>b.initial_bid||b.sow_comparison.reduce((s,c)=>s+(c.bid_total||0),0));
+  const totals=dealBids.map(b=>b.initial_bid||0);
   const minT=Math.min(...totals);
   const maxT=Math.max(...totals);
   totals.forEach(t=>{
