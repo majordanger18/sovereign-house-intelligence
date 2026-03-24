@@ -123,6 +123,7 @@ function renderDirectory(el){
       h+=`</div>`;
     }
     if(c.status==="do_not_use")h+=`<div style="font-size:9px;color:#ef4444;margin-top:4px;font-weight:700">⚠ DO NOT USE${c.do_not_use_reason?" — "+esc(c.do_not_use_reason):""}</div>`;
+    if(c.contact_scan_url)h+=`<div style="margin-top:6px"><a href="${esc(c.contact_scan_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none">📄 Card</a></div>`;
     h+=`</div>`;
   });
   h+=`</div>`;
