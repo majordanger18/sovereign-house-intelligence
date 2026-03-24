@@ -331,6 +331,9 @@ async function openDeal(dealId){
       <button onclick="addDealNote('${d.id}')" class="btn" style="padding:8px 14px;font-size:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;font-weight:700;white-space:nowrap">+ Note</button>
     </div>
 
+    <!-- DEAL OUTCOMES -->
+    ${['sold','listed','renovation_complete','closed'].includes(d.status)?`<div id="dealOutcomesArea" style="margin-bottom:16px"></div>`:''}
+
     <!-- DELETE DEAL -->
     <div style="margin-top:24px;padding-top:16px;border-top:1px solid rgba(239,68,68,0.12)">
       <button onclick="deleteDeal('${d.id}')" style="width:100%;padding:10px;border-radius:10px;border:1px solid rgba(239,68,68,0.2);background:transparent;color:#ef4444;font-size:12px;font-weight:700;cursor:pointer">Delete Deal</button>
@@ -342,6 +345,7 @@ async function openDeal(dealId){
 
   // Load financing summary asynchronously
   loadDealFinSummary(d.id);
+  if(['sold','listed','renovation_complete','closed'].includes(d.status)) loadDealOutcomes(d.id);
 }
 
 // ═══ DEAL ACTIONS ═══
@@ -568,4 +572,71 @@ async function loadDealFinSummary(dealId){
       ${pending?' · <span style="color:#eab308">⏳ Pending funding</span>':''}
     </div>`;
   }catch(e){el.innerHTML='';}
+}
+
+// ═══ DEAL OUTCOMES ═══
+async function loadDealOutcomes(dealId){
+  const el=document.getElementById("dealOutcomesArea");if(!el)return;
+  let existing=null;
+  try{
+    const res=await sb("deal_outcomes?deal_id=eq."+dealId);
+    if(Array.isArray(res)&&res.length)existing=res[0];
+  }catch(e){}
+
+  let h=`<div style="padding:14px;border-radius:14px;background:rgba(16,185,129,0.03);border:1px solid rgba(16,185,129,0.12)">`;
+  h+=`<div style="font-size:10px;color:#10b981;font-weight:700;letter-spacing:2px;margin-bottom:10px">DEAL OUTCOMES</div>`;
+  h+=`<div class="row2"><div class="fld"><label>ACTUAL RENO COST</label><input id="do_reno" type="number" class="cinput" value="${existing?.actual_reno_cost??''}" oninput="calcOutcomeProfit()"/></div>`;
+  h+=`<div class="fld"><label>ACTUAL HOLD (MONTHS)</label><input id="do_hold" type="number" class="cinput" value="${existing?.actual_hold_months??''}"/></div></div>`;
+  h+=`<div class="row2"><div class="fld"><label>ACTUAL SALE PRICE</label><input id="do_sale" type="number" class="cinput" value="${existing?.actual_sale_price??''}" oninput="calcOutcomeProfit()"/></div>`;
+  h+=`<div class="fld"><label>ACTUAL PROFIT</label><input id="do_profit" type="number" class="cinput" value="${existing?.actual_profit??''}" style="color:#22c55e"/></div></div>`;
+  h+=`<div class="fld"><label>LESSONS LEARNED / NOTES</label><textarea id="do_notes" rows="3" class="cinput" style="font-size:13px;min-height:60px">${esc(existing?.notes||'')}</textarea></div>`;
+  h+=`<button onclick="saveDealOutcome('${dealId}','${existing?.id||''}')" class="btn" style="width:100%;padding:12px;font-size:13px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#10b981;font-weight:800;margin-top:8px">${existing?'Update Outcomes':'Save Outcomes'}</button>`;
+
+  if(existing){
+    h+=`<div style="margin-top:12px;padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
+    h+=`<div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:1px;margin-bottom:8px">SAVED OUTCOMES</div>`;
+    h+=`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">`;
+    h+=`<div><div style="font-size:9px;color:#64748b;font-weight:700">RENO COST</div><div style="font-size:14px;font-weight:800;color:#f59e0b">${existing.actual_reno_cost!=null?$(existing.actual_reno_cost):'—'}</div></div>`;
+    h+=`<div><div style="font-size:9px;color:#64748b;font-weight:700">HOLD MONTHS</div><div style="font-size:14px;font-weight:800;color:#94a3b8">${existing.actual_hold_months||'—'}</div></div>`;
+    h+=`<div><div style="font-size:9px;color:#64748b;font-weight:700">SALE PRICE</div><div style="font-size:14px;font-weight:800;color:#e2e8f0">${existing.actual_sale_price!=null?$(existing.actual_sale_price):'—'}</div></div>`;
+    h+=`<div><div style="font-size:9px;color:#64748b;font-weight:700">ACTUAL PROFIT</div><div style="font-size:14px;font-weight:800;color:${(existing.actual_profit||0)>=0?'#22c55e':'#ef4444'}">${existing.actual_profit!=null?$(existing.actual_profit):'—'}</div></div>`;
+    h+=`</div>`;
+    if(existing.notes)h+=`<div style="margin-top:8px;font-size:11px;color:#94a3b8;line-height:1.5">${esc(existing.notes)}</div>`;
+    h+=`</div>`;
+  }
+
+  h+=`</div>`;
+  el.innerHTML=h;
+}
+
+function calcOutcomeProfit(){
+  const sale=Number(document.getElementById("do_sale")?.value)||0;
+  const reno=Number(document.getElementById("do_reno")?.value)||0;
+  const d=currentDeal;
+  const purchase=d?(d.accepted_price||d.offer_price||0):0;
+  if(sale>0)document.getElementById("do_profit").value=sale-purchase-reno;
+}
+
+async function saveDealOutcome(dealId,existingId){
+  const payload={
+    deal_id:dealId,
+    actual_reno_cost:Number(document.getElementById("do_reno")?.value)||null,
+    actual_hold_months:Number(document.getElementById("do_hold")?.value)||null,
+    actual_sale_price:Number(document.getElementById("do_sale")?.value)||null,
+    actual_profit:Number(document.getElementById("do_profit")?.value)||null,
+    notes:document.getElementById("do_notes")?.value?.trim()||null
+  };
+  try{
+    if(existingId){
+      await fetch(`${SB}/rest/v1/deal_outcomes?id=eq.${existingId}`,{method:'PATCH',headers:HD,body:JSON.stringify(payload)});
+    }else{
+      await fetch(`${SB}/rest/v1/deal_outcomes`,{method:'POST',headers:HD,body:JSON.stringify(payload)});
+    }
+    loadDealOutcomes(dealId);
+    const toast=document.createElement('div');
+    toast.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:10px;background:#10b981;color:#0a0a0a;font-size:12px;font-weight:800;z-index:9999';
+    toast.textContent='Outcomes saved';
+    document.body.appendChild(toast);
+    setTimeout(()=>toast.remove(),2000);
+  }catch(e){console.error("Save outcome failed:",e);alert("Failed to save outcomes.");}
 }
