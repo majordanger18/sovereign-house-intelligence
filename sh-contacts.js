@@ -908,6 +908,8 @@ async function saveParsedBid(){
   const payload={
     deal_id:dealId,contact_id:contactId,
     initial_bid:parsed.total_bid||parsed.total||(parsed.subtotal||0)+(parsed.overhead_amount||parsed.overhead||0),
+    overhead_pct:parsed.overhead_pct||0,
+    overhead_amount:parsed.overhead_amount||0,
     scope_description:(parsed.sections||[]).map(s=>s.section_name+': $'+s.section_total.toLocaleString()).join(' | '),
     bid_date:parsed.bid_date||new Date().toISOString().split("T")[0],
     status:"received",
