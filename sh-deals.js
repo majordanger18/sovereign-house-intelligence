@@ -429,6 +429,8 @@ function renderTimelineEntry(e){
 
 async function updateDealStatus(dealId,newStatus){
   const d=deals.find(x=>x.id===dealId);if(!d)return;
+  const newLabel=(DEAL_STAGES[newStatus]||{}).label||newStatus;
+  if(!confirm("Move deal to "+newLabel+"?"))return;
   const oldStatus=d.status;
   const tl=Array.isArray(d.timeline)?[...d.timeline]:[];
   const newEntry={date:new Date().toISOString(),type:'status_change',from:'system',summary:`Status: ${(DEAL_STAGES[oldStatus]||{}).label||oldStatus} → ${(DEAL_STAGES[newStatus]||{}).label||newStatus}`};
