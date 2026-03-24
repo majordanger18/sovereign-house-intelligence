@@ -424,7 +424,7 @@ function renderBidsV(el){
         h+=`<td class="reno-hm">${b.bid_accuracy_pct!=null?`<span style="color:${baC};font-weight:700">${Math.round(b.bid_accuracy_pct)}%</span>`:"—"}</td>`;
         h+=`<td class="reno-hm">${b.overall_rating?renderStars(b.overall_rating):"—"}</td>`;
       }
-      h+=`<td style="white-space:nowrap">${b.bid_document_url?`<a href="${esc(b.bid_document_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none;margin-right:6px">📄 Bid</a>`:""}${hasCmp?`<button onclick="event.stopPropagation();viewBidComparison('${b.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">View SOW</button>`:""}<button onclick="event.stopPropagation();deleteBid('${b.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;opacity:0.7;padding:4px 8px">Delete</button></td>`;
+      h+=`<td><div style="display:flex;align-items:center;gap:12px;white-space:nowrap">${b.bid_document_url?`<a href="${esc(b.bid_document_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none">📄 Bid</a>`:""}${hasCmp?`<button onclick="event.stopPropagation();viewBidComparison('${b.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer">View SOW</button>`:""}<button onclick="event.stopPropagation();deleteBid('${b.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;opacity:0.7;padding:4px 8px">Delete</button></div></td>`;
       h+=`</tr>`;
     });
     h+=`</tbody></table></div>`;
