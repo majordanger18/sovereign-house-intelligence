@@ -1073,21 +1073,42 @@ async function generateBidAnalysis(dealId){
   const address=bids[0].deals?.address||"Property";
   const bidContext=bids.map(b=>{
     const name=b.contacts?.display_name||"Unknown";
-    return`--- ${name} (Total: $${(b.initial_bid||0).toLocaleString()}) ---\n${JSON.stringify(b.parsed_line_items,null,2)}`;
+    const pl=b.parsed_line_items||{};
+    const sections=(pl.sections||[]).map(s=>{
+      const items=(s.items||[]).map(i=>`    - ${i.description}: ${(i.amount||0).toLocaleString()}`).join("\n");
+      return`  SECTION: ${s.section_name} — TOTAL: ${(s.section_total||0).toLocaleString()}\n${items}`;
+    }).join("\n");
+    const tbd=(pl.tbd_items||[]).length?`\n  TBD ITEMS (unpriced): ${(pl.tbd_items||[]).join(", ")}`:"";
+    return`=== ${name} — Total: ${(b.initial_bid||0).toLocaleString()} ===\nOverhead: ${pl.overhead_pct||0}% (${(pl.overhead_amount||0).toLocaleString()})\n${sections}${tbd}`;
   }).join("\n\n");
 
-  const prompt=`You are analyzing ${bids.length} contractor bids for a luxury residential flip in Las Vegas at ${address}. Compare these bids section by section and provide:
+  const prompt=`You are a construction cost analyst reviewing contractor bids for a luxury residential flip at ${address} in Las Vegas. The owner-operator buys their own materials — so labor and contractor-supplied materials both matter.
 
-1. EXECUTIVE SUMMARY — which contractor is lower, by how much, and your overall recommendation
-2. SECTION BY SECTION ANALYSIS — for each major scope area, note which bid is lower and by how much, and flag any areas where one contractor is significantly over or under the other
-3. SCOPE GAPS — items one contractor included that the other didn't, and what that means for the total comparison
-4. RED FLAGS — any line items that look unusually high or low in either bid
-5. NEGOTIATION LEVERAGE — specific items where you have data to push back on the higher bidder
+Here are the complete line-item bids:
 
-Keep it concise and actionable. Format for a printed meeting handout.
+${bidContext}
 
-BIDS:
-${bidContext}`;
+Provide a detailed analysis with these sections:
+
+## EXECUTIVE SUMMARY
+Who wins overall and why. Adjusted totals if scope gaps exist. One clear recommendation.
+
+## SECTION BY SECTION BREAKDOWN
+For each major area (kitchen, bathrooms, flooring, electrical, etc.) — who is cheaper, by how much, and any quality/scope concerns based on the line items. Call out vague line items with no spec.
+
+## SCOPE GAPS (Critical)
+Items one contractor priced that the other didn't. Adjust each total to account for missing scope and show the apples-to-apples comparison.
+
+## RED FLAGS
+Specific line items that are unusually high, unusually low, or vaguely described. Include the dollar amount and why it's a flag.
+
+## NEGOTIATION PLAYBOOK
+For the recommended contractor: list the top 5 specific line items to push back on, what to say, and what a fair price looks like based on the comparison data.
+
+## BOTTOM LINE
+One paragraph. What to do, who to hire, what to negotiate first.
+
+Be specific. Use actual dollar amounts from the bids. This will be printed and used in a contractor meeting.`;
 
   try{
     const res=await fetch("https://api.anthropic.com/v1/messages",{
@@ -1100,7 +1121,18 @@ ${bidContext}`;
     const text=(data.content||[]).map(c=>c.text||"").join("");
 
     // Render printable modal
-    const formatted=text.replace(/\n/g,"<br>");
+    function mdToHtml(md){
+      return md
+        .replace(/^## (.+)$/gm,'<h2 style="font-size:15px;font-weight:800;color:#111;margin:20px 0 8px;padding-bottom:4px;border-bottom:2px solid #e2e8f0;text-transform:uppercase;letter-spacing:0.5px">$1</h2>')
+        .replace(/^### (.+)$/gm,'<h3 style="font-size:13px;font-weight:800;color:#333;margin:14px 0 4px">$1</h3>')
+        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+        .replace(/^---$/gm,'<hr style="border:none;border-top:1px solid #e2e8f0;margin:12px 0"/>')
+        .replace(/^- (.+)$/gm,'<div style="padding:2px 0 2px 16px;font-size:13px;color:#333;line-height:1.6">• $1</div>')
+        .replace(/^\d+\. (.+)$/gm,'<div style="padding:2px 0 2px 16px;font-size:13px;color:#333;line-height:1.6">$1</div>')
+        .replace(/\n\n/g,'<div style="height:6px"></div>')
+        .replace(/\n/g,'<br>');
+    }
+    const formatted=mdToHtml(text);
     const bidHeaders=bids.map(b=>`<div style="flex:1;text-align:center;padding:8px;border:1px solid #ddd;border-radius:8px"><div style="font-weight:700">${esc(b.contacts?.display_name||"?")}</div><div style="font-size:14px;color:#666">$${(b.initial_bid||0).toLocaleString()}</div></div>`).join("");
 
     const pm=document.getElementById("contactsModal");
