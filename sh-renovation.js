@@ -206,7 +206,7 @@ function renderBudget(el){
     const holdPct=totalMonths>0?Math.min(msFunded/totalMonths*100,100):0;
     h+=`<div class="fin-hold-bar" style="border-color:${matBarColor}30;background:${matBarColor}08">`;
     h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:${matBarColor}">HOLD PERIOD</span>`;
-    h+=`<span style="font-size:10px;color:#64748b">Funded ${new Date(renoFin.funded_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"numeric"})}</span></div>`;
+    h+=`<span style="font-size:10px;color:#64748b">Funded ${new Date(renoFin.funded_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"numeric",timeZone:"America/Los_Angeles"})}</span></div>`;
     h+=`<div class="reno-pbar" style="margin-bottom:6px"><div class="reno-pfill" style="width:${holdPct}%;background:${matBarColor}"></div></div>`;
     h+=`<div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700">`;
     h+=`<span style="color:#94a3b8">${msFunded.toFixed(1)} months elapsed</span>`;
@@ -316,7 +316,7 @@ async function loadLineExp(lid){
       ex.forEach(e=>{
         const tc=EXP_TYPE_COLORS[e.expense_type]||"#94a3b8";
         exTotal+=e.amount||0;
-        h+=`<div class="reno-lx-row"><span style="color:#64748b;min-width:52px;font-size:10px">${e.expense_date?new Date(e.expense_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"2-digit"}):"—"}</span><span style="color:#94a3b8;min-width:70px;font-size:10px">${esc(e.vendor_name||"—")}</span><span style="flex:1;color:#e2e8f0;font-size:10px">${esc(e.description||"")}</span><span style="font-weight:700;min-width:65px;text-align:right;font-size:10px">${$r(e.amount)}</span><span><span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30">${e.expense_type||"other"}</span></span></div>`;
+        h+=`<div class="reno-lx-row"><span style="color:#64748b;min-width:52px;font-size:10px">${e.expense_date?new Date(e.expense_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"2-digit",timeZone:"America/Los_Angeles"}):"—"}</span><span style="color:#94a3b8;min-width:70px;font-size:10px">${esc(e.vendor_name||"—")}</span><span style="flex:1;color:#e2e8f0;font-size:10px">${esc(e.description||"")}</span><span style="font-weight:700;min-width:65px;text-align:right;font-size:10px">${$r(e.amount)}</span><span><span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30">${e.expense_type||"other"}</span></span></div>`;
       });
       h+=`</div><div style="font-size:11px;font-weight:700;color:#f1f5f9;margin-top:4px">Total: ${$r(exTotal)}</div>`;
     }else{
@@ -333,7 +333,7 @@ async function loadLineExp(lid){
       draws.forEach(d=>{
         const dr=d.renovation_draws||{};
         const dsc=RENO_STAT_COLORS[dr.status]||"#64748b";
-        h+=`<div class="reno-lx-row"><span style="color:#e2e8f0;font-weight:700;font-size:10px;min-width:55px">Draw #${dr.draw_number||"?"}</span><span style="font-weight:700;font-size:10px;min-width:65px;text-align:right">${$r(d.amount)}</span><span><span class="reno-chip" style="color:${dsc};background:${dsc}15;border:1px solid ${dsc}30">${(dr.status||"—").replace(/_/g," ")}</span></span>${dr.date_submitted?`<span style="color:#64748b;font-size:9px">${new Date(dr.date_submitted+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric"})}</span>`:''}</div>`;
+        h+=`<div class="reno-lx-row"><span style="color:#e2e8f0;font-weight:700;font-size:10px;min-width:55px">Draw #${dr.draw_number||"?"}</span><span style="font-weight:700;font-size:10px;min-width:65px;text-align:right">${$r(d.amount)}</span><span><span class="reno-chip" style="color:${dsc};background:${dsc}15;border:1px solid ${dsc}30">${(dr.status||"—").replace(/_/g," ")}</span></span>${dr.date_submitted?`<span style="color:#64748b;font-size:9px">${new Date(dr.date_submitted+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",timeZone:"America/Los_Angeles"})}</span>`:''}</div>`;
       });
     }else{
       h+=`<div style="color:#475569;font-size:11px">Not drawn yet</div>`;
@@ -430,7 +430,7 @@ async function openDrawUpdateTo(drawId,statusKey,dateField,stepIndex){
   let h=`<div class="sheet" style="position:relative;max-height:80vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeRenoModal()">✕</button>`;
   h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">SET DRAW STATUS</div>`;
   h+=`<div style="font-size:16px;font-weight:800;margin-bottom:16px">Draw #${dr.draw_number} → ${label}</div>`;
-  h+=`<div class="fld"><label>${label.toUpperCase()} DATE</label><input id="dsDate" type="date" class="cinput" value="${new Date().toISOString().split("T")[0]}"/></div>`;
+  h+=`<div class="fld"><label>${label.toUpperCase()} DATE</label><input id="dsDate" type="date" class="cinput" value="${new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'})}"/></div>`;
   if(statusKey==="disbursed"){
     h+=`<div class="fld"><label>AMOUNT RECEIVED</label><input id="dsAmt" type="number" class="cinput" value="${(dr.amount_requested||0)-(dr.draw_fee||0)}" placeholder="Net amount after fee"/></div>`;
   }
@@ -479,7 +479,7 @@ async function deleteDraw(drawId,drawNum){
   }catch(e){console.error("Delete draw failed:",e);showRenoToast("Failed to delete draw");}
 }
 
-function fmtDate(d){if(!d)return"—";return new Date(d+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"numeric"});}
+function fmtDate(d){if(!d)return"—";return new Date(d+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"numeric",timeZone:"America/Los_Angeles"});}
 
 // ═══ DRAW STATUS UPDATE ═══
 async function openDrawUpdate(drawId,cs){
@@ -489,7 +489,7 @@ async function openDrawUpdate(drawId,cs){
   let h=`<div class="sheet" style="position:relative;max-height:80vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeRenoModal()">✕</button>`;
   h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">UPDATE DRAW STATUS</div>`;
   h+=`<div style="font-size:16px;font-weight:800;margin-bottom:16px">Draw #${dr.draw_number} → ${ns.label}</div>`;
-  h+=`<div class="fld"><label>${ns.label.toUpperCase()} DATE</label><input id="dsDate" type="date" class="cinput" value="${new Date().toISOString().split("T")[0]}"/></div>`;
+  h+=`<div class="fld"><label>${ns.label.toUpperCase()} DATE</label><input id="dsDate" type="date" class="cinput" value="${new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'})}"/></div>`;
   if(ns.key==="disbursed")h+=`<div class="fld"><label>AMOUNT RECEIVED</label><input id="dsAmt" type="number" class="cinput" value="${(dr.amount_requested||0)-(dr.draw_fee||0)}" placeholder="Net amount received"/></div>`;
   h+=`<div class="fld"><label>AMOUNT REQUESTED</label><input id="dsAmt2" type="number" class="cinput" value="${dr.amount_requested||0}"/></div>`;
   h+=`<div class="fld"><label>DRAW FEE</label><input id="dsFee" type="number" class="cinput" value="${dr.draw_fee||0}"/></div>`;
@@ -633,7 +633,7 @@ function renderExpV(el){
   h+=`<div style="font-size:10px;color:#475569;text-align:center;margin-bottom:10px">Or enter manually below</div>`;
   // Quick entry form
   h+=`<div class="reno-ef"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:10px">LOG EXPENSE</div><div class="reno-eg">`;
-  h+=`<div class="fld"><label>DATE</label><input id="exD" type="date" class="cinput" value="${new Date().toISOString().split("T")[0]}"/></div>`;
+  h+=`<div class="fld"><label>DATE</label><input id="exD" type="date" class="cinput" value="${new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'})}"/></div>`;
   const sowFiltered=renoSOW.filter(l=>Number(l.lender_approved)>0||Number(l.planned_budget)>0);
   console.log("[SH] Expense SOW dropdown: renoSOW="+renoSOW.length+", filtered="+sowFiltered.length,renoSOW.slice(0,3));
   h+=`<div class="fld"><label>SOW LINE</label><select id="exS" class="cinput">`;
@@ -693,7 +693,7 @@ function renderExpLog(){
   f.forEach(e=>{
     const tc=EXP_TYPE_COLORS[e.expense_type]||"#94a3b8";
     const sl=e.renovation_sow_lines;
-    h+=`<tr><td style="color:#94a3b8;white-space:nowrap">${e.expense_date?new Date(e.expense_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric"}):"—"}</td><td>${sl?`<span class="reno-chip" style="color:#94a3b8;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">#${sl.line_number}</span>`:"—"}</td><td style="color:#94a3b8">${esc(e.vendor_name||"—")}</td><td style="color:#e2e8f0;font-weight:600">${esc(e.description||"")}</td><td style="text-align:right;font-weight:700">${$r(e.amount)}</td><td><span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30">${e.expense_type||"other"}</span></td><td class="reno-hm" style="color:#64748b">${e.payment_method?e.payment_method.replace(/_/g," "):"—"}</td><td><div style="display:flex;align-items:center;gap:12px;white-space:nowrap">${e.receipt_photo_url?`<a href="${esc(e.receipt_photo_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none">📄 Receipt</a>`:""}<button onclick="event.stopPropagation();editExpense('${e.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;padding:2px 4px">Edit</button><button onclick="event.stopPropagation();deleteExpense('${e.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;padding:2px 4px">Del</button></div></td></tr>`;
+    h+=`<tr><td style="color:#94a3b8;white-space:nowrap">${e.expense_date?new Date(e.expense_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",timeZone:"America/Los_Angeles"}):"—"}</td><td>${sl?`<span class="reno-chip" style="color:#94a3b8;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">#${sl.line_number}</span>`:"—"}</td><td style="color:#94a3b8">${esc(e.vendor_name||"—")}</td><td style="color:#e2e8f0;font-weight:600">${esc(e.description||"")}</td><td style="text-align:right;font-weight:700">${$r(e.amount)}</td><td><span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30">${e.expense_type||"other"}</span></td><td class="reno-hm" style="color:#64748b">${e.payment_method?e.payment_method.replace(/_/g," "):"—"}</td><td><div style="display:flex;align-items:center;gap:12px;white-space:nowrap">${e.receipt_photo_url?`<a href="${esc(e.receipt_photo_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none">📄 Receipt</a>`:""}<button onclick="event.stopPropagation();editExpense('${e.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;padding:2px 4px">Edit</button><button onclick="event.stopPropagation();deleteExpense('${e.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;padding:2px 4px">Del</button></div></td></tr>`;
   });
   h+=`</tbody></table></div>`;
 
@@ -887,10 +887,10 @@ function prefillExpenseForm(parsed){
 function exportCPAReport(){
   const d=deals.find(x=>x.id===renoDealId);if(!d){showRenoToast("No deal selected");return;}
   const f=renoFin;const ov=renoOv;
-  const now=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const now=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric',timeZone:'America/Los_Angeles'});
   const fmt=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const pct=n=>(Number(n||0)).toFixed(2)+'%';
-  const dt=v=>v?new Date(v+'T00:00:00').toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'}):'—';
+  const dt=v=>v?new Date(v+'T00:00:00').toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'America/Los_Angeles'}):'—';
   const e=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
   const purchasePrice=f?.purchase_price||d.accepted_price||d.offer_price||0;
@@ -1315,7 +1315,7 @@ function finRunningTotals(f,d){
   // Log Interest Payment button
   h+=`<div style="margin-top:12px"><button onclick="document.getElementById('finIntForm').style.display=document.getElementById('finIntForm').style.display==='none'?'block':'none'" class="btn" style="width:100%;padding:10px;font-size:12px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);color:#60a5fa;font-weight:700">Log Interest Payment</button>`;
   h+=`<div id="finIntForm" style="display:none;margin-top:8px;padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
-  h+=`<div class="row2"><div class="fld"><label>PAYMENT DATE</label><input id="finIntDate" type="date" class="cinput" value="${new Date().toISOString().split('T')[0]}"/></div>`;
+  h+=`<div class="row2"><div class="fld"><label>PAYMENT DATE</label><input id="finIntDate" type="date" class="cinput" value="${new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'})}"/></div>`;
   h+=`<div class="fld"><label>AMOUNT</label><input id="finIntAmt" type="number" step="0.01" class="cinput" value="${mip}"/></div></div>`;
   h+=`<button onclick="logInterestPayment()" class="btn" style="width:100%;padding:10px;font-size:12px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;margin-top:6px">Save Payment</button>`;
   h+=`</div></div>`;
@@ -1843,7 +1843,7 @@ function renderTaskCard(t){
   let dueTxt='',dueColor='#64748b';
   if(t.due_date){
     const dd=new Date(t.due_date+"T00:00:00");
-    dueTxt="Due "+dd.toLocaleDateString("en-US",{month:"numeric",day:"numeric"});
+    dueTxt="Due "+dd.toLocaleDateString("en-US",{month:"numeric",day:"numeric",timeZone:"America/Los_Angeles"});
     if(!isDone){
       const diff=(dd-now)/(864e5);
       if(diff<0)dueColor="#ef4444";
@@ -1876,7 +1876,7 @@ function renderTaskCard(t){
   h+=`<span style="padding:1px 6px;border-radius:4px;background:${cc}15;color:${cc};font-size:9px;font-weight:700;border:1px solid ${cc}30">${(t.category||"").replace(/_/g," ")}</span>`;
   h+=`<span style="color:#64748b">${name}</span>`;
   if(dueTxt)h+=`<span style="color:${dueColor};font-weight:600">${dueTxt}</span>`;
-  if(isDone&&t.completed_at)h+=`<span style="color:#22c55e;font-size:10px">Completed ${new Date(t.completed_at).toLocaleDateString("en-US",{month:"numeric",day:"numeric"})}</span>`;
+  if(isDone&&t.completed_at)h+=`<span style="color:#22c55e;font-size:10px">Completed ${new Date(t.completed_at).toLocaleDateString("en-US",{month:"numeric",day:"numeric",timeZone:"America/Los_Angeles"})}</span>`;
   h+=`</div>`;
 
   if(t.notes)h+=`<div style="font-size:11px;color:#475569;margin-top:4px">${esc(t.notes)}</div>`;

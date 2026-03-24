@@ -461,7 +461,7 @@ function openBidForm(editId){
 
   // Bid amounts
   h+=`<div class="row2"><div class="fld"><label>INITIAL BID</label><input id="bfInit" type="number" class="cinput" value="${isEdit&&b.initial_bid?b.initial_bid:""}"/></div>`;
-  h+=`<div class="fld"><label>BID DATE</label><input id="bfDate" type="date" class="cinput" value="${isEdit&&b.bid_date?b.bid_date:new Date().toISOString().split("T")[0]}"/></div></div>`;
+  h+=`<div class="fld"><label>BID DATE</label><input id="bfDate" type="date" class="cinput" value="${isEdit&&b.bid_date?b.bid_date:new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'})}"/></div></div>`;
   h+=`<div class="row2"><div class="fld"><label>NEGOTIATED BID</label><input id="bfNeg" type="number" class="cinput" value="${isEdit&&b.negotiated_bid?b.negotiated_bid:""}"/></div>`;
   h+=`<div class="fld"><label>FINAL CONTRACTED</label><input id="bfFinal" type="number" class="cinput" value="${isEdit&&b.final_contracted?b.final_contracted:""}"/></div></div>`;
 

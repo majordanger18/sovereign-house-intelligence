@@ -585,8 +585,8 @@ async function loadDealFinSummary(dealId){
     let matWarn='';
     if(f.maturity_date){
       const diff=(new Date(f.maturity_date+"T00:00:00")-new Date())/(864e5*30);
-      if(diff<4)matWarn=` · <span style="color:#ef4444;font-weight:800">Matures ${new Date(f.maturity_date+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</span>`;
-      else matWarn=` · Matures ${new Date(f.maturity_date+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}`;
+      if(diff<4)matWarn=` · <span style="color:#ef4444;font-weight:800">Matures ${new Date(f.maturity_date+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric",timeZone:"America/Los_Angeles"})}</span>`;
+      else matWarn=` · Matures ${new Date(f.maturity_date+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric",timeZone:"America/Los_Angeles"})}`;
     }
     el.innerHTML=`<div style="padding:10px 12px;margin-bottom:8px;border-radius:10px;background:rgba(6,182,212,0.04);border:1px solid rgba(6,182,212,0.12);font-size:11px;color:${sc2}">
       <span style="font-weight:800">FINANCING:</span> ${esc(f.lender_name||'—')} | ${f.interest_rate||'—'}% | ${$r(f.funded_principal)} principal${matWarn}
