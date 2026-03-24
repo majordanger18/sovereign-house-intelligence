@@ -895,6 +895,20 @@ async function generatePDF() {
     STATE.pdfPageCount = STATE.pdfDoc.numPages;
     STATE.pdfPageNum = 1;
     STATE.view = "preview";
+
+    // ═══ BACKGROUND UPLOAD TO SUPABASE STORAGE ═══
+    (async()=>{
+      try{
+        const addrSlug=(STATE.form.property_address||"").split(",")[0].trim().replace(/[^a-zA-Z0-9]+/g,"_").toLowerCase()||"unknown";
+        const ts=Date.now();
+        const filePath=`rpa_${addrSlug}_${ts}.pdf`;
+        const uploadBlob=new Blob([bytes],{type:'application/pdf'});
+        const {data,error}=await _sbClient.storage.from('rpa-documents').upload(filePath,uploadBlob,{contentType:'application/pdf',upsert:true});
+        if(error){console.error("[RPA STORAGE] Background upload error:",error);}
+        else{const {data:urlData}=_sbClient.storage.from('rpa-documents').getPublicUrl(filePath);console.log("[RPA STORAGE] Background upload OK. URL:",urlData?.publicUrl);}
+      }catch(e){console.error("[RPA STORAGE] Background upload failed:",e);}
+    })();
+
   } catch(e) {
     console.error("RPA generation error:", e);
   }
