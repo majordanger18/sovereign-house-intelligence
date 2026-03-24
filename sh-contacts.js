@@ -413,7 +413,7 @@ function renderBidsV(el){
       const hasCmp=b.sow_comparison&&(Array.isArray(b.sow_comparison)?b.sow_comparison.length:true);
       h+=`<tr class="reno-r" onclick="openBidForm('${b.id}')" style="${accepted?"border-left:3px solid #22c55e":""}">`;
       h+=`<td style="font-weight:600;color:#e2e8f0">${esc(b.contacts?.display_name||"—")}${b.contacts?.company?`<div style="font-size:9px;color:#64748b">${esc(b.contacts.company)}</div>`:""}</td>`;
-      h+=`<td style="text-align:right;font-weight:700">${$r(b.initial_bid)}</td>`;
+      h+=`<td style="text-align:right;font-weight:700">${$r(b.initial_bid)}${(b.current_revision||1)>1?` <span style="font-size:8px;color:#a855f7;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);border-radius:4px;padding:1px 4px;font-weight:800">Rev ${b.current_revision}</span>`:""}</td>`;
       h+=`<td style="text-align:right">${b.negotiated_bid?$r(b.negotiated_bid):"—"}</td>`;
       h+=`<td style="text-align:right;font-weight:700;color:#22c55e">${b.final_contracted?$r(b.final_contracted):"—"}</td>`;
       h+=`<td><span class="reno-chip" style="color:${mc};background:${mc}15;border:1px solid ${mc}30">${ml}</span></td>`;
@@ -425,7 +425,16 @@ function renderBidsV(el){
         h+=`<td class="reno-hm">${b.bid_accuracy_pct!=null?`<span style="color:${baC};font-weight:700">${Math.round(b.bid_accuracy_pct)}%</span>`:"—"}</td>`;
         h+=`<td class="reno-hm">${b.overall_rating?renderStars(b.overall_rating):"—"}</td>`;
       }
-      h+=`<td><div style="display:flex;align-items:center;gap:12px;white-space:nowrap">${b.bid_document_url?`<a href="${esc(b.bid_document_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none">📄 Bid</a>`:""}${hasCmp?`<button onclick="event.stopPropagation();viewBidComparison('${b.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer">View SOW</button>`:""}<button onclick="event.stopPropagation();deleteBid('${b.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;opacity:0.7;padding:4px 8px">Delete</button></div></td>`;
+      const rejected=b.status==="rejected";
+      let awardHtml="";
+      if(accepted)awardHtml=`<span style="color:#22c55e;font-size:10px;font-weight:800;padding:2px 8px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:6px">✓ Awarded</span>`;
+      else if(rejected)awardHtml=`<span style="color:#64748b;font-size:10px;font-weight:600;opacity:0.6">Rejected</span>`;
+      else awardHtml=`<button onclick="event.stopPropagation();awardBid('${b.id}')" style="background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-size:10px;font-weight:800;cursor:pointer;padding:4px 10px;border-radius:6px">Award Bid</button>`;
+      const hasLineItems=b.parsed_line_items&&b.parsed_line_items.sections;
+      const revisionHtml=hasLineItems&&!accepted&&!rejected?`<button onclick="event.stopPropagation();uploadBidRevision('${b.id}')" style="background:none;border:none;color:#a855f7;font-size:10px;font-weight:700;cursor:pointer">Upload Revision</button>`:"";
+      const hasHistory=Array.isArray(b.revision_history)&&b.revision_history.length>0;
+      const historyHtml=hasHistory?`<button onclick="event.stopPropagation();viewRevisionHistory('${b.id}')" style="background:none;border:none;color:#a855f7;font-size:10px;font-weight:700;cursor:pointer;opacity:0.8">History (${b.revision_history.length})</button>`:"";
+      h+=`<td><div style="display:flex;align-items:center;gap:12px;white-space:nowrap">${b.bid_document_url?`<a href="${esc(b.bid_document_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none">📄 Bid</a>`:""}${hasCmp?`<button onclick="event.stopPropagation();viewBidComparison('${b.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer">View SOW</button>`:""}${awardHtml}${revisionHtml}${historyHtml}<button onclick="event.stopPropagation();deleteBid('${b.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;opacity:0.7;padding:4px 8px">Delete</button></div></td>`;
       h+=`</tr>`;
     });
     h+=`</tbody></table></div>`;
@@ -1186,6 +1195,183 @@ async function deleteBid(bidId){
     showCtToast("Bid deleted");
     await loadCtData();renderCtSub();
   }catch(e){console.error("Delete bid failed:",e);}
+}
+
+// ═══ AWARD BID ═══
+async function awardBid(bidId){
+  const b=ctBids.find(x=>x.id===bidId);if(!b)return;
+  const prefill=b.negotiated_bid||b.initial_bid||0;
+  const input=prompt("Final contracted amount?",prefill);
+  if(input===null)return;
+  const amount=parseFloat(input);
+  if(isNaN(amount)||amount<=0){alert("Enter a valid dollar amount.");return;}
+  const ctrName=b.contacts?.display_name||"this contractor";
+  const otherCount=ctBids.filter(x=>x.deal_id===b.deal_id&&x.id!==bidId).length;
+  if(!confirm(`Award bid to ${ctrName} at ${$r(amount)}?\n\nThis will mark ${otherCount} other bid${otherCount!==1?"s":""} for this deal as rejected.`))return;
+  try{
+    await fetch(SB+"/rest/v1/contractor_bids?id=eq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify({status:"accepted",final_contracted:amount})});
+    await fetch(SB+"/rest/v1/contractor_bids?deal_id=eq."+b.deal_id+"&id=neq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify({status:"rejected"})});
+    const d=deals.find(x=>x.id===b.deal_id);
+    if(d){
+      const tl=Array.isArray(d.timeline)?[...d.timeline]:[];
+      tl.push({date:new Date().toISOString(),type:"contractor_awarded",from:"user",summary:`Bid awarded to ${ctrName} at ${$r(amount)}. ${otherCount} competing bid${otherCount!==1?"s":""} rejected.`});
+      await fetch(SB+"/rest/v1/deals?id=eq."+b.deal_id,{method:"PATCH",headers:HD,body:JSON.stringify({timeline:tl,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null})});
+      d.timeline=tl;
+    }
+    showCtToast(`Bid awarded to ${ctrName} — ${$r(amount)}`);
+    await loadCtData();renderCtSub();
+  }catch(e){console.error("Award bid failed:",e);alert("Failed to award bid.");}
+}
+
+// ═══ BID REVISION SYSTEM ═══
+function uploadBidRevision(bidId){
+  const b=ctBids.find(x=>x.id===bidId);if(!b)return;
+  const ctrName=b.contacts?.display_name||"Contractor";
+  const revNum=(b.current_revision||1)+1;
+  const m=document.getElementById("contactsModal");
+  let h=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button>`;
+  h+=`<div style="font-size:10px;color:#a855f7;font-weight:800;letter-spacing:3px;margin-bottom:4px">BID REVISION ${revNum}</div>`;
+  h+=`<div style="font-size:18px;font-weight:800;margin-bottom:4px">${esc(ctrName)}</div>`;
+  h+=`<div style="font-size:12px;color:#94a3b8;margin-bottom:16px">Current bid: ${$r(b.initial_bid)} (Rev ${b.current_revision||1})</div>`;
+  h+=`<div class="fld"><label>REVISED BID DOCUMENT</label><div id="revFileLabel" onclick="document.getElementById('revFileInput').click()" style="padding:20px;border-radius:10px;border:2px dashed rgba(168,85,247,0.2);background:rgba(168,85,247,0.02);text-align:center;cursor:pointer;color:#94a3b8;font-size:13px;font-weight:600;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(168,85,247,0.5)'" onmouseout="this.style.borderColor='rgba(168,85,247,0.2)'">📄 Choose PDF, JPG, or PNG</div><input type="file" id="revFileInput" accept=".pdf,image/*" style="display:none" onchange="if(this.files[0]){const l=document.getElementById('revFileLabel');l.innerHTML='📄 '+this.files[0].name;l.style.borderColor='rgba(34,197,94,0.4)';l.style.color='#e2e8f0'}"/></div>`;
+  h+=`<button onclick="parseRevision('${b.id}')" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;font-weight:800;border:none;margin-top:8px">🤖 Parse Revision</button>`;
+  h+=`</div>`;
+  m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
+}
+
+async function parseRevision(bidId){
+  const file=document.getElementById("revFileInput")?.files[0];
+  if(!file){alert("Select a revised bid document.");return;}
+  const b=ctBids.find(x=>x.id===bidId);if(!b)return;
+  const dealId=b.deal_id;
+
+  const m=document.getElementById("contactsModal");
+  m.innerHTML=`<div class="sheet" style="position:relative"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button><div style="text-align:center;padding:40px"><div style="width:24px;height:24px;border:2px solid rgba(168,85,247,0.2);border-top-color:#a855f7;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px"></div><div style="font-size:12px;color:#a855f7;font-weight:700">Parsing revised bid with AI...</div><div style="font-size:10px;color:#64748b;margin-top:4px">This may take 30-60 seconds</div></div></div>`;
+
+  let apiKey=localStorage.getItem("sh_claude_key");
+  if(!apiKey){apiKey=prompt("Enter your Claude API key:");if(!apiKey){closeCtModal();return;}localStorage.setItem("sh_claude_key",apiKey);}
+
+  const bidPath=storagePath(dealId,"bids",file);
+  const revUrl=await uploadToStorage(file,"sovereign-docs",bidPath);
+  const revFileName=file.name;
+
+  const buf=await file.arrayBuffer();
+  const bytes=new Uint8Array(buf);
+  let binary="";const chunk=8192;
+  for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+  const b64=btoa(binary);
+  const mediaType=file.type.startsWith('image/')?file.type:'application/pdf';
+  const docType=file.type.startsWith('image/')?'image':'document';
+
+  let sowLines=[];
+  try{const sw=await sb("renovation_sow_lines?deal_id=eq."+dealId+"&order=line_number&lender_approved=gt.0");sowLines=Array.isArray(sw)?sw:[];}catch(e){}
+
+  const sowContext=sowLines.length?"\n\nALSO: Here are the lender-approved SOW budget lines for this project. For each section in the bid, tell me which SOW line(s) it maps to. A section can map to one or more SOW lines. Multiple bid sections CAN map to the same SOW line (e.g. Primary Bathroom and Secondary Bathrooms both map to the Bathrooms SOW line). Include the mapping in each section object.\n\nSOW LINES:\n"+sowLines.map(l=>"#"+l.line_number+" "+l.category+" — "+l.description+" ($"+l.lender_approved+")").join("\n")+"\n\nAdd to each section object in your response:\n  \"sow_line_matches\": [{\"line_number\": 14, \"description\": \"Bathrooms\", \"budget\": 34000}]\n\nIf a section has NO matching SOW line, set sow_line_matches to an empty array [].\nIf a section spans multiple SOW lines (like Kitchen + Appliances), include all matches.":"";
+
+  const content=[
+    {type:docType,source:{type:"base64",media_type:mediaType,data:b64}},
+    {type:"text",text:"Parse this contractor bid document. The bid is organized into SECTIONS (bold headers like DEMOLITION, KITCHEN RENOVATION, etc.) with individual line items under each section.\n\nReturn ONLY a JSON object — no markdown, no backticks, no explanation:\n\n{\"contractor_name\":\"Company name\",\"contractor_address\":\"Address if visible\",\"contractor_phone\":\"Phone if visible\",\"bid_date\":\"YYYY-MM-DD or null\",\"project_address\":\"Project address if visible\",\"sections\":[{\"section_name\":\"DEMOLITION\",\"items\":[{\"item_number\":1,\"description\":\"Dumpster Rental and Debris Removal\",\"amount\":1800},{\"item_number\":2,\"description\":\"Remove all Existing Flooring\",\"amount\":3200}],\"section_total\":12100,\"sow_line_matches\":[{\"line_number\":2,\"description\":\"Demolition\",\"budget\":12000}]}],\"subtotal\":350800,\"overhead_pct\":15,\"overhead_amount\":52620,\"total_bid\":403420,\"tbd_items\":[\"description of any TBD items\"],\"notes\":\"Any payment terms or conditions\"}\n\nRULES:\n- Preserve EXACT section groupings from the document bold headers\n- section_total = sum of all item amounts in that section\n- Items marked TBD get amount: 0 and go in tbd_items array\n- Overhead/profit is separate, NOT inside any section\n- subtotal = sum of all section_totals before overhead\n- total_bid = subtotal + overhead_amount\n- Return ONLY valid JSON"+sowContext}
+  ];
+
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:8192,messages:[{role:"user",content:content}]})});
+    if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
+    const data=await res.json();
+    if(data.stop_reason==="max_tokens"){showCtToast("Warning: response truncated, sections may be missing");}
+    const parsed=await robustParseJSON(data,apiKey);
+    const comparison=buildSectionComparison(parsed,sowLines);
+    const unmatchedSOW=sowLines.filter(s=>!_bidUsedSOW.has(s.line_number)&&(s.lender_approved||0)>0);
+    renderRevisionReview(parsed,comparison,unmatchedSOW,bidId,revUrl,revFileName);
+  }catch(e){
+    console.error("Revision parse error:",e);
+    m.innerHTML=`<div class="sheet" style="position:relative"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button><div style="text-align:center;padding:40px"><div style="font-size:32px;margin-bottom:12px">⚠️</div><div style="font-size:14px;font-weight:700;color:#ef4444;margin-bottom:4px">Failed to parse revision</div><div style="font-size:12px;color:#94a3b8;margin-bottom:16px">${esc(e.message||"Unknown error")}</div><button onclick="uploadBidRevision('${bidId}')" class="btn" style="padding:12px 24px;font-size:13px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:#a855f7;font-weight:700">Try Again</button></div></div>`;
+  }
+}
+
+function renderRevisionReview(parsed,comparison,unmatchedSOW,bidId,revUrl,revFileName){
+  const m=document.getElementById("contactsModal");
+  const b=ctBids.find(x=>x.id===bidId);
+  const ctrName=parsed.contractor_name||b?.contacts?.display_name||"Contractor";
+  const revNum=(b?.current_revision||1)+1;
+  const subtotal=parsed.subtotal||(parsed.sections||[]).reduce((s,sec)=>s+(sec.section_total||0),0);
+  const overhead=parsed.overhead_amount||parsed.overhead||0;
+  const totalBid=parsed.total_bid||parsed.total||subtotal+overhead;
+  const prevTotal=b?.initial_bid||0;
+  const delta=totalBid-prevTotal;
+  const deltaSign=delta>=0?"+":"";
+  const deltaColor=delta<0?"#22c55e":delta>0?"#ef4444":"#64748b";
+  const overheadPct=parsed.overhead_pct||parsed.overhead_percent||0;
+
+  let h=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button>`;
+  h+=`<div style="font-size:10px;color:#a855f7;font-weight:800;letter-spacing:3px;margin-bottom:4px">REVISION ${revNum} REVIEW</div>`;
+  h+=`<div style="font-size:18px;font-weight:800;margin-bottom:4px">${esc(ctrName)}</div>`;
+  h+=`<div style="font-size:13px;color:#94a3b8;margin-bottom:4px">New Total: <strong style="color:#f1f5f9">${$r(totalBid)}</strong> <span style="color:${deltaColor};font-weight:700">(${deltaSign}${$r(delta)})</span></div>`;
+  h+=`<div style="font-size:11px;color:#64748b;margin-bottom:4px">Previous: ${$r(prevTotal)} (Rev ${b?.current_revision||1})</div>`;
+  h+=`<div style="font-size:11px;color:#94a3b8;margin-bottom:16px">Subtotal: ${$r(subtotal)} + ${overheadPct}% Overhead: ${$r(overhead)}</div>`;
+  h+=renderBidComparisonBody(parsed,comparison,unmatchedSOW);
+  h+=`<button onclick="saveRevision('${bidId}')" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;font-weight:800;border:none;margin-top:12px">Save as Revision ${revNum}</button>`;
+  h+=`</div>`;
+  m.innerHTML=h;
+  m._pendingRevision={parsed,comparison,unmatchedSOW,bidId,revUrl,revFileName};
+}
+
+async function saveRevision(bidId){
+  const m=document.getElementById("contactsModal");
+  const rev=m._pendingRevision;if(!rev)return;
+  const{parsed,comparison,unmatchedSOW,revUrl,revFileName}=rev;
+  const b=ctBids.find(x=>x.id===bidId);if(!b)return;
+
+  const historyEntry={revision:b.current_revision||1,date:new Date().toISOString(),initial_bid:b.initial_bid,overhead_pct:b.overhead_pct,overhead_amount:b.overhead_amount,scope_description:b.scope_description,parsed_line_items:b.parsed_line_items,sow_comparison:b.sow_comparison,bid_document_url:b.bid_document_url,bid_document_name:b.bid_document_name};
+  const history=Array.isArray(b.revision_history)?[...b.revision_history]:[];
+  history.push(historyEntry);
+
+  const newTotal=parsed.total_bid||parsed.total||(parsed.subtotal||0)+(parsed.overhead_amount||parsed.overhead||0);
+  const newRevNum=(b.current_revision||1)+1;
+  const ctrName=b.contacts?.display_name||"Contractor";
+
+  const patch={initial_bid:newTotal,overhead_pct:parsed.overhead_pct||0,overhead_amount:parsed.overhead_amount||0,scope_description:(parsed.sections||[]).map(s=>s.section_name+': $'+s.section_total.toLocaleString()).join(' | '),parsed_line_items:{...parsed,_unmatchedSOW:unmatchedSOW||[]},sow_comparison:comparison,current_revision:newRevNum,revision_history:history};
+  if(revUrl){patch.bid_document_url=revUrl;patch.bid_document_name=revFileName;}
+
+  try{
+    await fetch(SB+"/rest/v1/contractor_bids?id=eq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify(patch)});
+    closeCtModal();showCtToast(`Revision ${newRevNum} saved — ${esc(ctrName)} at ${$r(newTotal)}`);
+    await loadCtData();renderCtSub();
+  }catch(e){console.error("Save revision failed:",e);alert("Failed to save revision.");}
+}
+
+function viewRevisionHistory(bidId){
+  const b=ctBids.find(x=>x.id===bidId);
+  if(!b||!Array.isArray(b.revision_history)||!b.revision_history.length)return;
+  const m=document.getElementById("contactsModal");
+  const ctrName=b.contacts?.display_name||"Contractor";
+
+  let h=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button>`;
+  h+=`<div style="font-size:10px;color:#a855f7;font-weight:800;letter-spacing:3px;margin-bottom:4px">REVISION HISTORY</div>`;
+  h+=`<div style="font-size:18px;font-weight:800;margin-bottom:4px">${esc(ctrName)}</div>`;
+  h+=`<div style="font-size:12px;color:#94a3b8;margin-bottom:16px">Current: Rev ${b.current_revision||1} — ${$r(b.initial_bid)}</div>`;
+
+  h+=`<div style="padding:12px;border-radius:10px;background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.15);margin-bottom:8px">`;
+  h+=`<div style="display:flex;justify-content:space-between;align-items:center">`;
+  h+=`<div><span style="font-size:11px;font-weight:800;color:#a855f7">Rev ${b.current_revision||1}</span><span style="font-size:10px;color:#64748b;margin-left:8px">(current)</span></div>`;
+  h+=`<div style="font-size:14px;font-weight:800;color:#f1f5f9">${$r(b.initial_bid)}</div>`;
+  h+=`</div>`;
+  if(b.scope_description)h+=`<div style="font-size:10px;color:#94a3b8;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.scope_description)}</div>`;
+  h+=`</div>`;
+
+  [...b.revision_history].reverse().forEach(rev=>{
+    const revDate=rev.date?new Date(rev.date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric",timeZone:"America/Los_Angeles"}):"";
+    h+=`<div style="padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);margin-bottom:8px">`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center">`;
+    h+=`<div><span style="font-size:11px;font-weight:700;color:#94a3b8">Rev ${rev.revision}</span><span style="font-size:10px;color:#475569;margin-left:8px">${revDate}</span></div>`;
+    h+=`<div style="font-size:13px;font-weight:700;color:#94a3b8">${$r(rev.initial_bid)}</div>`;
+    h+=`</div>`;
+    if(rev.scope_description)h+=`<div style="font-size:10px;color:#64748b;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(rev.scope_description)}</div>`;
+    if(rev.bid_document_url)h+=`<a href="${esc(rev.bid_document_url)}" target="_blank" style="font-size:10px;color:#d4af37;text-decoration:none;font-weight:700;margin-top:4px;display:inline-block">📄 View Document</a>`;
+    h+=`</div>`;
+  });
+
+  h+=`</div>`;
+  m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
 }
 
 // ═══ HELPERS ═══
