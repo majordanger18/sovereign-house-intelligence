@@ -1017,12 +1017,10 @@ async function compareDealBids(dealId){
   });
   h+=`</tr></thead><tbody>`;
 
-  // Per-bid tracking of which section indices have been counted — prevents double counting
   const used=dealBids.map(()=>new Set());
 
   COMPARE_CATEGORIES.forEach(cat=>{
     const amounts=dealBids.map((b,bi)=>{
-      // Overhead is special — read directly from parsed_line_items
       if(cat.keywords[0]==='__overhead__'){
         const full=ctBids.find(x=>x.id===b.id);
         return Number(full?.parsed_line_items?.overhead_amount)||0;
@@ -1038,7 +1036,7 @@ async function compareDealBids(dealId){
       });
       return sum;
     });
-    if(amounts.every(a=>!a))return; // hide empty rows
+    if(amounts.every(a=>!a))return;
     const nonZero=amounts.filter(a=>a>0);
     const minAmt=nonZero.length?Math.min(...nonZero):0;
     const maxAmt=nonZero.length?Math.max(...nonZero):0;
