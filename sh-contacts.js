@@ -989,19 +989,25 @@ async function compareDealBids(dealId){
   h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">COMPARE BIDS</div>`;
   h+=`<div style="font-size:18px;font-weight:800;margin-bottom:16px">${esc(dealBids[0].deals?.address||"")}</div>`;
 
+  // Pure keyword matching — no SOW lines — no double counting
   const COMPARE_CATEGORIES=[
-    {label:'Demo & General',lines:[2,8,9,10,11]},
-    {label:'Kitchen',lines:[13,15,18]},
-    {label:'Primary Bathroom',lines:[14,6]},
-    {label:'Secondary Baths & Laundry',lines:[14],nameMatch:['secondary','laundry']},
-    {label:'Flooring',lines:[12]},
-    {label:'Electrical',lines:[16]},
-    {label:'Doors & Windows',lines:[6,9,22]},
-    {label:'Fireplace & Special Features',lines:[21]},
-    {label:'Exterior',lines:[5]},
-    {label:'Landscaping & Pool',lines:[19,21]},
-    {label:'HVAC / Mechanical',lines:[17]},
-    {label:'Overhead & Profit',lines:[]},
+    {label:'Demo & General',         keywords:['demo','general','whole house','drywall','sheetrock','paint','insulation']},
+    {label:'Foyer & Entry',          keywords:['foyer','entry']},
+    {label:'Kitchen',                keywords:['kitchen','pantry','cabinetry & appliance']},
+    {label:'Primary Bathroom',       keywords:['primary bath','primary bathroom']},
+    {label:'Secondary Bathrooms',    keywords:['secondary bath','secondary bathroom','walk in bath']},
+    {label:'Laundry',                keywords:['laundry']},
+    {label:'Flooring',               keywords:['flooring','floor']},
+    {label:'Electrical',             keywords:['electrical','electric']},
+    {label:'Doors & Windows',        keywords:['door','window']},
+    {label:'Fireplace',              keywords:['fireplace']},
+    {label:'Bar & Special Features', keywords:['bar feature','coffee bar','foyer bar','convert dining']},
+    {label:'Primary Bedroom',        keywords:['primary bedroom','primary bed']},
+    {label:'Family Room',            keywords:['family room']},
+    {label:'Exterior',               keywords:['exterior']},
+    {label:'Landscaping & Pool',     keywords:['landscape','landscaping','pool']},
+    {label:'HVAC / Mechanical',      keywords:['hvac','mechanical']},
+    {label:'Overhead & Profit',      keywords:['__overhead__']},
   ];
 
   h+=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th>Category</th>`;
@@ -1011,31 +1017,28 @@ async function compareDealBids(dealId){
   });
   h+=`</tr></thead><tbody>`;
 
-  // Per-bid tracking of which sections have been counted
+  // Per-bid tracking of which section indices have been counted — prevents double counting
   const used=dealBids.map(()=>new Set());
 
   COMPARE_CATEGORIES.forEach(cat=>{
     const amounts=dealBids.map((b,bi)=>{
-      if(cat.label==='Overhead & Profit'){
+      // Overhead is special — read directly from parsed_line_items
+      if(cat.keywords[0]==='__overhead__'){
         const full=ctBids.find(x=>x.id===b.id);
-        return(full?.parsed_line_items?.overhead_amount)||0;
+        return Number(full?.parsed_line_items?.overhead_amount)||0;
       }
       let sum=0;
       (b.sow_comparison||[]).forEach((c,ci)=>{
-        if(used[bi].has(ci))return;
+        if(used[bi].has(ci))return; // already counted in a previous category
         const secLower=(c.section_name||'').toLowerCase();
-        // Name-based match for Secondary Baths & Laundry
-        if(cat.nameMatch&&cat.nameMatch.some(k=>secLower.includes(k))){
-          sum+=c.bid_total||0;used[bi].add(ci);return;
+        if(cat.keywords.some(k=>secLower.includes(k))){
+          sum+=c.bid_total||0;
+          used[bi].add(ci);
         }
-        if(!cat.lines.length)return;
-        const allLines=[...(c.sow_matches||[]),...(c.sow_dupes||[])].map(m=>m.line_number);
-        if(allLines.some(ln=>cat.lines.includes(ln))){sum+=c.bid_total||0;used[bi].add(ci);}
       });
       return sum;
     });
-    // Hide rows where all contractors are $0
-    if(amounts.every(a=>!a))return;
+    if(amounts.every(a=>!a))return; // hide empty rows
     const nonZero=amounts.filter(a=>a>0);
     const minAmt=nonZero.length?Math.min(...nonZero):0;
     const maxAmt=nonZero.length?Math.max(...nonZero):0;
