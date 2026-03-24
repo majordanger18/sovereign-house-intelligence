@@ -13,11 +13,16 @@ const DEAL_STAGES={
   financing:{label:"Financing",color:"#8b5cf6",icon:"🏦"},
   closing:{label:"Closing",color:"#d4af37",icon:"🏁"},
   closed:{label:"Closed",color:"#10b981",icon:"✅"},
+  in_renovation:{label:"In Renovation",color:"#f97316",icon:"🔨"},
+  renovation_complete:{label:"Reno Complete",color:"#10b981",icon:"✅"},
+  listing_prep:{label:"Listing Prep",color:"#06b6d4",icon:"📸"},
+  listed:{label:"Listed",color:"#8b5cf6",icon:"🏷️"},
+  sold:{label:"Sold",color:"#d4af37",icon:"🏆"},
   rejected:{label:"Rejected",color:"#ef4444",icon:"❌"},
   withdrawn:{label:"Withdrawn",color:"#64748b",icon:"🚫"},
   expired:{label:"Expired",color:"#64748b",icon:"⏰"}
 };
-const DEAD_STATUSES=["closed","rejected","withdrawn","expired"];
+const DEAD_STATUSES=["sold","rejected","withdrawn","expired"];
 const LOST_STATUSES=["rejected","withdrawn","expired"];
 
 async function setPropertyDisposition(propertyId,disposition){
@@ -70,7 +75,7 @@ function dealBadge(status){
 
 function renderDeals(){
   const active=deals.filter(d=>!DEAD_STATUSES.includes(d.status));
-  const won=deals.filter(d=>d.status==="closed");
+  const won=deals.filter(d=>d.status==="sold");
   const lost=deals.filter(d=>LOST_STATUSES.includes(d.status));
 
   if(!deals.length){
@@ -227,15 +232,7 @@ async function openDeal(dealId){
     <!-- PIPELINE STATUS UPDATE -->
     ${!isDead?`<div style="margin-bottom:16px">
       <div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:8px">UPDATE STATUS</div>
-      <div id="deal_statusBtns" style="display:flex;gap:6px;flex-wrap:wrap">
-        ${stages.map(([k,v])=>`<button onclick="updateDealStatus('${d.id}','${k}')" style="padding:6px 12px;border-radius:8px;border:1px solid ${d.status===k?v.color+'60':' rgba(255,255,255,0.06)'};background:${d.status===k?v.color+'15':'rgba(255,255,255,0.02)'};color:${d.status===k?v.color:'#64748b'};font-size:10px;font-weight:700;cursor:pointer;min-height:36px;transition:all .15s">${v.icon} ${v.label}</button>`).join('')}
-      </div>
-      <div id="deal_killBtns" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px">
-        <button onclick="winDeal('${d.id}')" style="padding:8px;border-radius:8px;border:1px solid rgba(34,197,94,0.25);background:rgba(34,197,94,0.06);color:#22c55e;font-size:10px;font-weight:700;cursor:pointer;min-height:36px">🏆 Won</button>
-        <button onclick="killDeal('${d.id}','rejected')" style="padding:8px;border-radius:8px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.04);color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;min-height:36px">❌ Rejected</button>
-        <button onclick="killDeal('${d.id}','withdrawn')" style="padding:8px;border-radius:8px;border:1px solid rgba(100,116,139,0.2);background:rgba(100,116,139,0.04);color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer;min-height:36px">🚫 Withdraw</button>
-        <button onclick="killDeal('${d.id}','expired')" style="padding:8px;border-radius:8px;border:1px solid rgba(100,116,139,0.2);background:rgba(100,116,139,0.04);color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer;min-height:36px">⏰ Expired</button>
-      </div>
+      <div id="deal_statusBtns">${renderStatusButtons(d)}</div>
     </div>`:`<div style="margin-bottom:16px;padding:12px;border-radius:10px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.15)"><div style="font-size:10px;color:#ef4444;font-weight:800;letter-spacing:1px">DEAL ${d.status?.toUpperCase()}</div>${d.kill_reason?`<div style="font-size:12px;color:#94a3b8;margin-top:4px">${esc(d.kill_reason)}</div>`:''}<button onclick="updateDealStatus('${d.id}','offer_drafted')" style="margin-top:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer">♻️ Reopen Deal</button></div>`}
 
     <!-- FINANCING SUMMARY -->
@@ -377,8 +374,35 @@ async function deleteDeal(dealId){
 }
 
 function renderStatusButtons(d){
-  const stages=Object.entries(DEAL_STAGES).filter(([k])=>!DEAD_STATUSES.includes(k));
-  return stages.map(([k,v])=>`<button onclick="updateDealStatus('${d.id}','${k}')" style="padding:6px 12px;border-radius:8px;border:1px solid ${d.status===k?v.color+'60':' rgba(255,255,255,0.06)'};background:${d.status===k?v.color+'15':'rgba(255,255,255,0.02)'};color:${d.status===k?v.color:'#64748b'};font-size:10px;font-weight:700;cursor:pointer;min-height:36px;transition:all .15s">${v.icon} ${v.label}</button>`).join('');
+  const pipeKeys=Object.keys(DEAL_STAGES).filter(k=>!DEAD_STATUSES.includes(k));
+  const curIdx=pipeKeys.indexOf(d.status);
+  const cur=DEAL_STAGES[d.status]||{label:d.status,color:'#64748b',icon:'?'};
+  const prevKey=curIdx>0?pipeKeys[curIdx-1]:null;
+  const nextKey=curIdx>=0&&curIdx<pipeKeys.length-1?pipeKeys[curIdx+1]:null;
+  const prevS=prevKey?DEAL_STAGES[prevKey]:null;
+  const nextS=nextKey?DEAL_STAGES[nextKey]:null;
+
+  let h=`<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px">`;
+  if(prevKey){
+    h+=`<button onclick="updateDealStatus('${d.id}','${prevKey}')" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#94a3b8;font-size:11px;font-weight:700;cursor:pointer;min-height:40px;white-space:nowrap">← ${prevS.label}</button>`;
+  } else {
+    h+=`<div style="min-width:90px"></div>`;
+  }
+  h+=`<div style="text-align:center;flex:1"><div style="display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:12px;background:${cur.color}15;border:2px solid ${cur.color}40;color:${cur.color};font-size:16px;font-weight:800">${cur.icon} ${cur.label.toUpperCase()}</div></div>`;
+  if(nextKey){
+    h+=`<button onclick="updateDealStatus('${d.id}','${nextKey}')" style="padding:8px 14px;border-radius:8px;border:1px solid ${nextS.color}30;background:${nextS.color}10;color:${nextS.color};font-size:11px;font-weight:700;cursor:pointer;min-height:40px;white-space:nowrap">${nextS.label} →</button>`;
+  } else {
+    h+=`<div style="min-width:90px"></div>`;
+  }
+  h+=`</div>`;
+
+  h+=`<div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px">`;
+  h+=`<button onclick="winDeal('${d.id}')" style="padding:6px;border-radius:8px;border:1px solid rgba(34,197,94,0.15);background:rgba(34,197,94,0.04);color:#22c55e;font-size:9px;font-weight:700;cursor:pointer;min-height:32px;opacity:0.8">🏆 Won</button>`;
+  h+=`<button onclick="killDeal('${d.id}','rejected')" style="padding:6px;border-radius:8px;border:1px solid rgba(239,68,68,0.12);background:rgba(239,68,68,0.03);color:#ef4444;font-size:9px;font-weight:700;cursor:pointer;min-height:32px;opacity:0.6">❌ Rejected</button>`;
+  h+=`<button onclick="killDeal('${d.id}','withdrawn')" style="padding:6px;border-radius:8px;border:1px solid rgba(100,116,139,0.12);background:rgba(100,116,139,0.03);color:#94a3b8;font-size:9px;font-weight:700;cursor:pointer;min-height:32px;opacity:0.6">🚫 Withdraw</button>`;
+  h+=`<button onclick="killDeal('${d.id}','expired')" style="padding:6px;border-radius:8px;border:1px solid rgba(100,116,139,0.12);background:rgba(100,116,139,0.03);color:#94a3b8;font-size:9px;font-weight:700;cursor:pointer;min-height:32px;opacity:0.6">⏰ Expired</button>`;
+  h+=`</div>`;
+  return h;
 }
 
 function renderTimelineEntry(e){
@@ -409,20 +433,10 @@ async function updateDealStatus(dealId,newStatus){
     await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:newStatus,timeline:tl,kill_reason:null,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null})});
     d.status=newStatus;d.timeline=tl;d.kill_reason=null;
     // Auto-set disposition on linked property
-    const disp=DEAD_STATUSES.includes(newStatus)?(newStatus==='closed'?'acquired':null):'pursuing';
+    const disp=newStatus==='sold'?'sold':newStatus==='closed'?'acquired':DEAD_STATUSES.includes(newStatus)?null:'pursuing';
     await setPropertyDisposition(d.property_id,disp);
-    // Full re-render if transitioning from dead status (layout changes entirely)
-    if(DEAD_STATUSES.includes(oldStatus)){
-      openDeal(dealId);
-    } else {
-      // Surgical DOM update for active→active transitions
-      const badge=document.getElementById("deal_statusBadge");
-      if(badge)badge.innerHTML=dealBadge(newStatus);
-      const btns=document.getElementById("deal_statusBtns");
-      if(btns)btns.innerHTML=renderStatusButtons(d);
-      const timeline=document.getElementById("dealTimeline");
-      if(timeline)timeline.insertAdjacentHTML("afterbegin",renderTimelineEntry(newEntry));
-    }
+    // Full re-render — layout changes between stages (outcomes area, dead section)
+    openDeal(dealId);
     renderDashboard();
   }catch(e){console.error("Status update failed:",e);}
 }
