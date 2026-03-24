@@ -712,20 +712,20 @@ const BID_SOW_MAP={
   'DEMOLITION':['Demo'],
   'FOYER / ENTRY':['Framing','Carpentry','Other','Slider'],
   'BAR FEATURE WALL':['Other'],
-  'CONVERT DINING ROOM NICHE INTO BAR FEATURE WALL':['Other'],
+  'CONVERT DINING ROOM NICHE INTO BAR FEATURE WALL':[21],
   'KITCHEN RENOVATION':['Kitchen','Plumbing','Appliances'],
-  'KITCHEN RENOVATION / CABINETRY & APPLIANCES':['Kitchen','Plumbing','Appliances'],
+  'KITCHEN RENOVATION / CABINETRY & APPLIANCES':[13,15,18],
   'FAMILY ROOM':['Electrical'],
-  'PRIMARY BEDROOM':['Other','Framing'],
+  'PRIMARY BEDROOM':[8,21],
   'PRIMARY BATHROOM':['Bathrooms','Windows'],
-  'LAUNDRY ROOM':['Bathrooms'],
-  'SECONDARY BATHROOMS':['Bathrooms'],
+  'LAUNDRY ROOM':[14],
+  'SECONDARY BATHROOMS':[14],
   'FLOORING':['Flooring'],
   'WHOLE HOUSE IMPROVEMENTS':['Carpentry','Paint','Drywall'],
-  'ELECTRICAL':['Electrical'],
+  'ELECTRICAL':[16],
   'EXTERIOR IMPROVEMENTS':['Exterior'],
   'LANDSCAPING':['Landscape'],
-  'POOL AREA':['Other'],
+  'POOL AREA':[21],
   'MECHANICAL':['HVAC']
 };
 let _bidUsedSOW=new Set();
@@ -741,14 +741,21 @@ function buildSectionComparison(parsed,sowLines){
     // Find matching SOW lines by category from hardcoded map
     const allMatches=[];
     mapCats.forEach(cat=>{
-      const catLower=cat.toLowerCase();
-      let matches=(sowLines||[]).filter(s=>(s.category||'').toLowerCase()===catLower||(s.description||'').toLowerCase()===catLower);
-      if(!matches.length)matches=(sowLines||[]).filter(s=>(s.category||'').toLowerCase().includes(catLower)||(s.description||'').toLowerCase().includes(catLower));
-      matches.forEach(match=>{
-        if(!allMatches.some(m=>m.line_number===match.line_number)){
+      if(typeof cat==='number'){
+        const match=(sowLines||[]).find(s=>s.line_number===cat);
+        if(match&&!allMatches.some(m=>m.line_number===match.line_number)){
           allMatches.push({line_number:match.line_number,description:match.description||match.category,budget:match.lender_approved||0});
         }
-      });
+      }else{
+        const catLower=cat.toLowerCase();
+        let matches=(sowLines||[]).filter(s=>(s.category||'').toLowerCase()===catLower||(s.description||'').toLowerCase()===catLower);
+        if(!matches.length)matches=(sowLines||[]).filter(s=>(s.category||'').toLowerCase().includes(catLower)||(s.description||'').toLowerCase().includes(catLower));
+        matches.forEach(match=>{
+          if(!allMatches.some(m=>m.line_number===match.line_number)){
+            allMatches.push({line_number:match.line_number,description:match.description||match.category,budget:match.lender_approved||0});
+          }
+        });
+      }
     });
     // De-duplicate: only count SOW budget on the FIRST section that maps to it
     const newMatches=[];const dupeMatches=[];
