@@ -989,31 +989,57 @@ async function compareDealBids(dealId){
   h+=`<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">COMPARE BIDS</div>`;
   h+=`<div style="font-size:18px;font-weight:800;margin-bottom:16px">${esc(dealBids[0].deals?.address||"")}</div>`;
 
-  h+=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th>Section</th>`;
+  const COMPARE_CATEGORIES=[
+    {label:'Demo & General',lines:[2,8,9,10,11]},
+    {label:'Kitchen',lines:[13,15,18]},
+    {label:'Primary Bathroom',lines:[14,6]},
+    {label:'Secondary Baths & Laundry',lines:[14],nameMatch:['secondary','laundry']},
+    {label:'Flooring',lines:[12]},
+    {label:'Electrical',lines:[16]},
+    {label:'Doors & Windows',lines:[6,9,22]},
+    {label:'Fireplace & Special Features',lines:[21]},
+    {label:'Exterior',lines:[5]},
+    {label:'Landscaping & Pool',lines:[19,21]},
+    {label:'HVAC / Mechanical',lines:[17]},
+    {label:'Overhead & Profit',lines:[]},
+  ];
+
+  h+=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th>Category</th>`;
   dealBids.forEach(b=>{
     const name=b.contacts?.display_name||"?";
     h+=`<th style="text-align:right">${esc(name)}<div style="font-size:9px;color:#64748b">${$r(b.initial_bid)}</div></th>`;
   });
   h+=`</tr></thead><tbody>`;
 
-  // Collect all section names across all bids, normalized
-  const allSections=[];
-  dealBids.forEach(b=>{
-    (b.sow_comparison||[]).forEach(c=>{
-      const norm=(c.section_name||'').trim();
-      if(norm&&!allSections.some(s=>s.toLowerCase()===norm.toLowerCase()))allSections.push(norm);
-    });
-  });
+  // Per-bid tracking of which sections have been counted
+  const used=dealBids.map(()=>new Set());
 
-  allSections.forEach(secName=>{
-    const amounts=dealBids.map(b=>{
-      const match=(b.sow_comparison||[]).find(c=>(c.section_name||'').toLowerCase()===secName.toLowerCase());
-      return match?match.bid_total||0:0;
+  COMPARE_CATEGORIES.forEach(cat=>{
+    const amounts=dealBids.map((b,bi)=>{
+      if(cat.label==='Overhead & Profit'){
+        const full=ctBids.find(x=>x.id===b.id);
+        return(full?.parsed_line_items?.overhead_amount)||0;
+      }
+      let sum=0;
+      (b.sow_comparison||[]).forEach((c,ci)=>{
+        if(used[bi].has(ci))return;
+        const secLower=(c.section_name||'').toLowerCase();
+        // Name-based match for Secondary Baths & Laundry
+        if(cat.nameMatch&&cat.nameMatch.some(k=>secLower.includes(k))){
+          sum+=c.bid_total||0;used[bi].add(ci);return;
+        }
+        if(!cat.lines.length)return;
+        const allLines=[...(c.sow_matches||[]),...(c.sow_dupes||[])].map(m=>m.line_number);
+        if(allLines.some(ln=>cat.lines.includes(ln))){sum+=c.bid_total||0;used[bi].add(ci);}
+      });
+      return sum;
     });
+    // Hide rows where all contractors are $0
+    if(amounts.every(a=>!a))return;
     const nonZero=amounts.filter(a=>a>0);
     const minAmt=nonZero.length?Math.min(...nonZero):0;
     const maxAmt=nonZero.length?Math.max(...nonZero):0;
-    h+=`<tr><td style="color:#e2e8f0;font-weight:600">${esc(secName)}</td><td></td>`;
+    h+=`<tr><td style="color:#e2e8f0;font-weight:600">${esc(cat.label)}</td>`;
     dealBids.forEach((b,i)=>{
       const amt=amounts[i];
       let color="#e2e8f0";
@@ -1025,7 +1051,7 @@ async function compareDealBids(dealId){
   });
 
   // Totals row
-  h+=`<tr style="border-top:2px solid rgba(212,175,55,0.2)"><td style="font-weight:800;color:#d4af37">TOTAL</td><td></td>`;
+  h+=`<tr style="border-top:2px solid rgba(212,175,55,0.2)"><td style="font-weight:800;color:#d4af37">TOTAL</td>`;
   const totals=dealBids.map(b=>b.initial_bid||0);
   const minT=Math.min(...totals);
   const maxT=Math.max(...totals);
