@@ -1041,9 +1041,88 @@ async function compareDealBids(dealId){
     else if(totals.length>1&&t===maxT)color="#ef4444";
     h+=`<td style="text-align:right;font-weight:800;color:${color}">${$r(t)}</td>`;
   });
-  h+=`</tr></tbody></table></div></div>`;
+  h+=`</tr></tbody></table></div>`;
+
+  // Generate Analysis button
+  const bidIds=dealBids.map(b=>b.id);
+  const addr=esc(dealBids[0].deals?.address||"");
+  h+=`<div style="margin-top:16px"><button id="genAnalysisBtn" onclick="generateBidAnalysis('${dealId}')" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;border-radius:10px;cursor:pointer">🤖 Generate Analysis</button></div>`;
+  h+=`</div>`;
 
   m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
+}
+
+async function generateBidAnalysis(dealId){
+  const btn=document.getElementById("genAnalysisBtn");
+  if(btn){btn.disabled=true;btn.textContent="Analyzing…";btn.style.opacity="0.5";}
+
+  let apiKey=localStorage.getItem("sh_claude_key");
+  if(!apiKey){
+    apiKey=prompt("Enter your Claude API key:");
+    if(!apiKey){if(btn){btn.disabled=false;btn.textContent="🤖 Generate Analysis";btn.style.opacity="1";}return;}
+    localStorage.setItem("sh_claude_key",apiKey);
+  }
+
+  // Fetch full parsed_line_items for all bids on this deal
+  let bids=[];
+  try{bids=await sb("contractor_bids?deal_id=eq."+dealId+"&select=id,initial_bid,parsed_line_items,contacts(display_name),deals(address)");}catch(e){console.error("Bid fetch:",e);}
+  if(!Array.isArray(bids))bids=[];
+  bids=bids.filter(b=>b.parsed_line_items&&b.parsed_line_items.sections);
+  if(bids.length<2){showCtToast("Need at least 2 parsed bids");if(btn){btn.disabled=false;btn.textContent="🤖 Generate Analysis";btn.style.opacity="1";}return;}
+
+  const address=bids[0].deals?.address||"Property";
+  const bidContext=bids.map(b=>{
+    const name=b.contacts?.display_name||"Unknown";
+    return`--- ${name} (Total: $${(b.initial_bid||0).toLocaleString()}) ---\n${JSON.stringify(b.parsed_line_items,null,2)}`;
+  }).join("\n\n");
+
+  const prompt=`You are analyzing ${bids.length} contractor bids for a luxury residential flip in Las Vegas at ${address}. Compare these bids section by section and provide:
+
+1. EXECUTIVE SUMMARY — which contractor is lower, by how much, and your overall recommendation
+2. SECTION BY SECTION ANALYSIS — for each major scope area, note which bid is lower and by how much, and flag any areas where one contractor is significantly over or under the other
+3. SCOPE GAPS — items one contractor included that the other didn't, and what that means for the total comparison
+4. RED FLAGS — any line items that look unusually high or low in either bid
+5. NEGOTIATION LEVERAGE — specific items where you have data to push back on the higher bidder
+
+Keep it concise and actionable. Format for a printed meeting handout.
+
+BIDS:
+${bidContext}`;
+
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:8192,messages:[{role:"user",content:prompt}]})
+    });
+    if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
+    const data=await res.json();
+    const text=(data.content||[]).map(c=>c.text||"").join("");
+
+    // Render printable modal
+    const formatted=text.replace(/\n/g,"<br>");
+    const bidHeaders=bids.map(b=>`<div style="flex:1;text-align:center;padding:8px;border:1px solid #ddd;border-radius:8px"><div style="font-weight:700">${esc(b.contacts?.display_name||"?")}</div><div style="font-size:14px;color:#666">$${(b.initial_bid||0).toLocaleString()}</div></div>`).join("");
+
+    const pm=document.getElementById("contactsModal");
+    pm.innerHTML=`<div class="sheet" style="position:relative;max-height:95vh;overflow-y:auto;background:#fff;color:#111;border-radius:16px">
+      <div class="handle" style="background:#ccc"></div>
+      <button class="close-x" onclick="closeCtModal()" style="color:#666">✕</button>
+      <div id="bidAnalysisPrint">
+        <div style="text-align:center;margin-bottom:16px">
+          <div style="font-size:10px;color:#999;font-weight:700;letter-spacing:3px">BID ANALYSIS</div>
+          <div style="font-size:20px;font-weight:800;margin-top:4px">${esc(address)}</div>
+          <div style="font-size:11px;color:#999;margin-top:2px">${new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric",timeZone:"America/Los_Angeles"})}</div>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:20px">${bidHeaders}</div>
+        <div style="font-size:13px;line-height:1.7;color:#222">${formatted}</div>
+        <div style="margin-top:20px;text-align:center"><button onclick="(function(){var el=document.getElementById('bidAnalysisPrint');var w=window.open('','_blank');w.document.write('<html><head><title>Bid Analysis</title><style>body{font-family:-apple-system,system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#111;font-size:13px;line-height:1.7}</style></head><body>'+el.innerHTML+'</body></html>');w.document.close();w.print();})()" style="padding:12px 32px;font-size:14px;font-weight:700;background:#111;color:#fff;border:none;border-radius:8px;cursor:pointer">🖨 Print Report</button></div>
+      </div>
+    </div>`;
+  }catch(e){
+    console.error("Bid analysis error:",e);
+    showCtToast("Analysis failed: "+e.message);
+    if(btn){btn.disabled=false;btn.textContent="🤖 Generate Analysis";btn.style.opacity="1";}
+  }
 }
 
 // ═══ DELETE BID ═══
