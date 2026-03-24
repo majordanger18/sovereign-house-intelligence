@@ -87,7 +87,7 @@ function renderDashboard(){
 
   // Bottom nav active state
   const passedCount=props.filter(p=>p.disposition==="passed").length;
-  const feedViews=["all","fresh","go","maybe","watched","reduced","golf","pending","passed"];
+  const feedViews=["all","fresh","go","maybe","queued","watched","reduced","golf","pending","passed"];
   const isFeed=feedViews.includes(view);
   document.querySelectorAll(".bnav-tab").forEach(b=>{
     const t=b.dataset.tab;
@@ -102,7 +102,7 @@ function renderDashboard(){
 
   // Feed filter pills — only visible on feed views
   const feedFilters=document.getElementById("feedFilters");
-  const fD=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["watched",`★ (${st.watched})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${props.filter(p=>isPend(p)).length})`],["passed",`Passed (${passedCount})`]];
+  const fD=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["queued",`Queued (${queuedCount})`],["watched",`★ (${st.watched})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${props.filter(p=>isPend(p)).length})`],["passed",`Passed (${passedCount})`]];
   feedFilters.innerHTML=fD.map(([v,l])=>{
     const isOn=view===v;
     if(v==="passed")return`<button class="filt${isOn?" on-red":""}" onclick="setView('${v}')">${l}</button>`;
