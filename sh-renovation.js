@@ -1855,21 +1855,13 @@ function renderTasksV(el){
 
   let h='';
 
-  // Summary cards
-  h+=`<div class="reno-sgrid"><div class="reno-scard"><div class="reno-sl">TO DO</div><div class="reno-sv" style="color:#94a3b8">${todo}</div></div><div class="reno-scard"><div class="reno-sl">IN PROGRESS</div><div class="reno-sv" style="color:#3b82f6">${inp}</div></div><div class="reno-scard"><div class="reno-sl">WAITING ON</div><div class="reno-sv" style="color:#ef4444">${blk}</div></div><div class="reno-scard"><div class="reno-sl">DONE</div><div class="reno-sv" style="color:#22c55e">${done}</div></div></div>`;
+  // Summary cards — compact 4-col row
+  h+=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px"><div class="reno-scard"><div style="font-size:7px;color:#64748b;font-weight:700;letter-spacing:1px">TO DO</div><div style="font-size:16px;font-weight:800;color:#94a3b8;margin-top:2px">${todo}</div></div><div class="reno-scard"><div style="font-size:7px;color:#64748b;font-weight:700;letter-spacing:1px">IN PROGRESS</div><div style="font-size:16px;font-weight:800;color:#3b82f6;margin-top:2px">${inp}</div></div><div class="reno-scard"><div style="font-size:7px;color:#64748b;font-weight:700;letter-spacing:1px">WAITING ON</div><div style="font-size:16px;font-weight:800;color:#ef4444;margin-top:2px">${blk}</div></div><div class="reno-scard"><div style="font-size:7px;color:#64748b;font-weight:700;letter-spacing:1px">DONE</div><div style="font-size:16px;font-weight:800;color:#22c55e;margin-top:2px">${done}</div></div></div>`;
 
-  // Filter row — categories
-  const cats=[{k:"all",l:"All"},{k:"financing",l:"Financing"},{k:"contractor",l:"Contractor"},{k:"materials",l:"Materials"},{k:"design",l:"Design"},{k:"permits",l:"Permits"},{k:"administrative",l:"Admin"},{k:"listing_prep",l:"Listing"}];
-  h+=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">`;
-  cats.forEach(c=>{h+=`<button class="filt${renoTaskFilter.cat===c.k?' on':''}" onclick="renoTaskFilter.cat='${c.k}';renderRenoSub()">${c.l}</button>`;});
-  h+=`</div>`;
-
-  // Filter row — assignee
-  h+=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px">`;
-  h+=`<button class="filt${renoTaskFilter.assignee==='all'?' on':''}" onclick="renoTaskFilter.assignee='all';renderRenoSub()">All</button>`;
-  h+=`<button class="filt${renoTaskFilter.assignee==='mine'?' on':''}" onclick="renoTaskFilter.assignee='mine';renderRenoSub()">My Tasks</button>`;
-  h+=`<button class="filt${renoTaskFilter.assignee==='lisa'?' on':''}" onclick="renoTaskFilter.assignee='lisa';renderRenoSub()">Lisa's Tasks</button>`;
-  h+=`</div>`;
+  // Filter dropdowns — category + assignee
+  const _catOpts=[["all","All Categories"],["financing","Financing"],["contractor","Contractor"],["materials","Materials"],["design","Design"],["permits","Permits"],["administrative","Admin"],["listing_prep","Listing"]];
+  const _assOpts=[["all","All Assignees"],["j@jmarshallhunt.com","My Tasks"],["lisa@lisaahunt.com","Lisa's Tasks"]];
+  h+=`<div style="display:flex;gap:8px;margin-bottom:12px"><select id="taskCatFilter" class="cinput" style="flex:1;padding:8px;font-size:12px;min-height:36px" onchange="renoTaskFilter.cat=this.value;renderRenoSub()">${_catOpts.map(([v,l])=>`<option value="${v}"${renoTaskFilter.cat===v?' selected':''}>${l}</option>`).join('')}</select><select id="taskAssigneeFilter" class="cinput" style="flex:1;padding:8px;font-size:12px;min-height:36px" onchange="renoTaskFilter.assignee=this.value;renderRenoSub()">${_assOpts.map(([v,l])=>`<option value="${v}"${renoTaskFilter.assignee===v?' selected':''}>${l}</option>`).join('')}</select></div>`;
 
   // Add task button + inline form
   h+=`<button onclick="renoEditingTask='new';renderRenoSub()" class="btn" style="width:100%;padding:10px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;margin-bottom:12px">+ Add Task</button>`;
@@ -1879,8 +1871,7 @@ function renderTasksV(el){
   // Filter tasks
   let ft=all.filter(t=>t.status!=='done');
   if(renoTaskFilter.cat!=='all')ft=ft.filter(t=>t.category===renoTaskFilter.cat);
-  if(renoTaskFilter.assignee==='mine')ft=ft.filter(t=>t.assigned_to_email===SH_USER?.email);
-  else if(renoTaskFilter.assignee==='lisa')ft=ft.filter(t=>t.assigned_to_email==='lisa@lisaahunt.com');
+  if(renoTaskFilter.assignee!=='all')ft=ft.filter(t=>t.assigned_to_email===renoTaskFilter.assignee);
 
   // Sort: urgent first, then by status order, then sort_order
   const statOrd={todo:1,in_progress:2,waiting:3};
@@ -1894,8 +1885,7 @@ function renderTasksV(el){
   // Done tasks (collapsed)
   let doneTasks=all.filter(t=>t.status==='done');
   if(renoTaskFilter.cat!=='all')doneTasks=doneTasks.filter(t=>t.category===renoTaskFilter.cat);
-  if(renoTaskFilter.assignee==='mine')doneTasks=doneTasks.filter(t=>t.assigned_to_email===SH_USER?.email);
-  else if(renoTaskFilter.assignee==='lisa')doneTasks=doneTasks.filter(t=>t.assigned_to_email==='lisa@lisaahunt.com');
+  if(renoTaskFilter.assignee!=='all')doneTasks=doneTasks.filter(t=>t.assigned_to_email===renoTaskFilter.assignee);
 
   if(doneTasks.length){
     h+=`<button onclick="renoShowDone=!renoShowDone;renderRenoSub()" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:700;cursor:pointer;padding:8px 0;margin-top:8px">${renoShowDone?'▾':'▸'} Show completed (${doneTasks.length})</button>`;
