@@ -1618,6 +1618,16 @@ async function saveFinancing(dealId){
     const dl=deals.find(x=>x.id===dealId);
     if(dl)Object.assign(dl,dealSync);
 
+    // Sync close/funding date to deal coe_date if available
+    const parsedCloseDate=payload.funded_date||payload.first_payment_date||null;
+    if(parsedCloseDate&&/^\d{4}-\d{2}-\d{2}/.test(parsedCloseDate)){
+      try{
+        await fetch(SB+"/rest/v1/deals?id=eq."+dealId,{method:"PATCH",headers:RENO_WH,body:JSON.stringify({coe_date:parsedCloseDate})});
+        if(dl)dl.coe_date=parsedCloseDate;
+        console.log("[SH] Synced coe_date from financing:",parsedCloseDate);
+      }catch(e){console.error("[SH] COE date sync (non-fatal):",e);}
+    }
+
     _pendingFinUrl=null;
     showRenoToast("Financing saved");
     await loadFinancing(dealId);
