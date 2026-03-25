@@ -47,7 +47,7 @@ function renderDashboard(){
     aiGo:base.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="GO").length,
     aiMaybe:base.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="CONDITIONAL_GO").length,
     queued:base.filter(p=>!analysisMap[p.id]).length,
-    pending:base.filter(p=>isPend(p)).length,
+    pending:props.filter(p=>isPend(p)&&p.disposition!=="passed"&&p.disposition!=="acquired"&&p.listing_status!=="Closed"&&p.listing_status!=="Gone"&&!p.gone_date).length,
     avgScore:props.length?Math.round(props.reduce((a,p)=>a+(p.sovereign_score||0),0)/props.length):0,
     avgPrice:props.length?Math.round(props.reduce((a,p)=>a+(p.list_price||0),0)/props.length):0,
     avgDom:props.length?Math.round(props.reduce((a,p)=>a+(p.days_on_market||0),0)/props.length):0};
@@ -133,8 +133,8 @@ function renderList(){
   let list=[...props];
   list=list.filter(p=>{
     if(view==="passed")return p.disposition==="passed"&&(!q||(p.address||"").toLowerCase().includes(q)||(p.mls_number||"").toLowerCase().includes(q)||(p.zip_code||"").includes(q));
+    if(view==="pending")return isPend(p)&&p.disposition!=="passed"&&p.disposition!=="acquired"&&p.listing_status!=="Closed"&&p.listing_status!=="Gone"&&!p.gone_date&&(!q||(p.address||"").toLowerCase().includes(q)||(p.mls_number||"").toLowerCase().includes(q)||(p.zip_code||"").includes(q));
     if(!baseFilter(p))return false;
-    if(view==="pending"&&!isPend(p))return false;
     if(view==="watched"&&!watchIds.has(p.id))return false;
     if(view==="reduced"&&!(p.original_list_price&&p.list_price<p.original_list_price))return false;
     if(view==="golf"&&!isGolf(p))return false;
