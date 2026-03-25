@@ -442,6 +442,18 @@ async function updateDealStatus(dealId,newStatus){
     // Auto-set disposition on linked property
     const disp=newStatus==='sold'?'sold':newStatus==='closed'?'acquired':DEAD_STATUSES.includes(newStatus)?null:'pursuing';
     await setPropertyDisposition(d.property_id,disp);
+    // Auto-advance deal_financing status
+    const finMap={closing:"clear_to_close",closed:"funded",in_renovation:"active",sold:"paid_off"};
+    if(finMap[newStatus]){
+      try{
+        const fi=await sb("deal_financing?deal_id=eq."+dealId);
+        if(Array.isArray(fi)&&fi.length){
+          const patch={status:finMap[newStatus]};
+          if(newStatus==="closed")patch.funded_date=new Date().toLocaleDateString("en-CA",{timeZone:"America/Los_Angeles"});
+          await fetch(SB+"/rest/v1/deal_financing?deal_id=eq."+dealId,{method:"PATCH",headers:HD,body:JSON.stringify(patch)});
+        }
+      }catch(e){console.error("[SH] Financing auto-advance (non-fatal):",e);}
+    }
     // Full re-render — layout changes between stages (outcomes area, dead section)
     openDeal(dealId);
     renderDashboard();
