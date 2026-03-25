@@ -35,17 +35,19 @@ async function checkHealth(){
   console.log("[SH] Health:",checks);
 }
 
+const baseFilter=p=>p.disposition!=="passed"&&p.disposition!=="pursuing"&&p.disposition!=="acquired"&&p.listing_status!=="Closed"&&p.listing_status!=="Gone"&&!p.gone_date;
+
 function renderDashboard(){
-  const activeProps=props.filter(p=>!isPend(p)&&p.listing_status!=='Gone');
-  const st={total:activeProps.length,hot:activeProps.filter(p=>(p.sovereign_score||0)>=60).length,watched:activeProps.filter(p=>watchIds.has(p.id)&&p.disposition!=="passed"&&p.listing_status!=="Closed"&&!p.gone_date).length,
-    reduced:activeProps.filter(p=>p.original_list_price&&p.list_price<p.original_list_price).length,
-    pool:activeProps.filter(p=>p.pool).length,
-    golf:activeProps.filter(p=>isGolf(p)).length,
-    fresh:activeProps.filter(p=>p.days_on_market!=null&&p.days_on_market<=7).length,
-    aiGo:props.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="GO"&&!["passed","pursuing","acquired"].includes(p.disposition)).length,
-    aiMaybe:props.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="CONDITIONAL_GO"&&!["passed","pursuing","acquired"].includes(p.disposition)).length,
-    aiNo:activeProps.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="NO_GO").length,
-    aiScreened:activeProps.filter(p=>!!analysisMap[p.id]).length,
+  const base=props.filter(baseFilter);
+  const st={total:base.length,
+    watched:base.filter(p=>watchIds.has(p.id)).length,
+    reduced:base.filter(p=>p.original_list_price&&p.list_price<p.original_list_price).length,
+    golf:base.filter(p=>isGolf(p)).length,
+    fresh:base.filter(p=>p.days_on_market!=null&&p.days_on_market<=7).length,
+    aiGo:base.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="GO").length,
+    aiMaybe:base.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="CONDITIONAL_GO").length,
+    queued:base.filter(p=>!analysisMap[p.id]).length,
+    pending:base.filter(p=>isPend(p)).length,
     avgScore:props.length?Math.round(props.reduce((a,p)=>a+(p.sovereign_score||0),0)/props.length):0,
     avgPrice:props.length?Math.round(props.reduce((a,p)=>a+(p.list_price||0),0)/props.length):0,
     avgDom:props.length?Math.round(props.reduce((a,p)=>a+(p.days_on_market||0),0)/props.length):0};
@@ -83,7 +85,6 @@ function renderDashboard(){
 
   const activeDeals=deals.filter(d=>!["closed","rejected","withdrawn","expired"].includes(d.status));
   const deadDeals=deals.filter(d=>["closed","rejected","withdrawn","expired"].includes(d.status));
-  const queuedCount=activeProps.filter(p=>!analysisMap[p.id]).length;
 
   // Bottom nav active state
   const passedCount=props.filter(p=>p.disposition==="passed").length;
@@ -102,7 +103,7 @@ function renderDashboard(){
 
   // Feed filter pills — only visible on feed views
   const feedFilters=document.getElementById("feedFilters");
-  const fD=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["queued",`Queued (${queuedCount})`],["watched",`★ (${st.watched})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${props.filter(p=>isPend(p)).length})`],["passed",`Passed (${passedCount})`]];
+  const fD=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["queued",`Queued (${st.queued})`],["watched",`★ (${st.watched})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${st.pending})`],["passed",`Passed (${passedCount})`]];
   feedFilters.innerHTML=fD.map(([v,l])=>{
     const isOn=view===v;
     if(v==="passed")return`<button class="filt${isOn?" on-red":""}" onclick="setView('${v}')">${l}</button>`;
@@ -129,17 +130,16 @@ function renderList(){
   const sortBy=document.getElementById("sortBox").value;
   let list=[...props];
   list=list.filter(p=>{
-    if(p.listing_status==='Gone')return false;
-    if(view==="pending"){if(!isPend(p))return false;if(q)return(p.address||"").toLowerCase().includes(q)||(p.mls_number||"").toLowerCase().includes(q)||(p.zip_code||"").includes(q);return true;}
-    if(view!=="pending"&&view!=="go"&&view!=="maybe"&&isPend(p))return false;
-    if(view==="watched"&&(!watchIds.has(p.id)||["passed","pursuing","acquired"].includes(p.disposition)||p.listing_status==="Closed"||p.gone_date))return false;
+    if(view==="passed")return p.disposition==="passed"&&(!q||(p.address||"").toLowerCase().includes(q)||(p.mls_number||"").toLowerCase().includes(q)||(p.zip_code||"").includes(q));
+    if(!baseFilter(p))return false;
+    if(view==="pending"&&!isPend(p))return false;
+    if(view==="watched"&&!watchIds.has(p.id))return false;
     if(view==="reduced"&&!(p.original_list_price&&p.list_price<p.original_list_price))return false;
     if(view==="golf"&&!isGolf(p))return false;
-    if(view==="go"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="GO"||["passed","pursuing","acquired"].includes(p.disposition)))return false;
-    if(view==="maybe"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="CONDITIONAL_GO"||["passed","pursuing","acquired"].includes(p.disposition)))return false;
+    if(view==="go"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="GO"))return false;
+    if(view==="maybe"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="CONDITIONAL_GO"))return false;
     if(view==="queued"&&!!analysisMap[p.id])return false;
     if(view==="fresh"&&!(p.days_on_market!=null&&p.days_on_market<=7))return false;
-    if(view==="passed"&&p.disposition!=="passed")return false;
     if(q)return(p.address||"").toLowerCase().includes(q)||(p.mls_number||"").toLowerCase().includes(q)||(p.zip_code||"").includes(q);
     return true;
   });
