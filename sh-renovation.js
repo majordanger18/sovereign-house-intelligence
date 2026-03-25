@@ -202,7 +202,10 @@ function renderBudget(el){
   h+=`<div class="reno-hero"><div class="reno-hcard"><div class="reno-hl">TOTAL BUDGET</div><div class="reno-hv">${$r(tb)}</div>${tla&&tla!==tb?`<div style="font-size:10px;color:#64748b;margin-top:2px">Lender: ${$r(tla)}</div>`:''}${contractedBudget?`<div style="font-size:10px;color:rgba(212,175,55,0.6);margin-top:2px">Contracted: ${esc(renoDeal?.contracted_reno_contractor||"—")}</div>`:''}</div><div class="reno-hcard"><div class="reno-hl">TOTAL SPENT</div><div class="reno-hv" style="color:${sc}">${$r(ts)}</div></div><div class="reno-hcard"><div class="reno-hl">REMAINING</div><div class="reno-hv" style="color:${rc}">${$r(rem)}</div></div></div>`;
 
   // Progress bar
-  h+=`<div class="reno-pbar"><div class="reno-pfill" style="width:${Math.min(pct,100)}%;background:${sc}"></div></div><div style="text-align:right;font-size:10px;color:#64748b;margin-top:4px;margin-bottom:8px">${pct.toFixed(1)}% spent</div>`;
+  const _barFill=pct<70?"#4ade80":pct<=85?"#eab308":"#ef4444";
+  const _barW=Math.min(pct,100);
+  const _labelInside=_barW>=15;
+  h+=`<div style="position:relative;height:28px;border-radius:14px;background:rgba(255,255,255,0.06);overflow:hidden;margin:12px 0"><div style="height:100%;width:${_barW}%;background:${_barFill};border-radius:14px;transition:width .3s ease"></div><div style="position:absolute;top:0;${_labelInside?'right:12px':'left:'+(_barW+1)+'%'};height:100%;display:flex;align-items:center;font-size:13px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.5)">${pct.toFixed(1)}% spent</div></div>`;
 
   // Hold Period & Burn card
   if(renoDeal&&["in_renovation","renovation_complete","listed","sold"].includes(renoDeal.status)){
