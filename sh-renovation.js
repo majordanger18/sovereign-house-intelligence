@@ -135,7 +135,7 @@ async function loadRenoData(did){
       sb("renovation_draws?deal_id=eq."+did+"&order=draw_number"),
       sb("renovation_expenses?deal_id=eq."+did+"&order=expense_date.desc&select=*,renovation_sow_lines(line_number,category,description)"),
       sb("renovation_sow_lines?deal_id=eq."+did+"&order=line_number"),
-      sb("deals?id=eq."+did+"&select=id,address,status,lender_name,lender_max_draws,lender_holdback_pct,lender_draw_fee,lender_loan_number,lender_draw_turnaround_days,lender_draws_email,lender_change_order_email,reno_budget")
+      sb("deals?id=eq."+did+"&select=id,address,status,coe_date,lender_name,lender_max_draws,lender_holdback_pct,lender_draw_fee,lender_loan_number,lender_draw_turnaround_days,lender_draws_email,lender_change_order_email,reno_budget")
     ]);
     renoOv=Array.isArray(ov)&&ov.length?ov[0]:null;
     renoBLines=Array.isArray(bl)?bl:[];
@@ -196,6 +196,45 @@ function renderBudget(el){
 
   // Progress bar
   h+=`<div class="reno-pbar"><div class="reno-pfill" style="width:${Math.min(pct,100)}%;background:${sc}"></div></div><div style="text-align:right;font-size:10px;color:#64748b;margin-top:4px;margin-bottom:8px">${pct.toFixed(1)}% spent</div>`;
+
+  // Hold Period & Burn card
+  if(renoDeal&&["in_renovation","renovation_complete","listed","sold"].includes(renoDeal.status)){
+    const _coe=renoDeal.coe_date?new Date(renoDeal.coe_date+"T00:00:00"):null;
+    const _today=new Date();_today.setHours(0,0,0,0);
+    const _elapsed=_coe?Math.floor((_today-_coe)/864e5):null;
+    const _holdMax=240;
+    const _holdPct=_elapsed!=null?Math.min(_elapsed/_holdMax*100,100):0;
+    const _holdColor=_elapsed==null?"#64748b":_elapsed>210?"#ef4444":_elapsed>=180?"#eab308":"#22c55e";
+    const _fp=renoFin?.funded_principal||0;
+    const _ir=renoFin?.interest_rate||0;
+    const _intAccrued=_elapsed!=null&&_fp&&_ir?Math.round(_fp*_ir/100/365*_elapsed):null;
+    const _intBudget=_fp&&_ir?Math.round(_fp*_ir/100/12*8):null;
+    const _intPct=_intAccrued!=null&&_intBudget?Math.min(_intAccrued/_intBudget*100,100):0;
+    const _intColor=_intPct>90?"#ef4444":_intPct>70?"#eab308":"#22c55e";
+    const _drawSum=renoDraws.filter(d=>d.status==="disbursed").reduce((a,d)=>a+(d.amount_received||d.amount_requested||0),0);
+    const _expSum=renoExp.reduce((a,e)=>a+(e.amount||0),0);
+    const _burnPct=tb>0?Math.min((_drawSum+_expSum)/tb*100,100):0;
+    const _burnColor=_burnPct>90?"#ef4444":_burnPct>70?"#eab308":"#22c55e";
+    const _matDate=renoFin?.maturity_date?new Date(renoFin.maturity_date+"T00:00:00"):null;
+    const _matDays=_matDate?Math.ceil((_matDate-_today)/864e5):null;
+    const _matColor=_matDays==null?"#64748b":_matDays<60?"#ef4444":_matDays<90?"#eab308":"#22c55e";
+    h+=`<div style="margin:12px 0 16px;padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
+    h+=`<div style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:#d4af37;margin-bottom:10px">HOLD PERIOD & BURN</div>`;
+    h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">`;
+    // Days Elapsed
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">DAYS ELAPSED</div><div style="font-size:17px;font-weight:800;color:${_holdColor};margin-top:2px">${_elapsed!=null?_elapsed:"—"}</div></div>`;
+    // Hold Progress
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">HOLD PROGRESS</div><div style="margin-top:4px"><div class="reno-pbar" style="height:6px"><div class="reno-pfill" style="width:${_holdPct}%;background:${_holdColor}"></div></div><div style="font-size:10px;color:${_holdColor};font-weight:700;margin-top:2px">${_elapsed!=null?Math.round(_holdPct)+"%":"—"}</div></div></div>`;
+    // Interest Accrued
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">INTEREST ACCRUED</div><div style="font-size:17px;font-weight:800;color:${_intAccrued!=null?"#f59e0b":"#64748b"};margin-top:2px">${_intAccrued!=null?$r(_intAccrued):"—"}</div></div>`;
+    // Interest Budget
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">INTEREST BUDGET</div><div style="font-size:17px;font-weight:800;color:${_intColor};margin-top:2px">${_intBudget!=null?$r(_intBudget):"—"}</div>${_intAccrued!=null&&_intBudget?`<div class="reno-pbar" style="height:4px;margin-top:4px"><div class="reno-pfill" style="width:${_intPct}%;background:${_intColor}"></div></div>`:""}</div>`;
+    // Budget Consumed
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">BUDGET CONSUMED</div><div style="margin-top:4px"><div class="reno-pbar" style="height:6px"><div class="reno-pfill" style="width:${_burnPct}%;background:${_burnColor}"></div></div><div style="font-size:10px;color:${_burnColor};font-weight:700;margin-top:2px">${_burnPct.toFixed(1)}%</div></div></div>`;
+    // Maturity Countdown
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">MATURITY</div><div style="font-size:17px;font-weight:800;color:${_matColor};margin-top:2px">${_matDays!=null?_matDays+"d":"—"}</div></div>`;
+    h+=`</div></div>`;
+  }
 
   // Maturity countdown bar (if financing data exists)
   if(renoFin&&renoFin.funded_date){
