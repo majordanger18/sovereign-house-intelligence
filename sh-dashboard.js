@@ -105,7 +105,7 @@ function renderDashboard(){
 
   // Feed filter pills — only visible on feed views
   const feedFilters=document.getElementById("feedFilters");
-  const fD=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["queued",`Queued (${st.queued})`],["watched",`★ (${st.watched})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${st.pending})`],["passed",`Passed (${passedCount})`]];
+  const fD=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["watched",`★ (${st.watched})`],["queued",`Queued (${st.queued})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${st.pending})`],["passed",`Passed (${passedCount})`]];
   feedFilters.innerHTML=fD.map(([v,l])=>{
     const isOn=view===v;
     if(v==="passed")return`<button class="filt${isOn?" on-red":""}" onclick="setView('${v}')">${l}</button>`;
@@ -163,7 +163,7 @@ function renderList(){
   document.getElementById("countLabel").textContent=`${list.length} properties`;
   if(!list.length){document.getElementById("listArea").innerHTML=`<div style="text-align:center;padding:40px;color:#475569;grid-column:1/-1"><div style="font-size:32px;margin-bottom:8px">🏠</div><div style="font-size:14px;font-weight:600">No properties match</div></div>`;return;}
 
-  document.getElementById("listArea").innerHTML=list.map((p,i)=>{
+  function cardHtml(p,i,extraStyle){
     const isW=watchIds.has(p.id),red=p.original_list_price&&p.list_price<p.original_list_price;
     const redP=red?Math.round(((p.original_list_price-p.list_price)/p.original_list_price)*100):0;
     const ai=analysisMap[p.id];
@@ -185,8 +185,26 @@ function renderList(){
     const isPending=isPend(p);
     const passReasonMap={visited_passed:"Visited & Passed",price_too_high:"Price Too High",condition_worse:"Condition Worse",layout_doesnt_work:"Layout Issue",neighborhood_issue:"Neighborhood",already_sold:"Already Sold",other:"Other"};
     const passInfo=isPassed?`<div style="font-size:10px;color:#64748b;margin-top:2px">Passed: ${passReasonMap[p.disposition_reason]||"—"}${p.disposition_date?" · "+new Date(p.disposition_date).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"}):""}</div>`:"";
-    return`<div class="card${isW?" watched":""}" onclick="openDetail('${p.id}')" style="animation:fadeUp .3s ease ${i*30}ms both;${passedDim?"opacity:0.5;":isPending?"opacity:0.6":""}"><div style="display:flex;gap:12px;align-items:center">${ring(p.sovereign_score)}<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;gap:6px"><div style="min-width:0;flex:1"><div style="font-size:14px;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isW?'<span style="color:#d4af37">★ </span>':""}${esc(p.address)}</div><div style="font-size:10px;color:#64748b;margin-top:1px">${(p.subdivision_name&&truncSub(p.subdivision_name))?`<span style="color:#94a3b8">${esc(truncSub(p.subdivision_name))}</span> · `:""}${p.zip_code}</div>${passInfo}</div><div style="text-align:right;flex-shrink:0"><div style="font-size:17px;font-weight:800">${$(p.list_price)}</div>${p.price_per_sqft?`<div style="font-size:10px;color:#64748b">$${p.price_per_sqft}/sf</div>`:""}${isPassed?`<span class="passed-badge" style="margin-top:2px">PASSED</span>`:""}</div></div><div style="font-size:10px;color:#64748b;margin-top:4px">${stats}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${flags.join("")}</div>${aiRow}${pendingBadge}</div></div></div>`;
-  }).join("");
+    return`<div class="card${isW?" watched":""}" onclick="openDetail('${p.id}')" style="animation:fadeUp .3s ease ${i*30}ms both;${extraStyle||""}${passedDim?"opacity:0.5;":isPending?"opacity:0.6":""}"><div style="display:flex;gap:12px;align-items:center">${ring(p.sovereign_score)}<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;gap:6px"><div style="min-width:0;flex:1"><div style="font-size:14px;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isW?'<span style="color:#d4af37">★ </span>':""}${esc(p.address)}</div><div style="font-size:10px;color:#64748b;margin-top:1px">${(p.subdivision_name&&truncSub(p.subdivision_name))?`<span style="color:#94a3b8">${esc(truncSub(p.subdivision_name))}</span> · `:""}${p.zip_code}</div>${passInfo}</div><div style="text-align:right;flex-shrink:0"><div style="font-size:17px;font-weight:800">${$(p.list_price)}</div>${p.price_per_sqft?`<div style="font-size:10px;color:#64748b">$${p.price_per_sqft}/sf</div>`:""}${isPassed?`<span class="passed-badge" style="margin-top:2px">PASSED</span>`:""}</div></div><div style="font-size:10px;color:#64748b;margin-top:4px">${stats}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${flags.join("")}</div>${aiRow}${pendingBadge}</div></div></div>`;
+  }
+
+  if(view==="queued"){
+    const ready=list.filter(p=>(p.sovereign_score||0)>=40).sort((a,b)=>(b.sovereign_score||0)-(a.sovereign_score||0));
+    const below=list.filter(p=>(p.sovereign_score||0)<40).sort((a,b)=>(b.sovereign_score||0)-(a.sovereign_score||0));
+    let out="";
+    if(ready.length){
+      out+=`<div style="grid-column:1/-1;font-size:10px;font-weight:800;letter-spacing:2px;color:#d4af37;padding:8px 0 4px">READY TO ANALYZE (${ready.length})</div>`;
+      out+=ready.map((p,i)=>cardHtml(p,i,"")).join("");
+    }
+    if(below.length){
+      out+=`<div style="grid-column:1/-1;font-size:10px;font-weight:800;letter-spacing:2px;color:#64748b;padding:12px 0 4px">BELOW THRESHOLD (${below.length})</div>`;
+      out+=below.map((p,i)=>cardHtml(p,i+ready.length,"opacity:0.7;")).join("");
+    }
+    document.getElementById("listArea").innerHTML=out;
+    return;
+  }
+
+  document.getElementById("listArea").innerHTML=list.map((p,i)=>cardHtml(p,i,"")).join("");
 }
 
 document.getElementById("searchBox").addEventListener("input",()=>{const v=document.getElementById("searchBox").value;const c=document.getElementById("searchClear");if(c)c.style.display=v?"flex":"none";renderList();});
