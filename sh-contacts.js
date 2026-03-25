@@ -1217,6 +1217,7 @@ async function awardBid(bidId){
   try{
     await fetch(SB+"/rest/v1/contractor_bids?id=eq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify({status:"accepted",final_contracted:amount})});
     await fetch(SB+"/rest/v1/contractor_bids?deal_id=eq."+b.deal_id+"&id=neq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify({status:"rejected"})});
+    await fetch(SB+"/rest/v1/deals?id=eq."+b.deal_id,{method:"PATCH",headers:HD,body:JSON.stringify({contracted_reno_amount:amount,contracted_reno_contractor:ctrName,contracted_reno_date:new Date().toISOString().split("T")[0]})});
     const d=deals.find(x=>x.id===b.deal_id);
     if(d){
       const tl=Array.isArray(d.timeline)?[...d.timeline]:[];

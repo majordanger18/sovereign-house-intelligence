@@ -135,7 +135,7 @@ async function loadRenoData(did){
       sb("renovation_draws?deal_id=eq."+did+"&order=draw_number"),
       sb("renovation_expenses?deal_id=eq."+did+"&order=expense_date.desc&select=*,renovation_sow_lines(line_number,category,description)"),
       sb("renovation_sow_lines?deal_id=eq."+did+"&order=line_number"),
-      sb("deals?id=eq."+did+"&select=id,address,status,coe_date,lender_name,lender_max_draws,lender_holdback_pct,lender_draw_fee,lender_loan_number,lender_draw_turnaround_days,lender_draws_email,lender_change_order_email,reno_budget")
+      sb("deals?id=eq."+did+"&select=id,address,status,coe_date,contracted_reno_amount,contracted_reno_contractor,lender_name,lender_max_draws,lender_holdback_pct,lender_draw_fee,lender_loan_number,lender_draw_turnaround_days,lender_draws_email,lender_change_order_email,reno_budget")
     ]);
     renoOv=Array.isArray(ov)&&ov.length?ov[0]:null;
     renoBLines=Array.isArray(bl)?bl:[];
@@ -175,7 +175,9 @@ function renderBudget(el){
   const ov=renoOv;
   if(!ov&&!renoBLines.length){el.innerHTML=`<div style="text-align:center;padding:40px 20px;color:#475569"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:14px;font-weight:600;color:#94a3b8">No scope of work loaded for this deal.</div></div>`;return;}
 
-  const tb=ov?.total_planned_budget||0,ts=ov?.total_spent||0,rem=ov?.remaining_budget||0;
+  const contractedBudget=renoDeal?.contracted_reno_amount||null;
+  const tb=contractedBudget||ov?.total_planned_budget||0;
+  const ts=ov?.total_spent||0,rem=tb-ts;
   const pct=tb>0?(ts/tb*100):0;
   const sc=pct>100?"#ef4444":pct>80?"#eab308":"#22c55e";
   const rc=rem<0?"#ef4444":"#22c55e";
@@ -192,7 +194,7 @@ function renderBudget(el){
 
   // Big Three
   const tla=ov?.total_lender_approved||0;
-  h+=`<div class="reno-hero"><div class="reno-hcard"><div class="reno-hl">TOTAL BUDGET</div><div class="reno-hv">${$r(tb)}</div>${tla&&tla!==tb?`<div style="font-size:10px;color:#64748b;margin-top:2px">Lender: ${$r(tla)}</div>`:''}</div><div class="reno-hcard"><div class="reno-hl">TOTAL SPENT</div><div class="reno-hv" style="color:${sc}">${$r(ts)}</div></div><div class="reno-hcard"><div class="reno-hl">REMAINING</div><div class="reno-hv" style="color:${rc}">${$r(rem)}</div></div></div>`;
+  h+=`<div class="reno-hero"><div class="reno-hcard"><div class="reno-hl">TOTAL BUDGET</div><div class="reno-hv">${$r(tb)}</div>${tla&&tla!==tb?`<div style="font-size:10px;color:#64748b;margin-top:2px">Lender: ${$r(tla)}</div>`:''}${contractedBudget?`<div style="font-size:10px;color:rgba(212,175,55,0.6);margin-top:2px">Contracted: ${esc(renoDeal?.contracted_reno_contractor||"—")}</div>`:''}</div><div class="reno-hcard"><div class="reno-hl">TOTAL SPENT</div><div class="reno-hv" style="color:${sc}">${$r(ts)}</div></div><div class="reno-hcard"><div class="reno-hl">REMAINING</div><div class="reno-hv" style="color:${rc}">${$r(rem)}</div></div></div>`;
 
   // Progress bar
   h+=`<div class="reno-pbar"><div class="reno-pfill" style="width:${Math.min(pct,100)}%;background:${sc}"></div></div><div style="text-align:right;font-size:10px;color:#64748b;margin-top:4px;margin-bottom:8px">${pct.toFixed(1)}% spent</div>`;
@@ -268,7 +270,7 @@ function renderBudget(el){
 
   // LOC Exposure card
   const _locKiavi=renoFin?.rehab_holdback||ov?.total_lender_approved||0;
-  const _locPlanned=ov?.total_planned_budget||0;
+  const _locPlanned=renoDeal?.contracted_reno_amount||ov?.total_planned_budget||0;
   const _locGap=Math.max(_locPlanned-_locKiavi,0);
   const _locLimit=renoFin?.loc_limit||0;
   const _locHead=_locLimit-_locGap;
