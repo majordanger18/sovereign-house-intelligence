@@ -433,7 +433,7 @@ function renderBidsV(el){
       }
       const rejected=b.status==="rejected";
       let awardHtml="";
-      if(accepted)awardHtml=`<span style="color:#22c55e;font-size:10px;font-weight:800;padding:2px 8px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:6px">✓ Awarded</span>`;
+      if(accepted)awardHtml=`<span style="color:#22c55e;font-size:10px;font-weight:800;padding:2px 8px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:6px">✓ Awarded</span><button onclick="event.stopPropagation();undoAward('${b.id}')" style="background:none;border:none;color:#64748b;font-size:9px;font-weight:600;cursor:pointer;opacity:0.6;padding:2px 4px">Undo</button>`;
       else if(rejected)awardHtml=`<span style="color:#64748b;font-size:10px;font-weight:600;opacity:0.6">Rejected</span>`;
       else awardHtml=`<button onclick="event.stopPropagation();awardBid('${b.id}')" style="background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-size:10px;font-weight:800;cursor:pointer;padding:4px 10px;border-radius:6px">Award Bid</button>`;
       const hasLineItems=b.parsed_line_items&&b.parsed_line_items.sections;
@@ -1228,6 +1228,18 @@ async function awardBid(bidId){
     showCtToast(`Bid awarded to ${ctrName} — ${$r(amount)}`);
     await loadCtData();renderCtSub();
   }catch(e){console.error("Award bid failed:",e);alert("Failed to award bid.");}
+}
+
+async function undoAward(bidId){
+  if(!confirm("Undo this award? The bid will return to received status."))return;
+  const b=ctBids.find(x=>x.id===bidId);if(!b)return;
+  try{
+    await fetch(SB+"/rest/v1/contractor_bids?id=eq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify({status:"received",final_contracted:null})});
+    await fetch(SB+"/rest/v1/contractor_bids?deal_id=eq."+b.deal_id+"&status=eq.rejected",{method:"PATCH",headers:HD,body:JSON.stringify({status:"received"})});
+    await fetch(SB+"/rest/v1/deals?id=eq."+b.deal_id,{method:"PATCH",headers:HD,body:JSON.stringify({contracted_reno_amount:null,contracted_reno_contractor:null,contracted_reno_date:null})});
+    showCtToast("Award reversed");
+    await loadCtData();renderCtSub();
+  }catch(e){console.error("Undo award failed:",e);alert("Failed to undo award.");}
 }
 
 // ═══ BID REVISION SYSTEM ═══
