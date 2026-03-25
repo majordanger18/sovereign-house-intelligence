@@ -74,9 +74,11 @@ function dealBadge(status){
 }
 
 function renderDeals(){
-  const active=deals.filter(d=>!DEAD_STATUSES.includes(d.status));
-  const won=deals.filter(d=>d.status==="sold");
-  const lost=deals.filter(d=>LOST_STATUSES.includes(d.status));
+  const dq=(document.getElementById("searchBox")?.value||"").toLowerCase();
+  const dFilter=d=>!dq||(d.address||"").toLowerCase().includes(dq)||(d.community||"").toLowerCase().includes(dq)||(d.zip_code||"").includes(dq);
+  const active=deals.filter(d=>!DEAD_STATUSES.includes(d.status)&&dFilter(d));
+  const won=deals.filter(d=>d.status==="sold"&&dFilter(d));
+  const lost=deals.filter(d=>LOST_STATUSES.includes(d.status)&&dFilter(d));
 
   if(!deals.length){
     document.getElementById("countLabel").textContent="0 deals";
@@ -85,6 +87,11 @@ function renderDeals(){
   }
 
   document.getElementById("countLabel").textContent=`${active.length} active${won.length?' · '+won.length+' won':''}${lost.length?' · '+lost.length+' dead':''}`;
+
+  if(!active.length&&!won.length&&!lost.length&&dq){
+    document.getElementById("listArea").innerHTML=`<div style="text-align:center;padding:40px;color:#475569;grid-column:1/-1"><div style="font-size:32px;margin-bottom:8px">🤝</div><div style="font-size:14px;font-weight:600">No deals match</div></div>`;
+    return;
+  }
 
   let html='';
 
