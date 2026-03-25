@@ -261,13 +261,12 @@ function renderBudget(el){
   const md=renoFin?.max_draws||renoDeal?.lender_max_draws||"?";
   const ueBg=ue>50000?"rgba(239,68,68,0.08)":"rgba(255,255,255,0.02)";
   const ueBr=ue>50000?"rgba(239,68,68,0.2)":"rgba(255,255,255,0.06)";
-  h+=`<div style="margin-bottom:12px"><button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.nextElementSibling.style.display==='none'?'📊 Budget Details':'📊 Budget Details ▾'" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:700;cursor:pointer;padding:4px 0">📊 Budget Details</button>`;
-  h+=`<div style="display:none;margin-top:8px"><div class="reno-sgrid">`;
+  h+=`<div class="reno-sgrid">`;
   h+=`<div class="reno-scard"><div class="reno-sl">${renoFin?.rehab_holdback?'REHAB HOLDBACK':'LENDER APPROVED'}</div><div class="reno-sv">${$r(la)}</div></div>`;
   h+=`<div class="reno-scard"><div class="reno-sl">REIMBURSED</div><div class="reno-sv" style="color:#22c55e">${$r(rb2)}</div></div>`;
   h+=`<div class="reno-scard" style="background:${ueBg};border-color:${ueBr}"><div class="reno-sl">UNREIMBURSED</div><div class="reno-sv" style="color:${ue>50000?"#ef4444":"#f1f5f9"}">${$r(ue)}</div></div>`;
   h+=`<div class="reno-scard"><div class="reno-sl">DRAWS USED</div><div class="reno-sv">${du} / ${md}</div></div>`;
-  h+=`</div></div></div>`;
+  h+=`</div>`;
 
   // LOC Exposure card
   const _locKiavi=renoFin?.rehab_holdback||ov?.total_lender_approved||0;
@@ -278,17 +277,16 @@ function renderBudget(el){
   if(_locGap>0||_locLimit>0){
     const _gapColor=_locGap>0?"#f59e0b":"#22c55e";
     const _headColor=_locHead>=100000?"#22c55e":_locHead>=50000?"#eab308":"#ef4444";
-    h+=`<div style="margin-bottom:12px"><button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.nextElementSibling.style.display==='none'?'⚡ LOC Gap: ${$r(_locGap)} · Limit: ${_locLimit?$r(_locLimit):"Not set"}':'⚡ LOC Gap: ${$r(_locGap)} · Limit: ${_locLimit?$r(_locLimit):"Not set"} ▾'" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:700;cursor:pointer;padding:4px 0">⚡ LOC Gap: ${$r(_locGap)} · Limit: ${_locLimit?$r(_locLimit):"Not set"}</button>`;
-    h+=`<div style="display:none;margin-top:8px"><div style="padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
+    h+=`<div style="margin:12px 0 16px;padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
     h+=`<div style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:#d4af37;margin-bottom:10px">LOC EXPOSURE</div>`;
     h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">KIAVI APPROVED</div><div style="font-size:17px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_locKiavi)}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">PLANNED BUDGET</div><div style="font-size:17px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_locPlanned)}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">COVERAGE GAP</div><div style="font-size:17px;font-weight:800;color:${_gapColor};margin-top:2px">${$r(_locGap)}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC LIMIT</div><div style="font-size:17px;font-weight:800;color:#f1f5f9;margin-top:2px">${_locLimit?$r(_locLimit):"Not set"}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">COVERAGE GAP</div><div style="font-size:17px;font-weight:800;color:${_gapColor};margin-top:2px">${$r(_locGap)}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC HEADROOM</div><div style="font-size:17px;font-weight:800;color:${_locLimit?_headColor:"#64748b"};margin-top:2px">${_locLimit?$r(_locHead):"—"}</div></div>`;
-    h+=`</div></div></div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">KIAVI APPROVED</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_locKiavi)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">PLANNED BUDGET</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_locPlanned)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">COVERAGE GAP</div><div style="font-size:15px;font-weight:800;color:${_gapColor};margin-top:2px">${$r(_locGap)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC LIMIT</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${_locLimit?$r(_locLimit):"Not set"}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC DRAWN</div><div style="font-size:15px;font-weight:800;color:${_gapColor};margin-top:2px">${$r(_locGap)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC HEADROOM</div><div style="font-size:15px;font-weight:800;color:${_locLimit?_headColor:"#64748b"};margin-top:2px">${_locLimit?$r(_locHead):"—"}</div></div>`;
+    h+=`</div></div>`;
   }
 
   // Monthly interest card (if financing data has monthly payment)
