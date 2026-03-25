@@ -344,7 +344,7 @@ function renderContractors(el){
     return;
   }
 
-  const ctIds=new Set(ctList.filter(c=>c.contact_type==="contractor"||c.contact_type==="subcontractor").map(c=>c.id));
+  const ctIds=new Set(ctList.filter(c=>(c.contact_type==="contractor"||c.contact_type==="subcontractor")&&c.status!=="inactive"&&c.status!=="do_not_use").map(c=>c.id));
   const filtPerf=ctPerf.filter(p=>ctIds.has(p.contact_id));
   if(!filtPerf.length){
     el.innerHTML=`<div style="text-align:center;padding:40px 20px;color:#475569"><div style="font-size:32px;margin-bottom:8px">🔧</div><div style="font-size:14px;font-weight:600;color:#94a3b8">No contractor performance data yet.</div><div style="font-size:12px;color:#64748b;margin-top:6px">Ratings and accuracy scores populate after your first completed deal.</div></div>`;
