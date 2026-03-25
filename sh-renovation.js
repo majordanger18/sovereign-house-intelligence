@@ -323,18 +323,33 @@ function renderBudget(el){
   h+=`<div id="sowUploadArea"></div><div id="sowAddLineArea"></div>`;
   const fl=renoBLines.filter(l=>l.lender_approved>0||l.planned_budget>0||l.total_spent>0);
   if(fl.length){
-    h+=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th>#</th><th>Category</th><th>Description</th><th class="reno-hm">Approved</th><th>Planned</th><th>Spent</th><th class="reno-hm">Drawn</th><th>Remaining</th><th>Status</th></tr></thead><tbody>`;
+    h+=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th>#</th><th>Category</th><th>Description</th><th class="reno-hm">Approved</th><th>Planned</th><th>Actual</th><th>Spent</th><th class="reno-hm">Drawn</th><th>Remaining</th><th>Status</th></tr></thead><tbody>`;
     fl.forEach(l=>{
       const cc=RENO_CAT_COLORS[(l.category||"").toLowerCase()]||"#64748b";
       const stc=RENO_STAT_COLORS[l.status]||"#64748b";
       const pb=l.planned_budget||0,sp=l.total_spent||0,la2=l.lender_approved||0,rb3=l.remaining_budget||0;
+      const ac=l.actual_cost!=null?l.actual_cost:null;
+      const acDelta=ac!=null?ac-pb:null;
+      const acColor=ac==null?"#64748b":acDelta<=0?"#22c55e":"#ef4444";
+      const acText=ac!=null?$r(ac):"—";
+      const acDeltaText=acDelta!=null?`<div style="font-size:8px;color:${acColor};font-weight:700">${acDelta<=0?"":"+"} ${$r(acDelta)}</div>`:"";
       const rmc=rb3<0?"#ef4444":pb>0&&sp/pb>0.8?"#eab308":"#22c55e";
       const oopDot=pb>la2&&la2>0?`<span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#f59e0b;margin-left:4px;vertical-align:middle" title="Out-of-pocket"></span>`:'';
       const exp=renoExpandedLine===l.sow_line_id;
-      h+=`<tr class="reno-r${exp?" expanded":""}" onclick="toggleLineExp('${l.sow_line_id}')"><td style="color:#64748b">${l.line_number}</td><td><span class="reno-chip" style="color:${cc};background:${cc}15;border:1px solid ${cc}30">${esc((l.category||"").replace(/_/g," "))}</span></td><td style="font-weight:600;color:#e2e8f0">${esc(l.description||"")}</td><td class="reno-hm" style="text-align:right">${$r(la2)}</td><td style="text-align:right">${$r(pb)}${oopDot}</td><td style="text-align:right;font-weight:700">${$r(sp)}</td><td class="reno-hm" style="text-align:right">${$r(l.total_drawn)}</td><td style="text-align:right;color:${rmc};font-weight:700">${$r(rb3)}</td><td><span class="reno-chip" style="color:${stc};background:${stc}15;border:1px solid ${stc}30">${(l.status||"not_started").replace(/_/g," ")}</span></td></tr>`;
-      if(exp)h+=`<tr class="reno-xrow"><td colspan="9" id="renoLX_${l.sow_line_id}"><div style="padding:8px 0;color:#64748b;font-size:11px">Loading...</div></td></tr>`;
+      h+=`<tr class="reno-r${exp?" expanded":""}" onclick="toggleLineExp('${l.sow_line_id}')"><td style="color:#64748b">${l.line_number}</td><td><span class="reno-chip" style="color:${cc};background:${cc}15;border:1px solid ${cc}30">${esc((l.category||"").replace(/_/g," "))}</span></td><td style="font-weight:600;color:#e2e8f0">${esc(l.description||"")}</td><td class="reno-hm" style="text-align:right">${$r(la2)}</td><td style="text-align:right">${$r(pb)}${oopDot}</td><td style="text-align:right;color:${acColor}">${acText}${acDeltaText}</td><td style="text-align:right;font-weight:700">${$r(sp)}</td><td class="reno-hm" style="text-align:right">${$r(l.total_drawn)}</td><td style="text-align:right;color:${rmc};font-weight:700">${$r(rb3)}</td><td><span class="reno-chip" style="color:${stc};background:${stc}15;border:1px solid ${stc}30">${(l.status||"not_started").replace(/_/g," ")}</span></td></tr>`;
+      if(exp)h+=`<tr class="reno-xrow"><td colspan="10" id="renoLX_${l.sow_line_id}"><div style="padding:8px 0;color:#64748b;font-size:11px">Loading...</div></td></tr>`;
     });
-    h+=`</tbody></table></div></div>`;
+    h+=`</tbody></table></div>`;
+    // Actual vs Planned summary
+    const _sowTotalPlanned=fl.reduce((a,l)=>a+(l.planned_budget||0),0);
+    const _sowLinesWithActual=fl.filter(l=>l.actual_cost!=null);
+    const _sowTotalActual=_sowLinesWithActual.reduce((a,l)=>a+(l.actual_cost||0),0);
+    if(_sowLinesWithActual.length){
+      const _sowDelta=_sowTotalActual-_sowTotalPlanned;
+      const _sowDeltaC=_sowDelta<=0?"#22c55e":"#ef4444";
+      h+=`<div style="display:flex;gap:16px;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);margin-top:8px;font-size:12px"><span style="color:#64748b">Actual vs Planned:</span><span style="font-weight:700;color:#f1f5f9">${$r(_sowTotalActual)} actual</span><span style="color:#64748b">vs</span><span style="font-weight:700;color:#94a3b8">${$r(_sowTotalPlanned)} planned</span><span style="font-weight:800;color:${_sowDeltaC}">${_sowDelta<=0?"":"+"} ${$r(_sowDelta)} (${_sowTotalPlanned>0?(_sowDelta/_sowTotalPlanned*100).toFixed(1):"0"}%)</span><span style="color:#475569;font-size:10px">${_sowLinesWithActual.length}/${fl.length} lines</span></div>`;
+    }
+    h+=`</div>`;
   }
 
   // Change Orders
@@ -396,6 +411,7 @@ async function loadLineExp(lid){
     if(sowLine){
       const laRef=sowLine.lender_approved||0,pbVal=sowLine.planned_budget||0;
       h+=`<div class="fld" style="margin-bottom:6px"><label>PLANNED BUDGET</label><input type="number" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${pbVal||""}" onblur="saveSOWField('${lid}','planned_budget',Number(this.value))" onkeydown="if(event.key==='Enter'){this.blur()}"/><div style="font-size:9px;color:#64748b;margin-top:2px">Lender approved: ${$r(laRef)}</div>${pbVal>laRef&&laRef>0?`<div style="font-size:9px;color:#f59e0b;margin-top:1px">Out-of-pocket: ${$r(pbVal-laRef)}</div>`:''}</div>`;
+      h+=`<div class="fld" style="margin-bottom:6px"><label>ACTUAL COST</label><input type="number" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${sowLine.actual_cost!=null?sowLine.actual_cost:""}" placeholder="Final actual cost" onblur="saveSOWField('${lid}','actual_cost',this.value?Number(this.value):null)" onkeydown="if(event.key==='Enter'){this.blur()}"/>${sowLine.actual_cost!=null&&pbVal?`<div style="font-size:9px;color:${sowLine.actual_cost<=pbVal?'#22c55e':'#ef4444'};margin-top:2px">Delta: ${sowLine.actual_cost<=pbVal?'':'+'}${$r(sowLine.actual_cost-pbVal)}</div>`:''}</div>`;
       h+=`<div class="fld" style="margin-bottom:6px"><label>STATUS</label><select class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" onchange="saveSOWField('${lid}','status',this.value)"><option value="not_started"${sowLine.status==="not_started"?" selected":""}>Not Started</option><option value="in_progress"${sowLine.status==="in_progress"?" selected":""}>In Progress</option><option value="complete"${sowLine.status==="complete"?" selected":""}>Complete</option><option value="change_order"${sowLine.status==="change_order"?" selected":""}>Change Order</option></select></div>`;
       h+=`<div class="fld" style="margin-bottom:0"><label>NOTES</label><input type="text" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${esc(sowLine.notes||"")}" placeholder="Add notes for this line item..." onblur="saveSOWField('${lid}','notes',this.value)" onkeydown="if(event.key==='Enter'){this.blur()}"/></div>`;
       h+=`<button onclick="event.stopPropagation();deleteSOWLine('${lid}')" style="margin-top:8px;background:none;border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:6px 12px;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer">Delete This Line</button>`;
@@ -443,7 +459,7 @@ async function loadLineExp(lid){
 }
 
 async function saveSOWField(lid,field,value){
-  const patch={};patch[field]=field==='planned_budget'?(value||0):(value||null);
+  const patch={};patch[field]=field==='planned_budget'?(value||0):field==='actual_cost'?value:(value||null);
   try{
     const res=await fetch(SB+"/rest/v1/renovation_sow_lines?id=eq."+lid,{method:"PATCH",headers:RENO_WH,body:JSON.stringify(patch)});
     if(!res.ok){showRenoToast("Failed to save");return;}
