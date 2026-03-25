@@ -1237,6 +1237,11 @@ async function undoAward(bidId){
     await fetch(SB+"/rest/v1/contractor_bids?id=eq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify({status:"received",final_contracted:null})});
     await fetch(SB+"/rest/v1/contractor_bids?deal_id=eq."+b.deal_id+"&status=eq.rejected",{method:"PATCH",headers:HD,body:JSON.stringify({status:"received"})});
     await fetch(SB+"/rest/v1/deals?id=eq."+b.deal_id,{method:"PATCH",headers:HD,body:JSON.stringify({contracted_reno_amount:null,contracted_reno_contractor:null,contracted_reno_date:null})});
+    const dlResp=await fetch(SB+"/rest/v1/deals?id=eq."+b.deal_id+"&select=timeline",{headers:HD});
+    const dlData=await dlResp.json();
+    const curTl=Array.isArray(dlData[0]?.timeline)?dlData[0].timeline:[];
+    const cleanTl=curTl.filter(e=>e.type!=="contractor_awarded");
+    await fetch(SB+"/rest/v1/deals?id=eq."+b.deal_id,{method:"PATCH",headers:HD,body:JSON.stringify({timeline:cleanTl})});
     showCtToast("Award reversed");
     await loadCtData();renderCtSub();
   }catch(e){console.error("Undo award failed:",e);alert("Failed to undo award.");}
