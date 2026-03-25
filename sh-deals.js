@@ -402,14 +402,16 @@ function renderStatusButtons(d){
     h+=`<div style="margin-bottom:12px"></div>`;
   }
 
-  // ROW 4 — Deal outcome buttons (2x2) with separator
-  h+=`<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:4px;padding-top:8px"><div style="font-size:9px;color:#475569;font-weight:700;letter-spacing:2px;text-align:center;margin-bottom:8px">CLOSE DEAL</div>`;
-  h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">`;
-  h+=`<button onclick="winDeal('${d.id}')" style="padding:10px;border-radius:10px;border:1px solid rgba(34,197,94,0.15);background:rgba(34,197,94,0.04);color:#22c55e;font-size:12px;font-weight:800;cursor:pointer;min-height:40px">🏆 Won</button>`;
-  h+=`<button onclick="killDeal('${d.id}','rejected')" style="padding:10px;border-radius:10px;border:1px solid rgba(239,68,68,0.12);background:rgba(239,68,68,0.03);color:#ef4444;font-size:12px;font-weight:800;cursor:pointer;min-height:40px;opacity:0.7">❌ Rejected</button>`;
-  h+=`<button onclick="killDeal('${d.id}','withdrawn')" style="padding:10px;border-radius:10px;border:1px solid rgba(100,116,139,0.12);background:rgba(100,116,139,0.03);color:#94a3b8;font-size:12px;font-weight:800;cursor:pointer;min-height:40px;opacity:0.7">🚫 Withdraw</button>`;
-  h+=`<button onclick="killDeal('${d.id}','expired')" style="padding:10px;border-radius:10px;border:1px solid rgba(100,116,139,0.12);background:rgba(100,116,139,0.03);color:#94a3b8;font-size:12px;font-weight:800;cursor:pointer;min-height:40px;opacity:0.7">⏰ Expired</button>`;
-  h+=`</div></div>`;
+  // ROW 4 — Deal outcome buttons (2x2) — only during offer/negotiation phase
+  if(!['closing','closed','in_renovation','renovation_complete','listing_prep','listed','sold'].includes(d.status)){
+    h+=`<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:4px;padding-top:8px"><div style="font-size:9px;color:#475569;font-weight:700;letter-spacing:2px;text-align:center;margin-bottom:8px">CLOSE DEAL</div>`;
+    h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">`;
+    h+=`<button onclick="winDeal('${d.id}')" style="padding:10px;border-radius:10px;border:1px solid rgba(34,197,94,0.15);background:rgba(34,197,94,0.04);color:#22c55e;font-size:12px;font-weight:800;cursor:pointer;min-height:40px">🏆 Keys In Hand</button>`;
+    h+=`<button onclick="killDeal('${d.id}','rejected')" style="padding:10px;border-radius:10px;border:1px solid rgba(239,68,68,0.12);background:rgba(239,68,68,0.03);color:#ef4444;font-size:12px;font-weight:800;cursor:pointer;min-height:40px;opacity:0.7">❌ Rejected</button>`;
+    h+=`<button onclick="killDeal('${d.id}','withdrawn')" style="padding:10px;border-radius:10px;border:1px solid rgba(100,116,139,0.12);background:rgba(100,116,139,0.03);color:#94a3b8;font-size:12px;font-weight:800;cursor:pointer;min-height:40px;opacity:0.7">🚫 Withdraw</button>`;
+    h+=`<button onclick="killDeal('${d.id}','expired')" style="padding:10px;border-radius:10px;border:1px solid rgba(100,116,139,0.12);background:rgba(100,116,139,0.03);color:#94a3b8;font-size:12px;font-weight:800;cursor:pointer;min-height:40px;opacity:0.7">⏰ Expired</button>`;
+    h+=`</div></div>`;
+  }
   return h;
 }
 
