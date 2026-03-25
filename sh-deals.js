@@ -246,9 +246,9 @@ async function openDeal(dealId){
     <div id="dealFinSummary"></div>
 
     <!-- SECONDARY ACTIONS -->
-    <button onclick="openCalcForDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:12px;font-size:13px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700">🧮 Edit Deal Numbers</button>
-    <button onclick="openFinancing('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:12px;font-size:13px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700">💰 Financing</button>
-    <button onclick="openRPAFromDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:12px;font-size:13px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700">📄 Generate GLVAR RPA</button>
+    <button onclick="openCalcForDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:12px;font-size:13px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;font-weight:800">🧮 Edit Deal Numbers</button>
+    <button onclick="openFinancing('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:12px;font-size:13px;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);color:#22d3ee;font-weight:800">💰 Financing</button>
+    <button onclick="openRPAFromDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:12px;font-size:13px;background:linear-gradient(135deg,rgba(224,201,127,0.15),rgba(212,175,55,0.08));border:1px solid rgba(224,201,127,0.3);color:#e0c97f;font-weight:800">📄 Generate GLVAR RPA</button>
     ${d.rpa_generated_at?`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin-bottom:16px;border-radius:10px;background:rgba(224,201,127,0.04);border:1px solid rgba(224,201,127,0.12)">
       <div style="font-size:10px;color:#e0c97f">
         <span style="font-weight:700">RPA v${d.rpa_version||1}</span> · sent ${new Date(d.rpa_generated_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"})}${d.rpa_generated_by_email?' by '+esc(d.rpa_generated_by_email.split('@')[0]):''}
@@ -397,7 +397,7 @@ function renderStatusButtons(d){
 
   // ROW 3 — Prev (muted, smaller)
   if(prevKey){
-    h+=`<button onclick="updateDealStatus('${d.id}','${prevKey}')" style="width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#64748b;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:12px">← ${prevS.label}</button>`;
+    h+=`<button onclick="updateDealStatus('${d.id}','${prevKey}')" style="width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:#475569;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:12px">← ${prevS.label}</button>`;
   } else {
     h+=`<div style="margin-bottom:12px"></div>`;
   }
