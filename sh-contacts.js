@@ -75,14 +75,14 @@ function renderCtSub(){
 function renderDirectory(el){
   let h='';
   // Search + filters
-  h+=`<div class="ct-filters"><div style="flex:1;min-width:200px"><input id="ctSrch" type="text" class="cinput" placeholder="Search name, company, phone, email..." value="${esc(ctSearch)}" oninput="ctSearch=this.value;renderCtSub()"/></div>`;
+  h+=`<div class="ct-filters"><div style="flex:1;min-width:200px"><input id="ctSrch" type="text" placeholder="Search name, company, phone, email..." value="${esc(ctSearch)}" oninput="ctSearch=this.value;renderCtSub()" style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:14px;outline:none"/></div>`;
   h+=`<select id="ctTF" class="cinput ct-fsel" onchange="ctTypeF=this.value;renderCtSub()"><option value="all">All Types</option>`;
   CT_TYPES.forEach(t=>{h+=`<option value="${t}"${ctTypeF===t?" selected":""}>${CT_LABELS[t]}</option>`;});
   h+=`</select>`;
   h+=`<select id="ctSF" class="cinput ct-fsel" onchange="ctStatusF=this.value;renderCtSub()"><option value="active"${ctStatusF==="active"?" selected":""}>Active</option><option value="inactive"${ctStatusF==="inactive"?" selected":""}>Inactive</option><option value="do_not_use"${ctStatusF==="do_not_use"?" selected":""}>Do Not Use</option><option value="all"${ctStatusF==="all"?" selected":""}>All</option></select></div>`;
 
   // + Add Contact button
-  h+=`<div style="margin:12px 0;display:flex;gap:8px"><button onclick="openCtForm()" class="btn" style="flex:1;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">+ Add Contact</button><button onclick="openContactUpload()" class="btn" style="padding:8px 16px;font-size:12px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:700">📷 Scan Contact</button></div>`;
+  h+=`<div style="margin:12px 0;display:flex;gap:8px"><button onclick="openCtForm()" class="btn" style="flex:1;padding:8px 16px;font-size:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700;border-radius:10px;min-height:auto">+ Add Contact</button><button onclick="openContactUpload()" class="btn" style="padding:8px 16px;font-size:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700;border-radius:10px;min-height:auto">📷 Scan Contact</button></div>`;
 
   // Filter contacts
   let list=[...ctList];

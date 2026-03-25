@@ -23,13 +23,13 @@ input[type="range"]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;b
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .filters{display:flex;gap:4px;overflow-x:auto;padding:0 20px 10px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .filters::-webkit-scrollbar{display:none}
-.filt{padding:4px 10px;border-radius:14px;font-size:10px;min-height:28px;white-space:nowrap;font-weight:700;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#64748b;cursor:pointer;display:flex;align-items:center}
-.filt.on{border-color:rgba(212,175,55,0.35);background:rgba(212,175,55,0.08);color:#d4af37}
-.filt.on-red{border-color:rgba(239,68,68,0.35);background:rgba(239,68,68,0.08);color:#ef4444}
-@media(max-width:768px){.filt{font-size:12px;padding:6px 14px;min-height:34px}}
+.filt{padding:6px 14px;border-radius:20px;font-size:11px;white-space:nowrap;font-weight:700;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#64748b;cursor:pointer;display:flex;align-items:center}
+.filt.on{border-color:rgba(212,175,55,0.3);background:rgba(212,175,55,0.12);color:#d4af37;font-weight:800}
+.filt.on-red{border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.12);color:#ef4444;font-weight:800}
 .search-row{display:flex;align-items:center;gap:8px;padding:4px 20px 0;margin-bottom:4px}
-.search-row input{flex:1;min-height:36px;font-size:13px;padding:8px 32px 8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.04);color:#f1f5f9;outline:none;width:100%}
-.search-row select{min-height:36px;font-size:10px;padding:4px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:#131316;color:#f1f5f9;font-weight:700;white-space:nowrap;flex-shrink:0;cursor:pointer}
+.search-row input{flex:1;font-size:14px;padding:10px 32px 10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#f1f5f9;outline:none;width:100%}
+.search-row input::placeholder{color:#475569}
+.search-row select{font-size:12px;padding:8px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#94a3b8;font-weight:700;white-space:nowrap;flex-shrink:0;cursor:pointer}
 .pass-btn{display:inline-flex;align-items:center;gap:4px;padding:6px 14px;border-radius:8px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid rgba(239,68,68,0.2);background:transparent;color:#ef4444;opacity:0.7;transition:all .15s;min-height:32px}
 .pass-btn:hover{opacity:1}
 .pass-btn:active{transform:scale(0.97);opacity:1}
@@ -87,8 +87,8 @@ input[type="range"]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;b
 /* ═══ RENOVATION MODULE ═══ */
 .reno-wrap{max-width:100%}
 .reno-pills{display:flex;gap:6px;margin-bottom:16px}
-.reno-pill{padding:8px 20px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#64748b;cursor:pointer;transition:all .15s}
-.reno-pill.active{border-color:rgba(212,175,55,0.35);background:rgba(212,175,55,0.08);color:#d4af37}
+.reno-pill{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#64748b;cursor:pointer;transition:all .15s}
+.reno-pill.active{border-color:rgba(212,175,55,0.3);background:rgba(212,175,55,0.12);color:#d4af37;font-weight:800}
 .reno-pill:active{transform:scale(0.97)}
 .reno-hero{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
 @media(max-width:480px){.reno-hero{grid-template-columns:1fr}}
