@@ -344,8 +344,14 @@ function renderContractors(el){
     return;
   }
 
-  let h=`<div style="font-size:11px;color:#475569;font-weight:600;margin-bottom:8px">${ctPerf.length} contractor${ctPerf.length!==1?"s":""}</div>`;
-  ctPerf.forEach((p,i)=>{
+  const ctIds=new Set(ctList.filter(c=>c.contact_type==="contractor"||c.contact_type==="subcontractor").map(c=>c.id));
+  const filtPerf=ctPerf.filter(p=>ctIds.has(p.contact_id));
+  if(!filtPerf.length){
+    el.innerHTML=`<div style="text-align:center;padding:40px 20px;color:#475569"><div style="font-size:32px;margin-bottom:8px">🔧</div><div style="font-size:14px;font-weight:600;color:#94a3b8">No contractor performance data yet.</div><div style="font-size:12px;color:#64748b;margin-top:6px">Ratings and accuracy scores populate after your first completed deal.</div></div>`;
+    return;
+  }
+  let h=`<div style="font-size:11px;color:#475569;font-weight:600;margin-bottom:8px">${filtPerf.length} contractor${filtPerf.length!==1?"s":""}</div>`;
+  filtPerf.forEach((p,i)=>{
     const tc=CT_COLORS[p.contact_type]||"#f97316";
     const tags=Array.isArray(p.specialty_tags)?p.specialty_tags:[];
     const baColor=bidAccColor(p.avg_bid_accuracy);
