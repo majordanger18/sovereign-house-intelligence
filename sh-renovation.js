@@ -16,7 +16,7 @@ const DRAW_PIPE=[
   {key:"disbursed",label:"Disbursed",df:"date_disbursed"}
 ];
 
-let renoDealId=null,renoSub="budget",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null,renoTasks=[];
+let renoDealId=null,renoSub="budget",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null,renoTasks=[],renoChangeOrders=[];
 let renoExpF={sow:"all",type:"all",from:"",to:""};
 let renoTaskFilter={cat:"all",assignee:"all"};
 let renoEditingTask=null,renoShowDone=false;
@@ -156,6 +156,11 @@ async function loadRenoData(did){
     const tk=await sb("deal_tasks?deal_id=eq."+did+"&order=sort_order,created_at");
     renoTasks=Array.isArray(tk)?tk:[];
   }catch(e){console.error("[SH] Tasks load error (non-fatal):",e);renoTasks=[];}
+  // Change orders fetch
+  try{
+    const co=await sb("renovation_change_orders?deal_id=eq."+did+"&order=date_requested.desc");
+    renoChangeOrders=Array.isArray(co)?co:[];
+  }catch(e){console.error("[SH] Change orders load error (non-fatal):",e);renoChangeOrders=[];}
 }
 
 function switchRenoDeal(did){renoDealId=did;renoSub="budget";renoExpandedLine=null;renderRenoView();}
@@ -331,6 +336,36 @@ function renderBudget(el){
     });
     h+=`</tbody></table></div></div>`;
   }
+
+  // Change Orders
+  const coApproved=renoChangeOrders.filter(c=>c.status==="approved").reduce((a,c)=>a+(c.cost_impact||0),0);
+  const coPending=renoChangeOrders.filter(c=>c.status==="pending").reduce((a,c)=>a+(c.cost_impact||0),0);
+  h+=`<div style="margin-top:20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">CHANGE ORDERS</div><button onclick="toggleCOForm()" class="btn" style="padding:6px 14px;font-size:11px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:700;min-height:32px">+ Log Change Order</button></div>`;
+  if(coApproved||coPending){
+    h+=`<div style="font-size:11px;color:#94a3b8;margin-bottom:10px">Total Approved: <span style="color:${coApproved>=0?'#22c55e':'#ef4444'};font-weight:700">${$r(coApproved)}</span>${coPending?` | Pending: <span style="color:#eab308;font-weight:700">${$r(coPending)}</span>`:''}</div>`;
+  }
+  h+=`<div id="coFormArea"></div>`;
+  if(renoChangeOrders.length){
+    const _coStatC={pending:"#eab308",approved:"#22c55e",rejected:"#ef4444"};
+    h+=`<div class="reno-tw"><table class="reno-tbl"><thead><tr><th>Date</th><th>SOW Line</th><th>Description</th><th>Reason</th><th style="text-align:right">Cost Impact</th><th>By</th><th>Status</th><th></th></tr></thead><tbody>`;
+    renoChangeOrders.forEach(co=>{
+      const sowL=renoSOW.find(s=>s.id===co.sow_line_id);
+      const sc2=_coStatC[co.status]||"#64748b";
+      const impC=co.cost_impact>=0?"#ef4444":"#22c55e";
+      h+=`<tr><td style="font-size:11px;color:#64748b;white-space:nowrap">${co.date_requested?new Date(co.date_requested+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:"America/Los_Angeles"}):"—"}</td>`;
+      h+=`<td style="font-size:11px">${sowL?'#'+sowL.line_number+' '+esc(sowL.description||'').substring(0,20):"—"}</td>`;
+      h+=`<td style="font-size:11px;color:#e2e8f0;font-weight:600">${esc(co.description||"")}</td>`;
+      h+=`<td style="font-size:10px;color:#64748b">${(co.reason||"").replace(/_/g," ")}</td>`;
+      h+=`<td style="text-align:right;font-weight:700;color:${impC}">${co.cost_impact>=0?"+":""}${$r(co.cost_impact||0)}</td>`;
+      h+=`<td style="font-size:10px;color:#94a3b8">${(co.requested_by||"").replace(/_/g," ")}</td>`;
+      h+=`<td><span class="reno-chip" style="color:${sc2};background:${sc2}15;border:1px solid ${sc2}30">${co.status||"pending"}</span></td>`;
+      h+=`<td><button onclick="deleteCO('${co.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;cursor:pointer;padding:2px 6px">✕</button></td></tr>`;
+    });
+    h+=`</tbody></table></div>`;
+  } else {
+    h+=`<div style="font-size:11px;color:#475569;padding:12px">No change orders logged.</div>`;
+  }
+  h+=`</div>`;
 
   // Out of Pocket
   if(tb>la&&la>0){
@@ -1841,6 +1876,55 @@ async function deleteSOWLine(lid){
     await loadRenoData(renoDealId);
     renderRenoSub();
   }catch(e){console.error('Delete SOW line failed:',e);showRenoToast('Failed to delete line');}
+}
+
+// ═══ CHANGE ORDERS ═══
+function toggleCOForm(){
+  const area=document.getElementById("coFormArea");if(!area)return;
+  if(area.innerHTML){area.innerHTML="";return;}
+  const today=new Date().toLocaleDateString("en-CA",{timeZone:"America/Los_Angeles"});
+  const sowOpts=renoSOW.map(s=>`<option value="${s.id}">#${s.line_number} ${esc((s.description||"").substring(0,30))}</option>`).join("");
+  area.innerHTML=`<div style="padding:14px;border-radius:12px;background:rgba(212,175,55,0.03);border:1px solid rgba(212,175,55,0.12);margin-bottom:12px">
+    <div class="row2"><div class="fld"><label>SOW LINE</label><select id="co_sow" class="cinput" style="font-size:12px;min-height:40px"><option value="">— None —</option>${sowOpts}</select></div>
+    <div class="fld"><label>REASON</label><select id="co_reason" class="cinput" style="font-size:12px;min-height:40px"><option value="scope_addition">Scope Addition</option><option value="scope_reduction">Scope Reduction</option><option value="unforeseen_condition">Unforeseen Condition</option><option value="owner_request">Owner Request</option><option value="error_correction">Error Correction</option></select></div></div>
+    <div class="fld"><label>DESCRIPTION</label><input id="co_desc" class="cinput" placeholder="Describe the change..." style="font-size:12px;min-height:40px"/></div>
+    <div class="row2"><div class="fld"><label>COST IMPACT</label><input id="co_cost" type="number" class="cinput" placeholder="+5000 or -2000" style="font-size:12px;min-height:40px"/></div>
+    <div class="fld"><label>REQUESTED BY</label><select id="co_by" class="cinput" style="font-size:12px;min-height:40px"><option value="contractor">Contractor</option><option value="owner">Owner</option></select></div></div>
+    <div class="row2"><div class="fld"><label>STATUS</label><select id="co_status" class="cinput" style="font-size:12px;min-height:40px"><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
+    <div class="fld"><label>DATE REQUESTED</label><input id="co_date" type="date" class="cinput" value="${today}" style="font-size:12px;min-height:40px"/></div></div>
+    <button onclick="saveCO()" class="btn" style="width:100%;margin-top:8px;padding:10px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">Save Change Order</button>
+  </div>`;
+}
+
+async function saveCO(){
+  const payload={
+    deal_id:renoDealId,
+    sow_line_id:document.getElementById("co_sow").value||null,
+    description:(document.getElementById("co_desc").value||"").trim(),
+    reason:document.getElementById("co_reason").value,
+    cost_impact:Number(document.getElementById("co_cost").value)||0,
+    requested_by:document.getElementById("co_by").value,
+    status:document.getElementById("co_status").value,
+    date_requested:document.getElementById("co_date").value||null
+  };
+  if(!payload.description){showRenoToast("Description required");return;}
+  try{
+    const res=await fetch(SB+"/rest/v1/renovation_change_orders",{method:"POST",headers:RENO_WH,body:JSON.stringify(payload)});
+    if(!res.ok)throw new Error("Save failed");
+    showRenoToast("Change order saved");
+    await loadRenoData(renoDealId);
+    renderRenoSub();
+  }catch(e){console.error("Save CO failed:",e);showRenoToast("Failed to save change order");}
+}
+
+async function deleteCO(coId){
+  if(!confirm("Delete this change order?"))return;
+  try{
+    await fetch(SB+"/rest/v1/renovation_change_orders?id=eq."+coId,{method:"DELETE",headers:RENO_WH});
+    showRenoToast("Change order deleted");
+    await loadRenoData(renoDealId);
+    renderRenoSub();
+  }catch(e){console.error("Delete CO failed:",e);showRenoToast("Failed to delete change order");}
 }
 
 // ═══ TASKS VIEW ═══
