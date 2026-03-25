@@ -56,7 +56,9 @@ function renderDashboard(){
 
   const screened=Object.keys(analysisMap).length;
   const screenedSub=`<span style="color:#22c55e;font-weight:700">${screened}</span> screened`;
-  document.getElementById("statsArea").innerHTML=[sB("LISTINGS",st.total,"#e2e8f0",screenedSub),sB("AVG SCORE",st.avgScore,sc(st.avgScore)),sB("AVG PRICE",$k(st.avgPrice),"#e2e8f0"),sB("AVG DOM",st.avgDom,"#f59e0b","days")].join("");
+  const statsEl=document.getElementById("statsArea");
+  if(view==="renovation"||view==="deals"||view==="contacts"){statsEl.innerHTML="";statsEl.style.display="none";}
+  else{statsEl.style.display="";statsEl.innerHTML=[sB("LISTINGS",st.total,"#e2e8f0",screenedSub),sB("AVG SCORE",st.avgScore,sc(st.avgScore)),sB("AVG PRICE",$k(st.avgPrice),"#e2e8f0"),sB("AVG DOM",st.avgDom,"#f59e0b","days")].join("");}
 
   // Update alert badge (deduplicated)
   const dismissed=JSON.parse(localStorage.getItem("sh_dismissed_alerts")||"[]");
