@@ -294,7 +294,7 @@ function renderBudget(el){
     h+=`<div class="reno-scard" style="margin-bottom:16px;text-align:left;padding:12px 14px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div class="reno-sl">MONTHLY INTEREST</div><div class="reno-sv" style="color:#f59e0b;font-size:18px">${$r(renoFin.monthly_interest_payment)}</div></div><button onclick="openFinancing('${renoDealId}')" style="background:none;border:1px solid rgba(6,182,212,0.2);border-radius:8px;padding:6px 12px;color:#22d3ee;font-size:10px;font-weight:700;cursor:pointer">💰 Financing</button></div></div>`;
   } else {
     // Just show the financing button if no monthly payment
-    h+=`<div style="margin-bottom:12px"><button onclick="openFinancing('${renoDealId}')" class="btn" style="width:100%;padding:10px;font-size:12px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);color:#22d3ee;font-weight:700">💰 Financing</button></div>`;
+    h+=`<div style="margin-bottom:12px;text-align:right"><button onclick="openFinancing('${renoDealId}')" class="btn" style="padding:8px 20px;font-size:12px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);color:#22d3ee;font-weight:700;min-height:auto">💰 Financing</button></div>`;
   }
 
   // Lender info collapsible (Bug 2)
