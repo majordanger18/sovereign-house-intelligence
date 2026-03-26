@@ -605,7 +605,7 @@ async function renderSmartCard(dealId){
       onclickCode=`navigateSmartAction('${action.navigateTo}')`;
     }
 
-    actionBtn=`<button onclick="${onclickCode}" style="margin-top:12px;padding:12px 24px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;width:100%;transition:transform 0.15s,box-shadow 0.15s;" onmouseenter="this.style.transform='scale(1.02)';this.style.boxShadow='0 4px 15px rgba(212,175,55,0.3)'" onmouseleave="this.style.transform='scale(1)';this.style.boxShadow='none'">${action.action}</button>`;
+    actionBtn=`<button onclick="${onclickCode}" style="margin-top:12px;padding:12px 24px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;width:100%;text-align:center;transition:transform 0.15s,box-shadow 0.15s;" onmouseenter="this.style.transform='scale(1.02)';this.style.boxShadow='0 4px 15px rgba(212,175,55,0.3)'" onmouseleave="this.style.transform='scale(1)';this.style.boxShadow='none'">${action.action}</button>`;
   }
 
   let contextLine='';
@@ -615,13 +615,10 @@ async function renderSmartCard(dealId){
 
   card.innerHTML=`
     <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:20px;margin-bottom:16px;">
-      <div style="display:flex;align-items:flex-start;gap:14px;">
-        <span style="font-size:28px;line-height:1;">${action.icon}</span>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:16px;font-weight:600;color:#fff;line-height:1.3;">${action.message}</div>
-          ${contextLine}
-          ${actionBtn}
-        </div>
+      <div>
+        <div style="font-size:16px;font-weight:600;color:#fff;line-height:1.3;">${action.message}</div>
+        ${contextLine}
+        ${actionBtn}
       </div>
     </div>
   `;
