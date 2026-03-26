@@ -98,6 +98,7 @@ input[type="range"]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;b
 @media(max-width:480px){.reno-hv{font-size:18px}}
 .reno-pbar{height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden}
 .reno-pfill{height:100%;border-radius:3px;transition:width .5s ease}
+@keyframes overBudgetPulse{0%,100%{opacity:1}50%{opacity:.85}}
 .reno-sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:16px}
 @media(max-width:600px){.reno-sgrid{grid-template-columns:repeat(2,1fr)}}
 .reno-scard{padding:10px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);text-align:center}

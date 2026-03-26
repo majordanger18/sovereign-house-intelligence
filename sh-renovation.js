@@ -202,10 +202,11 @@ function renderBudget(el){
   h+=`<div class="reno-hero"><div class="reno-hcard"><div class="reno-hl">TOTAL BUDGET</div><div class="reno-hv">${$r(tb)}</div>${tla&&tla!==tb?`<div style="font-size:10px;color:#64748b;margin-top:2px">Lender: ${$r(tla)}</div>`:''}${contractedBudget?`<div style="font-size:10px;color:rgba(212,175,55,0.6);margin-top:2px">Contracted: ${esc(renoDeal?.contracted_reno_contractor||"—")}</div>`:''}</div><div class="reno-hcard"><div class="reno-hl">TOTAL SPENT</div><div class="reno-hv" style="color:${sc}">${$r(ts)}</div></div><div class="reno-hcard"><div class="reno-hl">REMAINING</div><div class="reno-hv" style="color:${rc}">${$r(rem)}</div></div></div>`;
 
   // Progress bar
-  const _barFill=pct<70?"#4ade80":pct<=85?"#eab308":"#ef4444";
+  const _barGrad=pct>100?"linear-gradient(90deg,#dc2626,#991b1b)":pct>80?"linear-gradient(90deg,#ef4444,#f87171)":pct>60?"linear-gradient(90deg,#eab308,#f59e0b)":"linear-gradient(90deg,#10b981,#34d399)";
   const _barW=Math.min(pct,100);
   const _labelInside=_barW>=15;
-  h+=`<div style="position:relative;height:28px;border-radius:14px;background:rgba(255,255,255,0.06);overflow:hidden;margin:12px 0"><div style="height:100%;width:${_barW}%;background:${_barFill};border-radius:14px;transition:width .3s ease"></div><div style="position:absolute;top:0;${_labelInside?'right:12px':'left:'+(_barW+1)+'%'};height:100%;display:flex;align-items:center;font-size:13px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.5)">${pct.toFixed(1)}% spent</div></div>`;
+  const _barPulse=pct>100?"animation:overBudgetPulse 2s ease-in-out infinite;":"";
+  h+=`<div style="margin:16px 0"><div style="position:relative;height:40px;border-radius:20px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);overflow:hidden"><div style="height:100%;width:${_barW}%;background:${_barGrad};border-radius:20px;transition:width .6s ease;box-shadow:inset 0 1px 0 rgba(255,255,255,0.2);${_barPulse}"></div><div style="position:absolute;top:0;${_labelInside?'right:16px':'left:'+(_barW+2)+'%'};height:100%;display:flex;align-items:center;font-size:14px;font-weight:700;${_labelInside?'color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.6)':'color:rgba(255,255,255,0.5)'}">${pct.toFixed(1)}% spent</div></div><div style="display:flex;justify-content:space-between;margin-top:4px"><div style="font-size:12px;color:rgba(255,255,255,0.35)">${$r(rem)} remaining</div><div style="font-size:12px;color:rgba(255,255,255,0.35)">${$r(ts)} of ${$r(tb)}</div></div></div>`;
 
   // Hold Period & Burn card
   if(renoDeal&&["in_renovation","renovation_complete","listed","sold"].includes(renoDeal.status)){
