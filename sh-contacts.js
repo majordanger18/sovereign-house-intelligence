@@ -1012,7 +1012,8 @@ async function saveParsedBid(){
   }
 
   try{
-    await fetch(SB+"/rest/v1/contractor_bids",{method:"POST",headers:HD,body:JSON.stringify(payload)});
+    const bidRes=await fetch(SB+"/rest/v1/contractor_bids",{method:"POST",headers:HD,body:JSON.stringify(payload)});
+    if(_pendingBidUrl){try{const bidSaved=await bidRes.json();const newBidId=Array.isArray(bidSaved)?bidSaved[0]?.id:bidSaved?.id;fetch(SB+"/rest/v1/deal_documents",{method:"POST",headers:HD,body:JSON.stringify({deal_id:dealId,file_url:_pendingBidUrl,file_name:_pendingBidName||"Contractor Bid",file_type:"pdf",doc_category:"bid",doc_subcategory:"contractor_bid",caption:"Bid from "+(parsed.contractor_name||"contractor"),uploaded_by:window.SH_USER?.email||"system"})}).catch(e=>console.error("Doc bridge:",e));}catch(e){}}
     _pendingBidUrl=null;_pendingBidName=null;
     const ctr=ctList.find(c=>c.id===contactId);
     closeCtModal();showCtToast("Bid saved — "+(ctr?.display_name||"contractor")+" at "+$r(payload.initial_bid));
@@ -1406,6 +1407,7 @@ async function saveRevision(bidId){
 
   try{
     await fetch(SB+"/rest/v1/contractor_bids?id=eq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify(patch)});
+    if(revUrl){fetch(SB+"/rest/v1/deal_documents",{method:"POST",headers:HD,body:JSON.stringify({deal_id:b.deal_id,file_url:revUrl,file_name:revFileName||"Bid Revision "+newRevNum,file_type:"pdf",doc_category:"bid",doc_subcategory:"bid_revision",caption:"Revision "+newRevNum+" from "+ctrName,uploaded_by:window.SH_USER?.email||"system"})}).catch(e=>console.error("Doc bridge:",e));}
     closeCtModal();showCtToast(`Revision ${newRevNum} saved — ${esc(ctrName)} at ${$r(newTotal)}`);
     await loadCtData();renderCtSub();
   }catch(e){console.error("Save revision failed:",e);alert("Failed to save revision.");}

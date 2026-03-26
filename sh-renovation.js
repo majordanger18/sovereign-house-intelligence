@@ -23,7 +23,7 @@ let renoTaskFilter={cat:"all",assignee:"all"};
 let renoEditingTask=null,renoShowDone=false;
 const TASK_CAT_COLORS={financing:"#22c55e",contractor:"#f97316",materials:"#3b82f6",design:"#ec4899",permits:"#6366f1",administrative:"#64748b",listing_prep:"#a855f7"};
 const TASK_ASSIGNEES={"j@jmarshallhunt.com":"King J","lisa@lisaahunt.com":"Lisa"};
-let _pendingReceiptUrl=null,_pendingFinUrl=null;
+let _pendingReceiptUrl=null,_pendingFinUrl=null,_pendingSowUrl=null;
 
 async function uploadToStorage(file,bucket,path){
   try{
@@ -855,6 +855,7 @@ async function saveExpense(){
       const saved=await res.json();
       const expId=Array.isArray(saved)?saved[0]?.id:saved?.id;
       if(expId)await fetch(SB+"/rest/v1/renovation_expenses?id=eq."+expId,{method:"PATCH",headers:RENO_WH,body:JSON.stringify({receipt_photo_url:_pendingReceiptUrl})});
+      if(expId)fetch(SB+"/rest/v1/deal_documents",{method:"POST",headers:RENO_WH,body:JSON.stringify({deal_id:renoDealId,file_url:_pendingReceiptUrl,file_name:(p.vendor_name||"Receipt")+" receipt",file_type:"jpg",doc_category:"receipt",doc_subcategory:"expense_receipt",caption:"Auto-indexed from expense",uploaded_by:window.SH_USER?.email||"system"})}).catch(e=>console.error("Doc bridge:",e));
       _pendingReceiptUrl=null;
     }
     // Clear form (keep date and payment method)
@@ -1739,7 +1740,7 @@ async function parseSOWPDF(){
 
   // Upload to storage
   const filePath=storagePath(renoDealId,"sow",file);
-  await uploadToStorage(file,"sovereign-docs",filePath);
+  _pendingSowUrl=await uploadToStorage(file,"sovereign-docs",filePath);
 
   try{
     const buf=await file.arrayBuffer();
@@ -1834,6 +1835,7 @@ async function confirmSOWSave(){
     const area=document.getElementById("sowUploadArea");if(area)area.innerHTML="";
     showRenoToast(saved+" SOW lines saved"+(errors?" ("+errors+" errors)":""));
     await loadRenoData(renoDealId);renderRenoSub();
+    if(_pendingSowUrl){fetch(SB+"/rest/v1/deal_documents",{method:"POST",headers:RENO_WH,body:JSON.stringify({deal_id:renoDealId,file_url:_pendingSowUrl,file_name:"Scope of Work",file_type:"pdf",doc_category:"sow",doc_subcategory:"sow_document",caption:"Auto-indexed from SOW upload",uploaded_by:window.SH_USER?.email||"system"})}).catch(e=>console.error("Doc bridge:",e));_pendingSowUrl=null;}
   }catch(e){
     console.error("SOW save error:",e);
     showRenoToast("Failed to save SOW lines");
