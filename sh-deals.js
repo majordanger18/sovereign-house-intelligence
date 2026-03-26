@@ -737,20 +737,19 @@ async function renderOriginalUnderwriting(dealId,propertyId){
   const deal=deals.find(d=>d.id===dealId);
   const actualOffer=deal?deal.offer_price:null;
 
-  // Extract values — check multiple possible field names
-  const purchasePrice=data.purchase_price||data.modeled_purchase_price||null;
-  const arvConservative=data.arv_conservative||data.conservative_arv||null;
-  const arvTarget=data.arv_target||data.target_arv||null;
-  const arvStretch=data.arv_stretch||data.stretch_arv||null;
-  const renoBudget=data.reno_budget||data.renovation_budget||data.total_reno||null;
-  const profitConservative=data.profit_conservative||data.conservative_profit||null;
-  const profitTarget=data.profit_target||data.target_profit||null;
-  const profitStretch=data.profit_stretch||data.stretch_profit||null;
-  const roiTarget=data.roi_target||data.target_roi||null;
+  // Extract values — correct calc_history column names
+  const purchasePrice=data.purchase_price||null;
+  const arvTarget=data.arv||null;
+  const renoBudget=data.rehab_budget||null;
+  const profitTarget=data.net_profit||null;
+  const roiTarget=data.roi||null;
   const lisaPct=data.lisa_buy_pct||data.lisa_commission_pct||2.5;
-  const holdMonths=data.hold_months||data.hold_period||8;
-  const maxOffer=data.max_offer||data.max_offer_price||null;
-  const verdict=data.verdict||data.ai_verdict||null;
+  const holdMonths=data.hold_months||8;
+  const maxOffer=data.max_offer||null;
+  const totalCost=data.total_cost||null;
+  const holdCost=data.hold_cost||null;
+  const loanAmount=data.loan_amount||null;
+  const interestRate=data.interest_rate||null;
   const savedDate=data.created_at?new Date(data.created_at).toLocaleDateString('en-US',{timeZone:'America/Los_Angeles'}):'';
 
   const f=(n)=>n!=null?'$'+Math.round(Number(n)).toLocaleString():'—';
@@ -769,28 +768,29 @@ async function renderOriginalUnderwriting(dealId,propertyId){
   if(actualOffer&&purchasePrice&&Math.round(actualOffer)!==Math.round(purchasePrice))
     rows+=`<div class="uw-row"><span class="uw-label">Actual Offer</span><span class="uw-value" style="color:#d4af37;">${f(actualOffer)}</span></div>`;
 
+  if(arvTarget)rows+=`<div class="uw-row"><span class="uw-label">ARV</span><span class="uw-value">${f(arvTarget)}</span></div>`;
+
   if(renoBudget)rows+=`<div class="uw-row"><span class="uw-label">Reno Budget (est)</span><span class="uw-value">${f(renoBudget)}</span></div>`;
 
   if(deal&&deal.contracted_reno_amount)
     rows+=`<div class="uw-row"><span class="uw-label">Contracted Reno</span><span class="uw-value" style="color:#d4af37;">${f(deal.contracted_reno_amount)}</span></div>`;
 
-  if(arvConservative||arvTarget||arvStretch)
-    rows+=`<div class="uw-row"><span class="uw-label">ARV Range</span><span class="uw-value">${f(arvConservative)} / ${f(arvTarget)} / ${f(arvStretch)}</span></div>`;
+  if(loanAmount)rows+=`<div class="uw-row"><span class="uw-label">Loan Amount</span><span class="uw-value">${f(loanAmount)}</span></div>`;
 
-  if(profitConservative||profitTarget||profitStretch)
-    rows+=`<div class="uw-row"><span class="uw-label">Profit Scenarios</span><span class="uw-value" style="color:#4ade80;">${f(profitConservative)} / ${f(profitTarget)} / ${f(profitStretch)}</span></div>`;
+  if(interestRate)rows+=`<div class="uw-row"><span class="uw-label">Interest Rate</span><span class="uw-value">${pct(interestRate)}</span></div>`;
 
-  if(roiTarget)rows+=`<div class="uw-row"><span class="uw-label">Target ROI</span><span class="uw-value">${pct(roiTarget)}</span></div>`;
+  if(holdCost)rows+=`<div class="uw-row"><span class="uw-label">Hold Cost</span><span class="uw-value">${f(holdCost)}</span></div>`;
 
   rows+=`<div class="uw-row"><span class="uw-label">Lisa Commission</span><span class="uw-value">${pct(lisaPct)}</span></div>`;
   rows+=`<div class="uw-row"><span class="uw-label">Hold Period</span><span class="uw-value">${holdMonths} months</span></div>`;
 
-  if(maxOffer)rows+=`<div class="uw-row"><span class="uw-label">Max Offer</span><span class="uw-value">${f(maxOffer)}</span></div>`;
+  if(totalCost)rows+=`<div class="uw-row"><span class="uw-label">Total Project Cost</span><span class="uw-value">${f(totalCost)}</span></div>`;
 
-  if(verdict){
-    const vc=verdict==='GO'?'#4ade80':verdict==='NO_GO'?'#ef4444':'#eab308';
-    rows+=`<div class="uw-row"><span class="uw-label">Verdict</span><span class="uw-value" style="color:${vc};font-weight:700;">${verdict}</span></div>`;
-  }
+  if(profitTarget)rows+=`<div class="uw-row"><span class="uw-label">Net Profit</span><span class="uw-value" style="color:#4ade80;">${f(profitTarget)}</span></div>`;
+
+  if(roiTarget)rows+=`<div class="uw-row"><span class="uw-label">ROI</span><span class="uw-value">${pct(roiTarget)}</span></div>`;
+
+  if(maxOffer)rows+=`<div class="uw-row"><span class="uw-label">Max Offer</span><span class="uw-value">${f(maxOffer)}</span></div>`;
 
   container.innerHTML=`
     <details class="uw-section" style="margin-bottom:16px;">
