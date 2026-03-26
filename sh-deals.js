@@ -627,12 +627,25 @@ async function renderSmartCard(dealId){
 async function confirmSmartAdvance(dealId,newStatus,cascadeMsg){
   const stObj=DEAL_STAGES[newStatus]||{label:newStatus};
 
+  // Check for missing financing when advancing to closing or closed
+  let finWarning='';
+  if(newStatus==='closing'||newStatus==='closed'){
+    try{
+      const fRes=await fetch(SB+'/rest/v1/deal_financing?deal_id=eq.'+dealId+'&select=id,interest_rate',{headers:HD});
+      const fData=await fRes.json();
+      if(!fData||!fData.length||!fData[0].interest_rate){
+        finWarning='<div style="font-size:13px;color:#eab308;margin-bottom:16px;">⚠️ Loan terms not saved yet. Hold period bar and burn calculations won\'t work without financing data.</div>';
+      }
+    }catch(e){}
+  }
+
   const overlay=document.createElement('div');
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;';
   overlay.innerHTML=`
     <div style="background:#1a1a2e;border:1px solid #d4af37;border-radius:14px;padding:24px;max-width:400px;width:100%;text-align:center;">
       <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:8px;">Move to ${stObj.label}?</div>
       ${cascadeMsg?'<div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px;">'+cascadeMsg+'</div>':''}
+      ${finWarning}
       <div style="display:flex;gap:12px;">
         <button id="smart-cancel" style="flex:1;padding:12px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Not Yet</button>
         <button id="smart-confirm" style="flex:1;padding:12px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Confirm</button>
