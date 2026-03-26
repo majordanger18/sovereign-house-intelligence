@@ -73,6 +73,189 @@ function dealBadge(status){
   return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;letter-spacing:0.5px;color:${s.color};background:${s.color}12;border:1px solid ${s.color}30;padding:3px 10px;border-radius:6px">${s.icon} ${s.label.toUpperCase()}</span>`;
 }
 
+// ═══════════════════════════════════════════
+// ═══ SMART STATUS BRAIN ═══
+// ═══════════════════════════════════════════
+
+function fmt(n){
+  if(n==null||isNaN(n))return'0';
+  return Math.round(Number(n)).toLocaleString();
+}
+
+async function getNextAction(dealId){
+  const deal=deals.find(d=>d.id===dealId);
+  if(!deal)return null;
+
+  // Fetch financing record
+  let financing=null;
+  try{
+    const fRes=await fetch(SB+'/rest/v1/deal_financing?deal_id=eq.'+dealId+'&select=*',{headers:HD});
+    const fData=await fRes.json();
+    if(fData&&fData.length>0)financing=fData[0];
+  }catch(e){}
+
+  // Fetch SOW lines
+  let sowLines=[];
+  try{
+    const sRes=await fetch(SB+'/rest/v1/renovation_sow_lines?deal_id=eq.'+dealId+'&select=*',{headers:HD});
+    sowLines=await sRes.json()||[];
+  }catch(e){}
+
+  // Fetch bids
+  let bids=[];
+  try{
+    const bRes=await fetch(SB+'/rest/v1/contractor_bids?deal_id=eq.'+dealId+'&select=*',{headers:HD});
+    bids=await bRes.json()||[];
+  }catch(e){}
+
+  // Fetch expenses
+  let expenses=[];
+  try{
+    const eRes=await fetch(SB+'/rest/v1/renovation_expenses?deal_id=eq.'+dealId+'&select=*',{headers:HD});
+    expenses=await eRes.json()||[];
+  }catch(e){}
+
+  // Fetch draws
+  let draws=[];
+  try{
+    const dRes=await fetch(SB+'/rest/v1/renovation_draws?deal_id=eq.'+dealId+'&select=*',{headers:HD});
+    draws=await dRes.json()||[];
+  }catch(e){}
+
+  // Fetch calc_history for original underwriting
+  let calcHistory=null;
+  if(deal.property_id){
+    try{
+      const cRes=await fetch(SB+'/rest/v1/calc_history?property_id=eq.'+deal.property_id+'&order=created_at.desc&limit=1',{headers:HD});
+      const cData=await cRes.json();
+      if(cData&&cData.length>0)calcHistory=cData[0];
+    }catch(e){}
+  }
+
+  // Calculate helper values
+  const totalBudget=deal.contracted_reno_amount||sowLines.reduce((s,l)=>s+(l.planned_budget||0),0)||0;
+  const totalSpent=expenses.reduce((s,e)=>s+(e.amount||0),0);
+  const totalReimbursed=draws.filter(d=>d.status==='disbursed').reduce((s,d)=>s+(d.amount_received||0),0);
+  const awardedBid=bids.find(b=>b.status==='accepted');
+  const hasInProgressSOW=sowLines.some(l=>l.status==='in_progress');
+  const allSOWComplete=sowLines.length>0&&sowLines.every(l=>l.status==='complete');
+  const hasRatings=bids.some(b=>b.rating_quality||b.rating_bid_accuracy||b.rating_timeline||b.rating_communication);
+
+  const monthsElapsed=financing&&financing.funded_date
+    ?(Date.now()-new Date(financing.funded_date+'T00:00:00').getTime())/(30.44*24*60*60*1000)
+    :0;
+
+  const status=deal.status;
+
+  // ═══ PHASE B: OFFER & NEGOTIATION ═══
+
+  if(status==='offer_drafted')
+    return{message:"Offer drafted at $"+fmt(deal.offer_price)+". Sign and submit.",action:"Generate RPA",icon:"📝",openModal:"rpa"};
+
+  if(status==='offer_submitted')
+    return{message:"Offer submitted. Waiting for response.",action:null,icon:"⏳"};
+
+  if(status==='counter_received')
+    return{message:"Counter from seller at $"+fmt(deal.offer_price),action:"Respond or Accept",icon:"↩️"};
+
+  if(status==='counter_sent')
+    return{message:"Counter sent. Waiting for seller response.",action:null,icon:"↪️"};
+
+  if(status==='accepted')
+    return{message:"Offer accepted!",action:"Confirm Under Contract",icon:"🤝",advanceTo:"under_contract"};
+
+  // ═══ PHASE C: DUE DILIGENCE ═══
+
+  if(status==='under_contract')
+    return{message:"Under contract. Schedule inspection.",action:"Move to Inspection",icon:"📋",advanceTo:"inspection"};
+
+  if(status==='inspection')
+    return{message:"Inspection phase. Complete due diligence.",action:"Inspection Complete",icon:"🔍",advanceTo:"financing"};
+
+  // ═══ PHASE D: FINANCING ═══
+
+  if(status==='financing'&&(!financing||!financing.interest_rate))
+    return{message:"Fill in loan terms from your lender.",action:"Open Financing",icon:"🏦",openModal:"financing"};
+
+  if(status==='financing'&&financing&&financing.interest_rate)
+    return{message:"Loan terms saved. Waiting for clear to close.",action:"Move to Closing",icon:"🏦",advanceTo:"closing",cascade:"Financing will advance to Clear to Close."};
+
+  // ═══ PHASE E: CLOSING ═══
+
+  if(status==='closing')
+    return{message:"Clear to close.",action:"Confirm Keys In Hand",icon:"🏁",advanceTo:"closed",cascade:"Loan marked funded. Hold period starts."};
+
+  // ═══ PHASE F: PRE-RENOVATION PREP (closed) ═══
+
+  if(status==='closed'){
+    if(sowLines.length===0)
+      return{message:"Keys in hand! Upload your lender SOW.",action:"Upload SOW",icon:"🔑",navigateTo:"reno-budget",context:financing?"Hold period started. "+monthsElapsed.toFixed(1)+" months elapsed.":null};
+
+    if(sowLines.length>0&&bids.length===0)
+      return{message:sowLines.length+" SOW lines loaded ($"+fmt(sowLines.reduce((s,l)=>s+(l.lender_approved||0),0))+" approved). Get contractor bids.",action:"Upload Bid",icon:"📄",navigateTo:"contacts-bids",context:"Lender SOW ready. Need bids to compare."};
+
+    if(bids.length>0&&!awardedBid)
+      return{message:bids.length+" bid"+(bids.length>1?"s":"")+" received. Compare and award.",action:bids.length>1?"Compare Bids":"Review Bid",icon:"⚖️",navigateTo:"contacts-bids",context:"Bids: "+bids.map(b=>b.initial_bid?"$"+fmt(b.initial_bid):"pending").join(" vs ")};
+
+    if(awardedBid&&!hasInProgressSOW)
+      return{message:"Contractor awarded at $"+fmt(deal.contracted_reno_amount)+". Ready to start demo?",action:"Start Renovation",icon:"🔨",advanceTo:"in_renovation",cascade:"Financing advances to Active. Renovation phase begins."};
+
+    if(hasInProgressSOW)
+      return{message:"Work has started. Confirm renovation phase.",action:"Start Renovation",icon:"🔨",advanceTo:"in_renovation",cascade:"Financing advances to Active."};
+  }
+
+  // ═══ PHASE G: IN RENOVATION ═══
+
+  if(status==='in_renovation'){
+    if(allSOWComplete)
+      return{message:"All scope items complete!",action:"Confirm Reno Complete",icon:"✅",advanceTo:"renovation_complete",cascade:"You can rate your contractor and log final costs."};
+
+    if(draws.length===0&&totalSpent>5000)
+      return{message:"$"+fmt(totalSpent)+" spent, no draws submitted. Submit your first draw for reimbursement.",action:"Create Draw",icon:"💰",navigateTo:"reno-draws",context:"$"+fmt(totalSpent)+" unreimbursed exposure on LOC."};
+
+    if(totalBudget>0&&totalSpent/totalBudget>0.85)
+      return{message:"⚠️ "+(totalSpent/totalBudget*100).toFixed(0)+"% of budget spent. $"+fmt(totalBudget-totalSpent)+" remaining.",action:null,icon:"⚠️",context:monthsElapsed.toFixed(1)+" months elapsed. "+(totalBudget>0?fmt(totalSpent/totalBudget*100)+"% budget consumed.":"")};
+
+    if(monthsElapsed>6)
+      return{message:"⚠️ "+monthsElapsed.toFixed(1)+" months elapsed. "+(8-monthsElapsed).toFixed(1)+" months until maturity.",action:null,icon:"⏰",context:fmt(totalSpent/totalBudget*100)+"% budget spent. "+draws.length+" draws submitted."};
+
+    const activeLines=sowLines.filter(l=>l.status==='in_progress').length;
+    const completeLines=sowLines.filter(l=>l.status==='complete').length;
+    return{message:activeLines+" items in progress, "+completeLines+" of "+sowLines.length+" complete.",action:null,icon:"🔨",context:"$"+fmt(totalSpent)+" spent of $"+fmt(totalBudget)+" ("+(totalBudget>0?(totalSpent/totalBudget*100).toFixed(0):0)+"%). "+draws.length+"/11 draws used."};
+  }
+
+  // ═══ PHASE H: RENOVATION COMPLETE ═══
+
+  if(status==='renovation_complete'){
+    if(awardedBid&&!hasRatings)
+      return{message:"Renovation done! Rate your contractor.",action:"Rate Contractor",icon:"⭐",navigateTo:"contacts-bids"};
+    return{message:"Renovation complete. Ready to list?",action:"Start Listing Prep",icon:"📸",advanceTo:"listing_prep"};
+  }
+
+  // ═══ PHASE I: LISTING PREP ═══
+
+  if(status==='listing_prep')
+    return{message:"Staging, photos, listing copy in progress.",action:"Go Live on MLS",icon:"📸",advanceTo:"listed"};
+
+  // ═══ PHASE J: LISTED ═══
+
+  if(status==='listed')
+    return{message:"On market. Tracking showings and offers.",action:null,icon:"🏷️",context:monthsElapsed.toFixed(1)+" months total hold. Interest still accruing."};
+
+  // ═══ PHASE K: SOLD ═══
+
+  if(status==='sold')
+    return{message:"SOLD! Log your final numbers for the postmortem.",action:"Deal Outcomes",icon:"🏆",navigateTo:"deal-outcomes"};
+
+  // ═══ DEAD DEALS ═══
+
+  if(['rejected','withdrawn','expired','dead'].includes(status))
+    return{message:"Deal "+status+".",action:null,icon:"❌"};
+
+  // Fallback
+  return{message:"Status: "+status,action:null,icon:"📋"};
+}
+
 function renderDeals(){
   const dq=(document.getElementById("searchBox")?.value||"").toLowerCase();
   const dFilter=d=>!dq||(d.address||"").toLowerCase().includes(dq)||(d.community||"").toLowerCase().includes(dq)||(d.zip_code||"").includes(dq);
