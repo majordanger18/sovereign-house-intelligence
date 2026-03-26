@@ -13,6 +13,7 @@ const SPEC_SUGGESTIONS=["general_contractor","kitchen","tile","electrical","plum
 
 let ctList=[],ctPerf=[],ctBids=[],ctSub="directory",ctSearch="",ctTypeF="all",ctStatusF="active",ctDetailId=null;
 let _pendingBidUrl=null,_pendingBidName=null;
+let ctRatingOpen=null;
 
 // ═══ TAB INJECTION ═══
 // Wrap the already-wrapped renderDashboard from sh-renovation.js
@@ -53,7 +54,7 @@ async function loadCtData(){
     const[c,p,b]=await Promise.all([
       sb("contacts?order=display_name"),
       sb("contractor_performance?order=avg_rating.desc.nullslast,total_spent_with.desc.nullslast"),
-      sb("contractor_bids?select=*,contacts(display_name,company),deals(address)&order=deal_id,created_at")
+      sb("contractor_bids?select=*,contacts(display_name,company),deals(address,status)&order=deal_id,created_at")
     ]);
     ctList=Array.isArray(c)?c:[];
     ctPerf=Array.isArray(p)?p:[];
@@ -351,20 +352,52 @@ function renderContractors(el){
     return;
   }
   let h=`<div style="font-size:11px;color:#475569;font-weight:600;margin-bottom:8px">${filtPerf.length} contractor${filtPerf.length!==1?"s":""}</div>`;
+  // Pre-compute dimension averages per contractor from ctBids
+  const ctDimAvgs={};
+  ctBids.forEach(b=>{
+    const cid=b.contact_id;if(!cid)return;
+    if(!ctDimAvgs[cid])ctDimAvgs[cid]={ba:[],tl:[],ql:[],cm:[]};
+    if(b.rating_bid_accuracy!=null)ctDimAvgs[cid].ba.push(b.rating_bid_accuracy);
+    if(b.rating_timeline!=null)ctDimAvgs[cid].tl.push(b.rating_timeline);
+    if(b.rating_quality!=null)ctDimAvgs[cid].ql.push(b.rating_quality);
+    if(b.rating_communication!=null)ctDimAvgs[cid].cm.push(b.rating_communication);
+  });
+  const dimAvg=arr=>arr.length?(arr.reduce((a,v)=>a+v,0)/arr.length).toFixed(1):null;
+
   filtPerf.forEach((p,i)=>{
     const tc=CT_COLORS[p.contact_type]||"#f97316";
     const tags=Array.isArray(p.specialty_tags)?p.specialty_tags:[];
     const baColor=bidAccColor(p.avg_bid_accuracy);
     const taColor=bidAccColor(p.avg_timeline_accuracy);
     const coColor=(p.total_change_orders||0)>3?"#ef4444":(p.total_change_orders||0)>=1?"#eab308":"#22c55e";
+    const da=ctDimAvgs[p.contact_id]||{ba:[],tl:[],ql:[],cm:[]};
+    const hasDimRatings=da.ba.length||da.tl.length||da.ql.length||da.cm.length;
+    const allDims=[...da.ba,...da.tl,...da.ql,...da.cm];
+    const overallDimAvg=allDims.length?(allDims.reduce((a,v)=>a+v,0)/allDims.length).toFixed(1):null;
 
     h+=`<div class="ct-card ct-perf-card" onclick="openCtDetail('${p.contact_id}')" style="animation:fadeUp .3s ease ${i*20}ms both">`;
     h+=`<div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:10px">`;
-    h+=`<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.display_name||"")}</div>`;
+    h+=`<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.display_name||"")}`;
+    if(overallDimAvg)h+=` <span style="font-size:11px;color:#d4af37;font-weight:700">★ ${overallDimAvg}</span>`;
+    else h+=` <span style="font-size:10px;color:#475569;font-weight:600">No ratings yet</span>`;
+    h+=`</div>`;
     if(p.company)h+=`<div style="font-size:11px;color:#64748b;margin-top:2px">${esc(p.company)}</div>`;
     h+=`</div>`;
     h+=`<div style="text-align:right">${renderStars(p.avg_rating)}</div>`;
     h+=`</div>`;
+
+    // Dimension ratings 2x2 grid
+    if(hasDimRatings){
+      h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-bottom:8px;padding:8px 10px;background:rgba(212,175,55,0.03);border:1px solid rgba(212,175,55,0.08);border-radius:8px">`;
+      const dimData=[{label:"Bid Accuracy",val:dimAvg(da.ba)},{label:"Timeline",val:dimAvg(da.tl)},{label:"Quality",val:dimAvg(da.ql)},{label:"Communication",val:dimAvg(da.cm)}];
+      dimData.forEach(d=>{
+        h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0"><span style="font-size:9px;color:#64748b;font-weight:600">${d.label}</span>`;
+        if(d.val)h+=`<span style="font-size:10px;color:#d4af37;font-weight:700">★ ${d.val}</span>`;
+        else h+=`<span style="font-size:9px;color:#3f3f46">—</span>`;
+        h+=`</div>`;
+      });
+      h+=`</div>`;
+    }
 
     // Metrics grid
     h+=`<div class="ct-metrics-grid">`;
@@ -440,8 +473,23 @@ function renderBidsV(el){
       const revisionHtml=hasLineItems&&!accepted&&!rejected?`<button onclick="event.stopPropagation();uploadBidRevision('${b.id}')" style="background:none;border:none;color:#a855f7;font-size:10px;font-weight:700;cursor:pointer">Upload Revision</button>`:"";
       const hasHistory=Array.isArray(b.revision_history)&&b.revision_history.length>0;
       const historyHtml=hasHistory?`<button onclick="event.stopPropagation();viewRevisionHistory('${b.id}')" style="background:none;border:none;color:#a855f7;font-size:10px;font-weight:700;cursor:pointer;opacity:0.8">History (${b.revision_history.length})</button>`:"";
-      h+=`<td><div style="display:flex;align-items:center;gap:12px;white-space:nowrap">${b.bid_document_url?`<a href="${esc(b.bid_document_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none">📄 Bid</a>`:""}${hasCmp?`<button onclick="event.stopPropagation();viewBidComparison('${b.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer">View SOW</button>`:""}${awardHtml}${revisionHtml}${historyHtml}<button onclick="event.stopPropagation();deleteBid('${b.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;opacity:0.7;padding:4px 8px">Delete</button></div></td>`;
+      const rateableStatuses=["renovation_complete","listing_prep","listed","sold","closing"];
+      const dealStatus=b.deals?.status||"";
+      const canRate=rateableStatuses.includes(dealStatus);
+      const hasRatings=b.rating_bid_accuracy||b.rating_timeline||b.rating_quality||b.rating_communication;
+      const avgR=hasRatings?[b.rating_bid_accuracy,b.rating_timeline,b.rating_quality,b.rating_communication].filter(v=>v!=null):[];
+      const avgRating=avgR.length?(avgR.reduce((a,v)=>a+v,0)/avgR.length).toFixed(1):null;
+      let rateHtml="";
+      if(canRate){
+        if(hasRatings)rateHtml=`<button onclick="event.stopPropagation();toggleRatingPanel('${b.id}')" style="background:none;border:none;color:#d4af37;font-size:10px;font-weight:700;cursor:pointer">★ ${avgRating} — Edit</button>`;
+        else rateHtml=`<button onclick="event.stopPropagation();toggleRatingPanel('${b.id}')" style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.2);color:#d4af37;font-size:10px;font-weight:700;cursor:pointer;padding:3px 8px;border-radius:5px">Rate</button>`;
+      }
+      h+=`<td><div style="display:flex;align-items:center;gap:12px;white-space:nowrap">${b.bid_document_url?`<a href="${esc(b.bid_document_url)}" target="_blank" onclick="event.stopPropagation()" style="color:#d4af37;font-size:10px;font-weight:700;text-decoration:none">📄 Bid</a>`:""}${hasCmp?`<button onclick="event.stopPropagation();viewBidComparison('${b.id}')" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer">View SOW</button>`:""}${awardHtml}${revisionHtml}${historyHtml}${rateHtml}<button onclick="event.stopPropagation();deleteBid('${b.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;opacity:0.7;padding:4px 8px">Delete</button></div></td>`;
       h+=`</tr>`;
+      if(ctRatingOpen===b.id){
+        const colSpan=hasActual?11:8;
+        h+=`<tr><td colspan="${colSpan}" style="padding:0;border-top:none">${buildRatingPanel(b)}</td></tr>`;
+      }
     });
     h+=`</tbody></table></div>`;
     if(compBids.length>1){
@@ -1396,6 +1444,73 @@ function viewRevisionHistory(bidId){
 
   h+=`</div>`;
   m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
+}
+
+// ═══ CONTRACTOR RATING SYSTEM ═══
+function toggleRatingPanel(bidId){
+  ctRatingOpen=ctRatingOpen===bidId?null:bidId;
+  renderCtSub();
+}
+
+function buildRatingPanel(b){
+  const dims=[
+    {key:"rating_bid_accuracy",label:"Bid Accuracy",hint:"How close was the bid to actual cost?"},
+    {key:"rating_timeline",label:"Timeline",hint:"Did they finish on time?"},
+    {key:"rating_quality",label:"Quality",hint:"Workmanship and attention to detail"},
+    {key:"rating_communication",label:"Communication",hint:"Responsiveness and updates"}
+  ];
+  const rated=dims.filter(d=>b[d.key]!=null);
+  const avg=rated.length?(rated.reduce((s,d)=>s+b[d.key],0)/rated.length).toFixed(1):null;
+
+  let h=`<div style="padding:12px 16px;background:rgba(212,175,55,0.03);border:1px solid rgba(212,175,55,0.1);border-radius:10px;margin:4px 0 8px">`;
+  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:10px;font-weight:800;color:#d4af37;letter-spacing:2px">RATE CONTRACTOR</div>`;
+  if(avg)h+=`<div style="font-size:11px;color:#94a3b8">Overall: <span style="color:#d4af37;font-weight:800">★ ${avg}</span></div>`;
+  h+=`</div>`;
+
+  h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">`;
+  dims.forEach(d=>{
+    const val=b[d.key]||0;
+    h+=`<div style="padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px">`;
+    h+=`<div style="font-size:10px;font-weight:700;color:#e2e8f0;margin-bottom:2px">${d.label}</div>`;
+    h+=`<div style="font-size:9px;color:#475569;margin-bottom:6px">${d.hint}</div>`;
+    h+=`<div style="display:flex;align-items:center;gap:2px">`;
+    for(let i=1;i<=5;i++){
+      const filled=i<=val;
+      h+=`<span onclick="event.stopPropagation();setDimRating('${b.id}','${d.key}',${i})" onmouseover="previewStars(this.parentElement,${i})" onmouseout="restoreStars(this.parentElement,${val})" style="cursor:pointer;font-size:16px;color:${filled?"#d4af37":"rgba(255,255,255,0.15)"};transition:color .15s;user-select:none" data-idx="${i}">★</span>`;
+    }
+    if(val)h+=`<span style="font-size:10px;color:#94a3b8;margin-left:6px;font-weight:700">${val}.0</span>`;
+    h+=`</div></div>`;
+  });
+  h+=`</div></div>`;
+  return h;
+}
+
+function previewStars(container,n){
+  container.querySelectorAll("span[data-idx]").forEach(s=>{
+    const idx=parseInt(s.dataset.idx);
+    s.style.color=idx<=n?"#d4af37":"rgba(255,255,255,0.15)";
+  });
+}
+function restoreStars(container,val){
+  container.querySelectorAll("span[data-idx]").forEach(s=>{
+    const idx=parseInt(s.dataset.idx);
+    s.style.color=idx<=val?"#d4af37":"rgba(255,255,255,0.15)";
+  });
+}
+
+async function setDimRating(bidId,dimKey,value){
+  const b=ctBids.find(x=>x.id===bidId);if(!b)return;
+  const newVal=b[dimKey]===value?null:value;
+  try{
+    await fetch(SB+"/rest/v1/contractor_bids?id=eq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify({[dimKey]:newVal})});
+    b[dimKey]=newVal;
+    const dims=["rating_bid_accuracy","rating_timeline","rating_quality","rating_communication"];
+    const rated=dims.filter(d=>b[d]!=null);
+    const avg=rated.length?(rated.reduce((s,d)=>s+b[d],0)/rated.length):null;
+    b.overall_rating=avg?parseFloat(avg.toFixed(1)):null;
+    await fetch(SB+"/rest/v1/contractor_bids?id=eq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify({overall_rating:b.overall_rating})});
+    renderCtSub();
+  }catch(e){console.error("Set rating failed:",e);showCtToast("Failed to save rating");}
 }
 
 // ═══ HELPERS ═══
