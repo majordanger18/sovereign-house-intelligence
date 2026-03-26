@@ -159,7 +159,7 @@ async function loadRenoData(did){
   }catch(e){console.error("[SH] Tasks load error (non-fatal):",e);renoTasks=[];}
   // Change orders fetch
   try{
-    const co=await sb("renovation_change_orders?deal_id=eq."+did+"&order=date_requested.desc");
+    const co=await sb("renovation_change_orders?deal_id=eq."+did+"&order=created_at.desc");
     renoChangeOrders=Array.isArray(co)?co:[];
   }catch(e){console.error("[SH] Change orders load error (non-fatal):",e);renoChangeOrders=[];}
   // Load documents
