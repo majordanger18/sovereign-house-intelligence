@@ -430,23 +430,24 @@ async function openDeal(dealId){
     <!-- SMART ACTION CARD -->
     <div id="smart-action-card"></div>
 
+    <!-- ORIGINAL UNDERWRITING -->
+    <div id="original-underwriting"></div>
+
     <!-- FINANCING SUMMARY -->
     <div id="dealFinSummary"></div>
 
     <!-- SECONDARY ACTIONS -->
-    <button onclick="openCalcForDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:12px;font-size:13px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;font-weight:800">🧮 Edit Deal Numbers</button>
-    <button onclick="openFinancing('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:12px;font-size:13px;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);color:#22d3ee;font-weight:800">💰 Financing</button>
-    <button onclick="openRPAFromDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:12px;font-size:13px;background:linear-gradient(135deg,rgba(224,201,127,0.15),rgba(212,175,55,0.08));border:1px solid rgba(224,201,127,0.3);color:#e0c97f;font-weight:800">📄 Generate GLVAR RPA</button>
+    ${['offer_drafted','offer_submitted','counter_received','counter_sent','accepted'].includes(d.status)?`<button onclick="openRPAFromDeal('${d.id}')" class="btn" style="width:100%;margin-bottom:8px;padding:12px;font-size:13px;background:linear-gradient(135deg,rgba(224,201,127,0.15),rgba(212,175,55,0.08));border:1px solid rgba(224,201,127,0.3);color:#e0c97f;font-weight:800">📄 Generate GLVAR RPA</button>
     ${d.rpa_generated_at?`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;margin-bottom:16px;border-radius:10px;background:rgba(224,201,127,0.04);border:1px solid rgba(224,201,127,0.12)">
       <div style="font-size:10px;color:#e0c97f">
         <span style="font-weight:700">RPA v${d.rpa_version||1}</span> · sent ${new Date(d.rpa_generated_at).toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"})}${d.rpa_generated_by_email?' by '+esc(d.rpa_generated_by_email.split('@')[0]):''}
         ${d.rpa_url?` · <a href="${esc(d.rpa_url)}" target="_blank" style="color:#60a5fa;text-decoration:underline">View PDF</a>`:''}
       </div>
       <button onclick="deleteRPA('${d.id}')" style="background:none;border:none;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;padding:4px 8px;white-space:nowrap">Delete RPA</button>
-    </div>`:`<div style="margin-bottom:16px"></div>`}
+    </div>`:`<div style="margin-bottom:16px"></div>`}`:''}
 
     <!-- LOG COUNTER OFFER -->
-    <div style="margin-bottom:16px;padding:14px;border-radius:14px;background:rgba(249,115,22,0.03);border:1px solid rgba(249,115,22,0.12)">
+    ${['offer_submitted','counter_received','counter_sent'].includes(d.status)?`<div style="margin-bottom:16px;padding:14px;border-radius:14px;background:rgba(249,115,22,0.03);border:1px solid rgba(249,115,22,0.12)">
       <div style="font-size:10px;color:#f97316;font-weight:700;letter-spacing:2px;margin-bottom:10px">LOG COUNTER OFFER</div>
       <div class="row2">
         <div class="fld"><label>FROM</label>
@@ -463,7 +464,7 @@ async function openDeal(dealId){
       </div>
       <div class="fld"><label>KEY TERMS / NOTES</label><textarea id="co_terms" rows="2" class="cinput" style="font-size:13px;min-height:60px" placeholder="As-is, informational inspections only, pool heater ack..."></textarea></div>
       <button onclick="logCounter('${d.id}')" class="btn" style="width:100%;margin-top:8px;padding:12px;font-size:13px;background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.3);color:#f97316;font-weight:800">↩️ Log Counter Offer</button>
-    </div>
+    </div>`:''}
 
     <!-- CONCESSIONS -->
     <div style="margin-bottom:16px;padding:14px;border-radius:14px;background:rgba(139,92,246,0.03);border:1px solid rgba(139,92,246,0.12)">
@@ -543,6 +544,9 @@ async function openDeal(dealId){
 
   // Load smart action card
   renderSmartCard(d.id);
+
+  // Load original underwriting
+  renderOriginalUnderwriting(d.id,d.property_id);
 
   // Load financing summary asynchronously
   loadDealFinSummary(d.id);
@@ -687,6 +691,109 @@ function navigateSmartAction(target){
     const outcomesSection=document.getElementById('dealOutcomesArea');
     if(outcomesSection)outcomesSection.scrollIntoView({behavior:'smooth'});
   }
+}
+
+// ═══════════════════════════════════════════
+// ═══ ORIGINAL UNDERWRITING ═══
+// ═══════════════════════════════════════════
+
+async function renderOriginalUnderwriting(dealId,propertyId){
+  const container=document.getElementById('original-underwriting');
+  if(!container)return;
+
+  let data=null;
+  let source='';
+
+  // Try Layer 2 first: calc_history (manual calculator tweaks)
+  if(propertyId){
+    try{
+      const cRes=await fetch(SB+'/rest/v1/calc_history?property_id=eq.'+propertyId+'&order=created_at.desc&limit=1',{headers:HD});
+      const cData=await cRes.json();
+      if(cData&&cData.length>0){data=cData[0];source='calculator';}
+    }catch(e){}
+  }
+
+  // Fallback to Layer 1: underwriting_analyses (auto-screener)
+  if(!data&&propertyId){
+    try{
+      const uRes=await fetch(SB+'/rest/v1/underwriting_analyses?property_id=eq.'+propertyId+'&order=created_at.desc&limit=1',{headers:HD});
+      const uData=await uRes.json();
+      if(uData&&uData.length>0){data=uData[0];source='screener';}
+    }catch(e){}
+  }
+
+  if(!data){container.innerHTML='';return;}
+
+  const deal=deals.find(d=>d.id===dealId);
+  const actualOffer=deal?deal.offer_price:null;
+
+  // Extract values — check multiple possible field names
+  const purchasePrice=data.purchase_price||data.modeled_purchase_price||null;
+  const arvConservative=data.arv_conservative||data.conservative_arv||null;
+  const arvTarget=data.arv_target||data.target_arv||null;
+  const arvStretch=data.arv_stretch||data.stretch_arv||null;
+  const renoBudget=data.reno_budget||data.renovation_budget||data.total_reno||null;
+  const profitConservative=data.profit_conservative||data.conservative_profit||null;
+  const profitTarget=data.profit_target||data.target_profit||null;
+  const profitStretch=data.profit_stretch||data.stretch_profit||null;
+  const roiTarget=data.roi_target||data.target_roi||null;
+  const lisaPct=data.lisa_buy_pct||data.lisa_commission_pct||2.5;
+  const holdMonths=data.hold_months||data.hold_period||8;
+  const maxOffer=data.max_offer||data.max_offer_price||null;
+  const verdict=data.verdict||data.ai_verdict||null;
+  const savedDate=data.created_at?new Date(data.created_at).toLocaleDateString('en-US',{timeZone:'America/Los_Angeles'}):'';
+
+  const f=(n)=>n!=null?'$'+Math.round(Number(n)).toLocaleString():'—';
+  const pct=(n)=>n!=null?Number(n).toFixed(1)+'%':'—';
+
+  const sourceLabel=source==='calculator'
+    ?'Calculator · '+savedDate
+    :'AI Screener · '+savedDate;
+
+  const editOnclick="openCalcForDeal('"+dealId+"')";
+
+  let rows='';
+
+  if(purchasePrice)rows+=`<div class="uw-row"><span class="uw-label">Purchase (modeled)</span><span class="uw-value">${f(purchasePrice)}</span></div>`;
+
+  if(actualOffer&&purchasePrice&&Math.round(actualOffer)!==Math.round(purchasePrice))
+    rows+=`<div class="uw-row"><span class="uw-label">Actual Offer</span><span class="uw-value" style="color:#d4af37;">${f(actualOffer)}</span></div>`;
+
+  if(renoBudget)rows+=`<div class="uw-row"><span class="uw-label">Reno Budget (est)</span><span class="uw-value">${f(renoBudget)}</span></div>`;
+
+  if(deal&&deal.contracted_reno_amount)
+    rows+=`<div class="uw-row"><span class="uw-label">Contracted Reno</span><span class="uw-value" style="color:#d4af37;">${f(deal.contracted_reno_amount)}</span></div>`;
+
+  if(arvConservative||arvTarget||arvStretch)
+    rows+=`<div class="uw-row"><span class="uw-label">ARV Range</span><span class="uw-value">${f(arvConservative)} / ${f(arvTarget)} / ${f(arvStretch)}</span></div>`;
+
+  if(profitConservative||profitTarget||profitStretch)
+    rows+=`<div class="uw-row"><span class="uw-label">Profit Scenarios</span><span class="uw-value" style="color:#4ade80;">${f(profitConservative)} / ${f(profitTarget)} / ${f(profitStretch)}</span></div>`;
+
+  if(roiTarget)rows+=`<div class="uw-row"><span class="uw-label">Target ROI</span><span class="uw-value">${pct(roiTarget)}</span></div>`;
+
+  rows+=`<div class="uw-row"><span class="uw-label">Lisa Commission</span><span class="uw-value">${pct(lisaPct)}</span></div>`;
+  rows+=`<div class="uw-row"><span class="uw-label">Hold Period</span><span class="uw-value">${holdMonths} months</span></div>`;
+
+  if(maxOffer)rows+=`<div class="uw-row"><span class="uw-label">Max Offer</span><span class="uw-value">${f(maxOffer)}</span></div>`;
+
+  if(verdict){
+    const vc=verdict==='GO'?'#4ade80':verdict==='NO_GO'?'#ef4444':'#eab308';
+    rows+=`<div class="uw-row"><span class="uw-label">Verdict</span><span class="uw-value" style="color:${vc};font-weight:700;">${verdict}</span></div>`;
+  }
+
+  container.innerHTML=`
+    <details class="uw-section" style="margin-bottom:16px;">
+      <summary style="cursor:pointer;user-select:none;font-size:13px;font-weight:600;color:#d4af37;letter-spacing:1px;padding:12px 0;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;">▶</span> ORIGINAL UNDERWRITING
+        <span style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.3);margin-left:auto;">${sourceLabel}</span>
+        <a onclick="${editOnclick}" style="font-size:11px;color:rgba(255,255,255,0.3);margin-left:8px;cursor:pointer;text-decoration:none;">Edit in Calculator</a>
+      </summary>
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:16px;margin-top:4px;">
+        ${rows}
+      </div>
+    </details>
+  `;
 }
 
 function renderTimelineEntry(e){
@@ -935,7 +1042,7 @@ async function loadDealFinSummary(dealId){
   try{
     const res=await sb("deal_financing?deal_id=eq."+dealId);
     const f=Array.isArray(res)&&res.length?res[0]:null;
-    if(!f){el.innerHTML='';return;}
+    if(!f||!f.interest_rate){el.innerHTML='';return;}
     const st=f.status||"application";
     const funded=st==="funded"||st==="active";
     const pending=st==="application"||st==="approved";
