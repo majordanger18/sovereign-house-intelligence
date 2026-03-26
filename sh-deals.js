@@ -390,6 +390,7 @@ async function openDeal(dealId){
   const stages=Object.entries(DEAL_STAGES).filter(([k])=>!DEAD_STATUSES.includes(k));
   const isDead=DEAD_STATUSES.includes(d.status);
   const currentPrice=d.accepted_price||d.offer_price||0;
+  const stageObj=DEAL_STAGES[d.status]||{label:d.status||'Unknown',color:'#64748b',icon:'📋'};
 
   const m=document.getElementById("dealModal");
   m.innerHTML=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeDeal()">✕</button>
@@ -419,11 +420,15 @@ async function openDeal(dealId){
       <div style="padding:8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);text-align:center"><div style="font-size:7px;color:#64748b;font-weight:700">COE DATE</div><div style="font-size:11px;font-weight:700;color:#94a3b8;margin-top:2px">${d.coe_date?new Date(d.coe_date+"T00:00:00").toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"}):'-'}</div></div>
     </div>
 
-    <!-- PIPELINE STATUS UPDATE -->
-    ${!isDead?`<div style="margin-bottom:16px">
-      <div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:8px">UPDATE STATUS</div>
-      <div id="deal_statusBtns">${renderStatusButtons(d)}</div>
-    </div>`:`<div style="margin-bottom:16px;padding:12px;border-radius:10px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.15)"><div style="font-size:10px;color:#ef4444;font-weight:800;letter-spacing:1px">DEAL ${d.status?.toUpperCase()}</div>${d.kill_reason?`<div style="font-size:12px;color:#94a3b8;margin-top:4px">${esc(d.kill_reason)}</div>`:''}<button onclick="updateDealStatus('${d.id}','offer_drafted')" style="margin-top:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer">♻️ Reopen Deal</button></div>`}
+    <!-- STATUS BADGE -->
+    <div id="deal-status-badge" style="display:flex;align-items:center;gap:8px;margin-bottom:${isDead?'8':'16'}px;">
+      <span style="font-size:20px;">${stageObj.icon}</span>
+      <span style="font-size:15px;font-weight:700;color:${stageObj.color};letter-spacing:0.5px;">${stageObj.label.toUpperCase()}</span>
+    </div>
+    ${isDead&&d.kill_reason?`<div style="font-size:12px;color:#94a3b8;margin-bottom:16px;padding:10px 14px;border-radius:10px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.1)">${esc(d.kill_reason)}</div>`:''}
+
+    <!-- SMART ACTION CARD -->
+    <div id="smart-action-card"></div>
 
     <!-- FINANCING SUMMARY -->
     <div id="dealFinSummary"></div>
@@ -517,6 +522,16 @@ async function openDeal(dealId){
     <!-- DEAL OUTCOMES -->
     ${['sold','listed','renovation_complete','closed'].includes(d.status)?`<div id="dealOutcomesArea" style="margin-bottom:16px"></div>`:''}
 
+    <!-- MANUAL OVERRIDE -->
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.04);">
+      <details>
+        <summary style="font-size:12px;color:rgba(255,255,255,0.25);cursor:pointer;user-select:none;">Override status (advanced)</summary>
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">
+          ${Object.entries(DEAL_STAGES).map(([key,stage])=>`<button onclick="confirmSmartAdvance('${d.id}','${key}','')" style="padding:4px 10px;font-size:11px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:${d.status===key?stage.color+'20':'transparent'};color:${d.status===key?stage.color:'rgba(255,255,255,0.3)'};cursor:pointer;">${stage.icon} ${stage.label}</button>`).join('')}
+        </div>
+      </details>
+    </div>
+
     <!-- DELETE DEAL -->
     <div style="margin-top:24px;padding-top:16px;border-top:1px solid rgba(239,68,68,0.12)">
       <button onclick="deleteDeal('${d.id}')" style="width:100%;padding:10px;border-radius:10px;border:1px solid rgba(239,68,68,0.2);background:transparent;color:#ef4444;font-size:12px;font-weight:700;cursor:pointer">Delete Deal</button>
@@ -525,6 +540,9 @@ async function openDeal(dealId){
   </div>`;
 
   m.style.display="block";document.body.style.overflow="hidden";
+
+  // Load smart action card
+  renderSmartCard(d.id);
 
   // Load financing summary asynchronously
   loadDealFinSummary(d.id);
@@ -559,43 +577,116 @@ async function deleteDeal(dealId){
   }catch(e){console.error("Delete deal failed:",e);}
 }
 
-function renderStatusButtons(d){
-  const pipeKeys=Object.keys(DEAL_STAGES).filter(k=>!DEAD_STATUSES.includes(k));
-  const curIdx=pipeKeys.indexOf(d.status);
-  const cur=DEAL_STAGES[d.status]||{label:d.status,color:'#64748b',icon:'?'};
-  const prevKey=curIdx>0?pipeKeys[curIdx-1]:null;
-  const nextKey=curIdx>=0&&curIdx<pipeKeys.length-1?pipeKeys[curIdx+1]:null;
-  const prevS=prevKey?DEAL_STAGES[prevKey]:null;
-  const nextS=nextKey?DEAL_STAGES[nextKey]:null;
+// ═══════════════════════════════════════════
+// ═══ SMART ACTION CARD + HANDLERS ═══
+// ═══════════════════════════════════════════
 
-  // ROW 1 — Current status (large centered card)
-  let h=`<div style="text-align:center;padding:16px;border-radius:14px;background:${cur.color}14;border:1px solid ${cur.color}33;margin-bottom:8px"><div style="font-size:18px;font-weight:800;color:${cur.color}">${cur.icon} ${cur.label.toUpperCase()}</div></div>`;
+async function renderSmartCard(dealId){
+  const card=document.getElementById('smart-action-card');
+  if(!card)return;
 
-  // ROW 2 — Next (primary action, full width, gold gradient)
-  if(nextKey){
-    h+=`<button onclick="updateDealStatus('${d.id}','${nextKey}')" style="width:100%;padding:16px;border-radius:10px;border:none;background:linear-gradient(135deg,#d4af37,#b8962e);color:#000;font-size:16px;font-weight:800;cursor:pointer;min-height:48px;margin-bottom:8px">${nextS.label} →</button>`;
-  } else {
-    h+=`<button disabled style="width:100%;padding:16px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#27272a;font-size:16px;font-weight:800;min-height:48px;cursor:default;margin-bottom:8px">Next →</button>`;
+  card.innerHTML='<div style="padding:16px;color:rgba(255,255,255,0.3);font-size:13px;">Loading...</div>';
+
+  const action=await getNextAction(dealId);
+  if(!action){card.innerHTML='';return;}
+
+  let actionBtn='';
+  if(action.action){
+    let onclickCode='';
+    if(action.advanceTo){
+      onclickCode=`confirmSmartAdvance('${dealId}','${action.advanceTo}',\`${(action.cascade||'').replace(/`/g,'\\`')}\`)`;
+    }else if(action.openModal){
+      onclickCode=`openSmartModal('${dealId}','${action.openModal}')`;
+    }else if(action.navigateTo){
+      onclickCode=`navigateSmartAction('${action.navigateTo}')`;
+    }
+
+    actionBtn=`<button onclick="${onclickCode}" style="margin-top:12px;padding:12px 24px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;width:100%;transition:transform 0.15s,box-shadow 0.15s;" onmouseenter="this.style.transform='scale(1.02)';this.style.boxShadow='0 4px 15px rgba(212,175,55,0.3)'" onmouseleave="this.style.transform='scale(1)';this.style.boxShadow='none'">${action.action}</button>`;
   }
 
-  // ROW 3 — Prev (muted, smaller)
-  if(prevKey){
-    h+=`<button onclick="updateDealStatus('${d.id}','${prevKey}')" style="width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:#475569;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:12px">← ${prevS.label}</button>`;
-  } else {
-    h+=`<div style="margin-bottom:12px"></div>`;
+  let contextLine='';
+  if(action.context){
+    contextLine=`<div style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:8px;">${action.context}</div>`;
   }
 
-  // ROW 4 — Deal outcome buttons (2x2) — only during offer/negotiation phase
-  if(!['closing','closed','in_renovation','renovation_complete','listing_prep','listed','sold'].includes(d.status)){
-    h+=`<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:4px;padding-top:8px"><div style="font-size:9px;color:#475569;font-weight:700;letter-spacing:2px;text-align:center;margin-bottom:8px">CLOSE DEAL</div>`;
-    h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">`;
-    h+=`<button onclick="winDeal('${d.id}')" style="padding:10px;border-radius:10px;border:1px solid rgba(34,197,94,0.15);background:rgba(34,197,94,0.04);color:#22c55e;font-size:12px;font-weight:800;cursor:pointer;min-height:40px">🏆 Keys In Hand</button>`;
-    h+=`<button onclick="killDeal('${d.id}','rejected')" style="padding:10px;border-radius:10px;border:1px solid rgba(239,68,68,0.12);background:rgba(239,68,68,0.03);color:#ef4444;font-size:12px;font-weight:800;cursor:pointer;min-height:40px;opacity:0.7">❌ Rejected</button>`;
-    h+=`<button onclick="killDeal('${d.id}','withdrawn')" style="padding:10px;border-radius:10px;border:1px solid rgba(100,116,139,0.12);background:rgba(100,116,139,0.03);color:#94a3b8;font-size:12px;font-weight:800;cursor:pointer;min-height:40px;opacity:0.7">🚫 Withdraw</button>`;
-    h+=`<button onclick="killDeal('${d.id}','expired')" style="padding:10px;border-radius:10px;border:1px solid rgba(100,116,139,0.12);background:rgba(100,116,139,0.03);color:#94a3b8;font-size:12px;font-weight:800;cursor:pointer;min-height:40px;opacity:0.7">⏰ Expired</button>`;
-    h+=`</div></div>`;
+  card.innerHTML=`
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:20px;margin-bottom:16px;">
+      <div style="display:flex;align-items:flex-start;gap:14px;">
+        <span style="font-size:28px;line-height:1;">${action.icon}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:16px;font-weight:600;color:#fff;line-height:1.3;">${action.message}</div>
+          ${contextLine}
+          ${actionBtn}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function confirmSmartAdvance(dealId,newStatus,cascadeMsg){
+  const stObj=DEAL_STAGES[newStatus]||{label:newStatus};
+
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML=`
+    <div style="background:#1a1a2e;border:1px solid #d4af37;border-radius:14px;padding:24px;max-width:400px;width:100%;text-align:center;">
+      <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:8px;">Move to ${stObj.label}?</div>
+      ${cascadeMsg?'<div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px;">'+cascadeMsg+'</div>':''}
+      <div style="display:flex;gap:12px;">
+        <button id="smart-cancel" style="flex:1;padding:12px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Not Yet</button>
+        <button id="smart-confirm" style="flex:1;padding:12px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Confirm</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById('smart-cancel').onclick=()=>overlay.remove();
+  document.getElementById('smart-confirm').onclick=async()=>{
+    overlay.remove();
+    await updateDealStatus(dealId,newStatus);
+    openDeal(dealId);
+  };
+}
+
+function openSmartModal(dealId,modalName){
+  if(modalName==='financing'){
+    if(typeof openFinancing==='function')openFinancing(dealId);
+    else console.warn('No financing modal function found');
+  }else if(modalName==='rpa'){
+    if(typeof openRPAFromDeal==='function')openRPAFromDeal(dealId);
+    else if(typeof openOfferBuilder==='function')openOfferBuilder(dealId);
+    else console.warn('No RPA function found');
+  }else if(modalName==='sowUpload'){
+    navigateSmartAction('reno-budget');
   }
-  return h;
+}
+
+function navigateSmartAction(target){
+  const parts=target.split('-');
+
+  if(parts[0]==='reno'){
+    // Close deal modal first so reno view is visible
+    closeDeal();
+    if(typeof setView==='function')setView('renovation');
+    if(parts[1]){
+      setTimeout(()=>{
+        const pill=document.querySelector('[data-view="'+parts[1]+'"]');
+        if(pill)pill.click();
+      },200);
+    }
+  }else if(parts[0]==='contacts'){
+    closeDeal();
+    if(typeof setView==='function')setView('contacts');
+    if(parts[1]){
+      setTimeout(()=>{
+        const pill=document.querySelector('[data-view="'+parts[1]+'"]');
+        if(pill)pill.click();
+      },200);
+    }
+  }else if(target==='deal-outcomes'){
+    const outcomesSection=document.getElementById('dealOutcomesArea');
+    if(outcomesSection)outcomesSection.scrollIntoView({behavior:'smooth'});
+  }
 }
 
 function renderTimelineEntry(e){
