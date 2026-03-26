@@ -18,6 +18,7 @@ const DRAW_PIPE=[
 
 let renoDealId=null,renoSub="budget",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null,renoTasks=[],renoChangeOrders=[];
 let renoExpF={sow:"all",type:"all",from:"",to:""};
+let renoDocs=[],renoDocFilter="all",renoDocRoom="all",renoDocPhase="all",renoCompareMode=false,renoCompareRoom="kitchen";
 let renoTaskFilter={cat:"all",assignee:"all"};
 let renoEditingTask=null,renoShowDone=false;
 const TASK_CAT_COLORS={financing:"#22c55e",contractor:"#f97316",materials:"#3b82f6",design:"#ec4899",permits:"#6366f1",administrative:"#64748b",listing_prep:"#a855f7"};
@@ -106,7 +107,7 @@ async function renderRenoView(){
   }
   // Sub-view pills
   const tkOpen=renoTasks.filter(t=>t.status!=='done').length;
-  html+=`<div class="reno-pills"><button class="reno-pill${renoSub==="budget"?" active":""}" onclick="switchRenoSub('budget')">Budget</button><button class="reno-pill${renoSub==="draws"?" active":""}" onclick="switchRenoSub('draws')">Draws</button><button class="reno-pill${renoSub==="expenses"?" active":""}" onclick="switchRenoSub('expenses')">Expenses</button><button class="reno-pill${renoSub==="tasks"?" active":""}" onclick="switchRenoSub('tasks')">Tasks${tkOpen?' ('+tkOpen+')':''}</button></div>`;
+  html+=`<div class="reno-pills"><button class="reno-pill${renoSub==="budget"?" active":""}" onclick="switchRenoSub('budget')">Budget</button><button class="reno-pill${renoSub==="draws"?" active":""}" onclick="switchRenoSub('draws')">Draws</button><button class="reno-pill${renoSub==="expenses"?" active":""}" onclick="switchRenoSub('expenses')">Expenses</button><button class="reno-pill${renoSub==="tasks"?" active":""}" onclick="switchRenoSub('tasks')">Tasks${tkOpen?' ('+tkOpen+')':''}</button><button class="reno-pill${renoSub==="docs"?" active":""}" onclick="switchRenoSub('docs')">Docs${renoDocs.length?' ('+renoDocs.length+')':''}</button></div>`;
   // Content placeholder
   html+=`<div id="renoContent"><div style="text-align:center;padding:40px"><div style="width:24px;height:24px;border:2px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto"></div></div></div>`;
   html+='</div>';
@@ -161,6 +162,11 @@ async function loadRenoData(did){
     const co=await sb("renovation_change_orders?deal_id=eq."+did+"&order=date_requested.desc");
     renoChangeOrders=Array.isArray(co)?co:[];
   }catch(e){console.error("[SH] Change orders load error (non-fatal):",e);renoChangeOrders=[];}
+  // Load documents
+  try{
+    const docs=await sb("deal_documents?deal_id=eq."+did+"&order=created_at.desc");
+    renoDocs=Array.isArray(docs)?docs:[];
+  }catch(e){console.error("[SH] Docs load error (non-fatal):",e);renoDocs=[];}
 }
 
 function switchRenoDeal(did){renoDealId=did;renoSub="budget";renoExpandedLine=null;renderRenoView();}
@@ -173,6 +179,7 @@ function renderRenoSub(){
   else if(renoSub==="draws")renderDrawsV(el);
   else if(renoSub==="expenses")renderExpV(el);
   else if(renoSub==="tasks")renderTasksV(el);
+  else if(renoSub==="docs")renderDocsV(el);
 }
 
 // ═══ BUDGET VIEW ═══
@@ -2139,6 +2146,401 @@ async function deleteTask(taskId){
     showRenoToast("Task deleted");
     await loadRenoData(renoDealId);renderRenoSub();
   }catch(e){console.error("Delete task failed:",e);showRenoToast("Failed to delete task");}
+}
+
+// ═══════════════════════════════════════════
+// ═══ DOCUMENT LIBRARY ═══
+// ═══════════════════════════════════════════
+
+const DOC_PHASE_COLORS={before:"#64748b",demo:"#ef4444",rough_in:"#f97316",install:"#eab308",finish:"#3b82f6",after:"#4ade80"};
+const DOC_ROOMS=["kitchen","primary_bath","secondary_bath","powder_room","primary_bedroom","secondary_bedroom","living_room","family_room","dining_room","office","laundry","garage","exterior_front","exterior_back","pool","hallway","stairway","entry","pantry","closet","other"];
+const DOC_PHASES=["before","demo","rough_in","install","finish","after"];
+const DOC_CATEGORIES=["sow","bid","closing","insurance","inspection","permit","contract","invoice","other"];
+
+function roomLabel(r){return(r||"other").replace(/_/g," ").replace(/\b\w/g,l=>l.toUpperCase());}
+
+function renderDocsV(el){
+  const photos=renoDocs.filter(d=>d.doc_category==='photo');
+  const docs=renoDocs.filter(d=>d.doc_category!=='photo');
+
+  // Filter logic
+  let filteredPhotos=photos;
+  let filteredDocs=docs;
+  if(renoDocFilter==='photos'){filteredDocs=[];}
+  else if(renoDocFilter==='receipts'){filteredPhotos=[];filteredDocs=docs.filter(d=>d.doc_category==='receipt');}
+  else if(renoDocFilter==='docs'){filteredPhotos=[];filteredDocs=docs.filter(d=>d.doc_category!=='receipt');}
+  else if(renoDocFilter==='other'){filteredPhotos=photos.filter(d=>d.room==='other');filteredDocs=docs.filter(d=>d.doc_category==='other');}
+
+  if(renoDocFilter==='photos'||renoDocFilter==='all'){
+    if(renoDocRoom!=='all')filteredPhotos=filteredPhotos.filter(p=>p.room===renoDocRoom);
+    if(renoDocPhase!=='all')filteredPhotos=filteredPhotos.filter(p=>p.phase===renoDocPhase);
+  }
+
+  let h='';
+
+  // Upload buttons
+  h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+    <button onclick="docsPickPhotos()" class="btn" style="padding:12px;font-size:13px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;font-weight:800">📷 Upload Photos</button>
+    <button onclick="docsPickDocument()" class="btn" style="padding:12px;font-size:13px;background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.25);color:#a78bfa;font-weight:800">📄 Upload Document</button>
+  </div>`;
+  h+=`<input type="file" id="docsPhotoInput" accept="image/*" multiple style="display:none" onchange="docsHandlePhotos(this.files)"/>`;
+  h+=`<input type="file" id="docsDocInput" accept=".pdf,.doc,.docx,.xlsx,.csv,image/*" style="display:none" onchange="docsHandleDocument(this.files)"/>`;
+
+  // Category filter pills
+  h+=`<div class="reno-pills" style="margin-bottom:8px">
+    <button class="reno-pill${renoDocFilter==='all'?' active':''}" onclick="setDocFilter('all')">All</button>
+    <button class="reno-pill${renoDocFilter==='photos'?' active':''}" onclick="setDocFilter('photos')">Photos${photos.length?' ('+photos.length+')':''}</button>
+    <button class="reno-pill${renoDocFilter==='receipts'?' active':''}" onclick="setDocFilter('receipts')">Receipts</button>
+    <button class="reno-pill${renoDocFilter==='docs'?' active':''}" onclick="setDocFilter('docs')">Docs</button>
+    <button class="reno-pill${renoDocFilter==='other'?' active':''}" onclick="setDocFilter('other')">Other</button>
+  </div>`;
+
+  // Room/Phase filters (photos only)
+  if(renoDocFilter==='photos'||renoDocFilter==='all'){
+    h+=`<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+      <select onchange="renoDocRoom=this.value;renderRenoSub()" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:12px;font-weight:700;min-height:36px">
+        <option value="all">All Rooms</option>
+        ${DOC_ROOMS.map(r=>`<option value="${r}"${renoDocRoom===r?' selected':''}>${roomLabel(r)}</option>`).join('')}
+      </select>
+      <select onchange="renoDocPhase=this.value;renderRenoSub()" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:12px;font-weight:700;min-height:36px">
+        <option value="all">All Phases</option>
+        ${DOC_PHASES.map(p=>`<option value="${p}"${renoDocPhase===p?' selected':''}>${roomLabel(p)}</option>`).join('')}
+      </select>
+      <button onclick="renoCompareMode=!renoCompareMode;renderRenoSub()" class="reno-pill${renoCompareMode?' active':''}" style="margin-left:auto">Compare Rooms</button>
+    </div>`;
+  }
+
+  // Compare mode
+  if(renoCompareMode&&(renoDocFilter==='photos'||renoDocFilter==='all')){
+    h+=renderRoomCompare(photos);
+    el.innerHTML=h;return;
+  }
+
+  // Photo grid
+  if(filteredPhotos.length>0){
+    h+=`<div class="docs-grid">`;
+    filteredPhotos.forEach((p,i)=>{
+      const pc=DOC_PHASE_COLORS[p.phase]||'#64748b';
+      h+=`<div class="docs-thumb" onclick="openDocLightbox(${i},'photo')">
+        <img src="${esc(p.file_url)}" alt="${esc(p.caption||p.ai_description||'')}" loading="lazy"/>
+        ${p.is_starred?'<div style="position:absolute;top:4px;right:4px;font-size:14px;">⭐</div>':''}
+        <div class="docs-meta">
+          <div style="font-size:11px;font-weight:600;color:#e2e8f0">${roomLabel(p.room)}</div>
+          <span class="reno-chip" style="color:${pc};background:${pc}18;font-size:9px">${roomLabel(p.phase)}</span>
+        </div>
+      </div>`;
+    });
+    h+=`</div>`;
+  }
+
+  // Document list
+  if(filteredDocs.length>0){
+    if(filteredPhotos.length>0)h+=`<div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:2px;margin:16px 0 8px">DOCUMENTS</div>`;
+    filteredDocs.forEach((d,i)=>{
+      const icon=d.doc_category==='receipt'?'🧾':d.file_type==='pdf'?'📄':'📋';
+      const cat=(d.doc_category||'other').toUpperCase();
+      const dt=d.created_at?new Date(d.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric',timeZone:'America/Los_Angeles'}):'';
+      h+=`<div class="docs-row" onclick="window.open('${esc(d.file_url)}','_blank')">
+        <span style="font-size:18px;flex-shrink:0">${icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.file_name||'Untitled')}</div>
+          ${d.caption?`<div style="font-size:11px;color:#64748b;margin-top:1px">${esc(d.caption)}</div>`:''}
+        </div>
+        <span class="reno-chip" style="color:#94a3b8;background:rgba(255,255,255,0.04);font-size:9px">${cat}</span>
+        <span style="font-size:11px;color:#475569;flex-shrink:0">${dt}</span>
+        <button onclick="event.stopPropagation();deleteDoc('${d.id}')" style="flex-shrink:0;background:none;border:none;color:#ef4444;font-size:12px;cursor:pointer;padding:4px">✕</button>
+      </div>`;
+    });
+  }
+
+  // Empty state
+  if(!filteredPhotos.length&&!filteredDocs.length){
+    h+=`<div style="text-align:center;padding:40px 20px;color:#475569">
+      <div style="font-size:32px;margin-bottom:8px">📁</div>
+      <div style="font-size:14px;font-weight:600;color:#94a3b8">No documents yet.</div>
+      <div style="font-size:12px;color:#64748b;margin-top:4px">Upload your first photos or files to start building your project library.</div>
+    </div>`;
+  }
+
+  el.innerHTML=h;
+}
+
+function setDocFilter(f){renoDocFilter=f;renderRenoSub();}
+
+// ═══ ROOM COMPARE VIEW ═══
+function renderRoomCompare(photos){
+  let h=`<div style="margin-bottom:12px">
+    <select onchange="renoCompareRoom=this.value;renderRenoSub()" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(212,175,55,0.2);background:rgba(212,175,55,0.04);color:#f1f5f9;font-size:13px;font-weight:700;min-height:40px">
+      ${DOC_ROOMS.map(r=>`<option value="${r}"${renoCompareRoom===r?' selected':''}>${roomLabel(r)}</option>`).join('')}
+    </select>
+  </div>`;
+  const roomPhotos=photos.filter(p=>p.room===renoCompareRoom);
+  if(!roomPhotos.length){
+    h+=`<div style="text-align:center;padding:40px;color:#475569;font-size:13px">No photos for ${roomLabel(renoCompareRoom)}</div>`;
+    return h;
+  }
+  h+=`<div class="docs-compare">`;
+  DOC_PHASES.forEach(phase=>{
+    const pp=roomPhotos.filter(p=>p.phase===phase);
+    const pc=DOC_PHASE_COLORS[phase]||'#64748b';
+    h+=`<div class="docs-compare-col">
+      <div style="text-align:center;font-size:10px;font-weight:700;color:${pc};letter-spacing:1px;margin-bottom:6px">${roomLabel(phase).toUpperCase()}</div>
+      ${pp.length?pp.map(p=>`<img src="${esc(p.file_url)}" style="width:100%;border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="openDocLightbox(${renoDocs.indexOf(p)},'photo')" loading="lazy"/>`).join(''):`<div style="padding:20px;text-align:center;font-size:11px;color:#333;border:1px dashed rgba(255,255,255,0.08);border-radius:8px">—</div>`}
+    </div>`;
+  });
+  h+=`</div>`;
+  return h;
+}
+
+// ═══ PHOTO UPLOAD FLOW ═══
+function docsPickPhotos(){document.getElementById('docsPhotoInput').click();}
+function docsPickDocument(){document.getElementById('docsDocInput').click();}
+
+async function docsHandlePhotos(files){
+  if(!files||!files.length||!renoDealId)return;
+  const fileArr=Array.from(files);
+  const modal=document.getElementById('renoModal');
+  modal.style.display='block';
+
+  // Step 1: Upload all files to storage
+  modal.innerHTML=`<div class="sheet"><div class="handle"></div><button class="close-x" onclick="closeDocsModal()">✕</button>
+    <div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:16px">UPLOAD PHOTOS</div>
+    <div id="docsProgress" style="text-align:center;padding:40px"><div style="width:24px;height:24px;border:2px solid rgba(59,130,246,0.2);border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px"></div><div style="font-size:14px;color:#94a3b8">Uploading 1 of ${fileArr.length}...</div></div>
+    <div id="docsConfirmArea"></div>
+  </div>`;
+
+  const uploads=[];
+  for(let i=0;i<fileArr.length;i++){
+    document.getElementById('docsProgress').querySelector('div:last-child').textContent=`Uploading ${i+1} of ${fileArr.length}...`;
+    const file=fileArr[i];
+    const path=renoDealId+'/photos/'+Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const url=await uploadToStorage(file,'sovereign-docs',path);
+    if(url){
+      // Convert to base64
+      const buf=await file.arrayBuffer();
+      const bytes=new Uint8Array(buf);
+      let binary='';const chunk=8192;
+      for(let j=0;j<bytes.length;j+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(j,j+chunk));
+      const b64=btoa(binary);
+      uploads.push({file,url,b64,mediaType:file.type||'image/jpeg'});
+    }
+  }
+
+  if(!uploads.length){modal.innerHTML=`<div class="sheet"><div class="handle"></div><button class="close-x" onclick="closeDocsModal()">✕</button><div style="padding:40px;text-align:center;color:#ef4444">Upload failed. Check file sizes and try again.</div></div>`;return;}
+
+  // Step 2: Classify all with AI
+  let apiKey=localStorage.getItem('sh_claude_key');
+  if(!apiKey){apiKey=prompt('Enter your Claude API key:');if(!apiKey){closeDocsModal();return;}localStorage.setItem('sh_claude_key',apiKey);}
+
+  const classified=[];
+  for(let i=0;i<uploads.length;i++){
+    document.getElementById('docsProgress').querySelector('div:last-child').textContent=`Classifying ${i+1} of ${uploads.length}...`;
+    let cls;
+    try{cls=await classifyPhoto(apiKey,uploads[i].b64,uploads[i].mediaType);}
+    catch(e){console.error('Classification error:',e);cls={room:'other',phase:'before',description:'Unclassified photo',tags:[]};}
+    classified.push({...uploads[i],cls});
+  }
+
+  // Step 3: Show confirmation cards
+  document.getElementById('docsProgress').style.display='none';
+  let cards='';
+  classified.forEach((c,i)=>{
+    cards+=`<div class="docs-confirm-card" id="docCard${i}">
+      <img src="${esc(c.url)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin-bottom:10px"/>
+      <div class="row2">
+        <div class="fld"><label>ROOM</label>
+          <select id="docRoom${i}" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:12px;font-weight:700;min-height:40px">
+            ${DOC_ROOMS.map(r=>`<option value="${r}"${c.cls.room===r?' selected':''}>${roomLabel(r)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="fld"><label>PHASE</label>
+          <select id="docPhase${i}" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:12px;font-weight:700;min-height:40px">
+            ${DOC_PHASES.map(p=>`<option value="${p}"${c.cls.phase===p?' selected':''}>${roomLabel(p)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="fld"><label>DESCRIPTION</label><input id="docDesc${i}" class="cinput" value="${esc(c.cls.description||'')}" style="font-size:12px;min-height:36px"/></div>
+      <div style="display:flex;justify-content:flex-end"><button onclick="document.getElementById('docCard${i}').remove()" style="font-size:11px;color:#ef4444;background:none;border:none;cursor:pointer;padding:4px 8px">Skip</button></div>
+    </div>`;
+  });
+  cards+=`<button onclick="docsSaveAll()" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;font-weight:700;cursor:pointer;margin-top:12px">Save All</button>`;
+  document.getElementById('docsConfirmArea').innerHTML=cards;
+
+  // Store classified data for save
+  window._docsClassified=classified;
+}
+
+async function classifyPhoto(apiKey,b64,mediaType){
+  const res=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:[
+      {type:'image',source:{type:'base64',media_type:mediaType,data:b64}},
+      {type:'text',text:`You are classifying a renovation photo for a luxury home flip. Respond ONLY with a JSON object, no markdown, no backticks, no other text.\n\n{"room": one of: "kitchen", "primary_bath", "secondary_bath", "powder_room", "primary_bedroom", "secondary_bedroom", "living_room", "family_room", "dining_room", "office", "laundry", "garage", "exterior_front", "exterior_back", "pool", "hallway", "stairway", "entry", "pantry", "closet", "other", "phase": one of: "before", "demo", "rough_in", "install", "finish", "after", "description": brief description under 20 words, "tags": array of 3-5 relevant tags}`}
+    ]}]})
+  });
+  const data=await res.json();
+  const text=data.content?.[0]?.text||'{}';
+  try{return JSON.parse(text.replace(/```json|```/g,'').trim());}
+  catch(e){return{room:'other',phase:'before',description:'Unclassified photo',tags:[]};}
+}
+
+async function docsSaveAll(){
+  const classified=window._docsClassified;if(!classified)return;
+  const deal=deals.find(d=>d.id===renoDealId);
+  let saved=0;
+  for(let i=0;i<classified.length;i++){
+    const card=document.getElementById('docCard'+i);
+    if(!card)continue; // skipped
+    const c=classified[i];
+    const room=document.getElementById('docRoom'+i)?.value||c.cls.room;
+    const phase=document.getElementById('docPhase'+i)?.value||c.cls.phase;
+    const desc=document.getElementById('docDesc'+i)?.value||c.cls.description;
+    const payload={
+      deal_id:renoDealId,
+      property_id:deal?.property_id||null,
+      file_url:c.url,
+      file_name:c.file.name,
+      file_type:(c.file.type||'image/jpeg').split('/')[1]||'jpg',
+      file_size:c.file.size,
+      doc_category:'photo',
+      doc_subcategory:phase+'_photo',
+      room:room,
+      phase:phase,
+      ai_description:c.cls.description,
+      ai_tags:c.cls.tags||[],
+      ai_confidence:0.85,
+      caption:desc,
+      uploaded_by:window.SH_USER?.email||'King J'
+    };
+    try{
+      await fetch(SB+'/rest/v1/deal_documents',{method:'POST',headers:RENO_WH,body:JSON.stringify(payload)});
+      saved++;
+    }catch(e){console.error('Save doc failed:',e);}
+  }
+  window._docsClassified=null;
+  closeDocsModal();
+  showRenoToast(saved+' photo'+(saved!==1?'s':'')+' saved');
+  await loadRenoData(renoDealId);
+  renderRenoSub();
+}
+
+// ═══ DOCUMENT UPLOAD FLOW ═══
+async function docsHandleDocument(files){
+  if(!files||!files.length||!renoDealId)return;
+  const file=files[0];
+  const modal=document.getElementById('renoModal');
+  modal.style.display='block';
+
+  modal.innerHTML=`<div class="sheet"><div class="handle"></div><button class="close-x" onclick="closeDocsModal()">✕</button>
+    <div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:16px">UPLOAD DOCUMENT</div>
+    <div id="docUploadProgress" style="text-align:center;padding:20px"><div style="width:24px;height:24px;border:2px solid rgba(139,92,246,0.2);border-top-color:#a78bfa;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px"></div><div style="font-size:13px;color:#94a3b8">Uploading...</div></div>
+    <div id="docUploadForm" style="display:none"></div>
+  </div>`;
+
+  const path=renoDealId+'/docs/'+Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+  const url=await uploadToStorage(file,'sovereign-docs',path);
+  if(!url){document.getElementById('docUploadProgress').innerHTML='<div style="color:#ef4444">Upload failed.</div>';return;}
+
+  document.getElementById('docUploadProgress').style.display='none';
+  document.getElementById('docUploadForm').style.display='block';
+  document.getElementById('docUploadForm').innerHTML=`
+    <div style="padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);margin-bottom:12px">
+      <div style="font-size:14px;font-weight:700;color:#e2e8f0">📄 ${esc(file.name)}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:2px">${(file.size/1024).toFixed(0)} KB</div>
+    </div>
+    <div class="fld"><label>CATEGORY</label>
+      <select id="docCatSel" style="width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:14px;font-weight:700;min-height:44px">
+        ${DOC_CATEGORIES.map(c=>`<option value="${c}">${c.toUpperCase()}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fld"><label>DESCRIPTION (optional)</label><input id="docDescInput" class="cinput" placeholder="e.g. Kiavi approved SOW" style="font-size:13px"/></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="closeDocsModal()" class="btn" style="flex:1;padding:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);font-weight:600">Cancel</button>
+      <button onclick="docsSaveDocument('${esc(url)}','${esc(file.name)}','${(file.type||'application/octet-stream').split('/')[1]||'pdf'}',${file.size})" class="btn" style="flex:1;padding:12px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;font-weight:700">Save</button>
+    </div>
+  `;
+}
+
+async function docsSaveDocument(url,name,fileType,fileSize){
+  const deal=deals.find(d=>d.id===renoDealId);
+  const cat=document.getElementById('docCatSel')?.value||'other';
+  const desc=document.getElementById('docDescInput')?.value||'';
+  const payload={
+    deal_id:renoDealId,
+    property_id:deal?.property_id||null,
+    file_url:url,
+    file_name:name,
+    file_type:fileType,
+    file_size:fileSize,
+    doc_category:cat,
+    caption:desc,
+    uploaded_by:window.SH_USER?.email||'King J'
+  };
+  try{
+    await fetch(SB+'/rest/v1/deal_documents',{method:'POST',headers:RENO_WH,body:JSON.stringify(payload)});
+    closeDocsModal();
+    showRenoToast('Document saved');
+    await loadRenoData(renoDealId);
+    renderRenoSub();
+  }catch(e){console.error('Save document failed:',e);showRenoToast('Save failed');}
+}
+
+async function deleteDoc(docId){
+  if(!confirm('Delete this document?'))return;
+  try{
+    await fetch(SB+'/rest/v1/deal_documents?id=eq.'+docId,{method:'DELETE',headers:RENO_WH});
+    showRenoToast('Document deleted');
+    await loadRenoData(renoDealId);
+    renderRenoSub();
+  }catch(e){console.error('Delete doc failed:',e);}
+}
+
+function closeDocsModal(){
+  const m=document.getElementById('renoModal');if(m)m.style.display='none';
+  // Reset file inputs
+  const pi=document.getElementById('docsPhotoInput');if(pi)pi.value='';
+  const di=document.getElementById('docsDocInput');if(di)di.value='';
+}
+
+// ═══ PHOTO LIGHTBOX ═══
+function openDocLightbox(idx){
+  const photos=renoDocs.filter(d=>d.doc_category==='photo');
+  if(idx<0||idx>=photos.length)return;
+  const p=photos[idx];
+  const pc=DOC_PHASE_COLORS[p.phase]||'#64748b';
+  const dt=p.created_at?new Date(p.created_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric',timeZone:'America/Los_Angeles'}):'';
+
+  const modal=document.getElementById('renoModal');
+  modal.style.display='block';
+  modal.innerHTML=`<div style="position:relative;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px">
+    <button onclick="closeDocsModal()" style="position:absolute;top:12px;right:12px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:20px;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center">✕</button>
+    ${idx>0?`<button onclick="openDocLightbox(${idx-1})" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:20px;cursor:pointer">‹</button>`:''}
+    ${idx<photos.length-1?`<button onclick="openDocLightbox(${idx+1})" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:20px;cursor:pointer">›</button>`:''}
+    <img src="${esc(p.file_url)}" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:8px"/>
+    <div style="margin-top:16px;text-align:center;max-width:500px">
+      <div style="font-size:15px;font-weight:700;color:#e2e8f0">${roomLabel(p.room)}</div>
+      <span class="reno-chip" style="color:${pc};background:${pc}18;font-size:10px;margin-top:4px">${roomLabel(p.phase)}</span>
+      ${p.caption||p.ai_description?`<div style="font-size:12px;color:#94a3b8;margin-top:6px">${esc(p.caption||p.ai_description)}</div>`:''}
+      <div style="font-size:11px;color:#475569;margin-top:4px">${dt}</div>
+      <div style="display:flex;gap:12px;justify-content:center;margin-top:12px">
+        <button onclick="toggleDocStar('${p.id}',${!p.is_starred})" style="padding:8px 16px;border-radius:8px;border:1px solid rgba(212,175,55,0.2);background:${p.is_starred?'rgba(212,175,55,0.12)':'transparent'};color:#d4af37;font-size:12px;font-weight:700;cursor:pointer">${p.is_starred?'⭐ Starred':'☆ Star'}</button>
+        <button onclick="deleteDoc('${p.id}')" style="padding:8px 16px;border-radius:8px;border:1px solid rgba(239,68,68,0.2);background:transparent;color:#ef4444;font-size:12px;font-weight:700;cursor:pointer">Delete</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function toggleDocStar(docId,starred){
+  try{
+    await fetch(SB+'/rest/v1/deal_documents?id=eq.'+docId,{method:'PATCH',headers:RENO_WH,body:JSON.stringify({is_starred:starred})});
+    const d=renoDocs.find(x=>x.id===docId);
+    if(d)d.is_starred=starred;
+    // Refresh lightbox
+    const photos=renoDocs.filter(x=>x.doc_category==='photo');
+    const idx=photos.findIndex(x=>x.id===docId);
+    if(idx>=0)openDocLightbox(idx);
+  }catch(e){console.error('Star toggle failed:',e);}
 }
 
 // Restore search bar when leaving reno view
