@@ -627,21 +627,88 @@ async function updateDealStatus(dealId,newStatus){
   try{
     await fetch(`${SB}/rest/v1/deals?id=eq.${dealId}`,{method:'PATCH',headers:HD,body:JSON.stringify({status:newStatus,timeline:tl,kill_reason:null,updated_by:window.SH_USER?.id||null,updated_by_email:window.SH_USER?.email||null})});
     d.status=newStatus;d.timeline=tl;d.kill_reason=null;
-    // Auto-set disposition on linked property
-    const disp=newStatus==='sold'?'sold':newStatus==='closed'?'acquired':DEAD_STATUSES.includes(newStatus)?null:'pursuing';
-    await setPropertyDisposition(d.property_id,disp);
-    // Auto-advance deal_financing status
-    const finMap={closing:"clear_to_close",closed:"funded",in_renovation:"active",sold:"paid_off"};
-    if(finMap[newStatus]){
+
+    // ═══════════════════════════════════════════
+    // SMART STATUS CASCADES
+    // ═══════════════════════════════════════════
+    const cascadeMessages=[];
+
+    // CASCADE 1: Financing auto-advance
+    const finCascadeMap={
+      'closing':'clear_to_close',
+      'closed':'funded',
+      'in_renovation':'active',
+      'sold':'paid_off'
+    };
+
+    if(finCascadeMap[newStatus]){
       try{
-        const fi=await sb("deal_financing?deal_id=eq."+dealId);
-        if(Array.isArray(fi)&&fi.length){
-          const patch={status:finMap[newStatus]};
-          if(newStatus==="closed")patch.funded_date=new Date().toLocaleDateString("en-CA",{timeZone:"America/Los_Angeles"});
-          await fetch(SB+"/rest/v1/deal_financing?deal_id=eq."+dealId,{method:"PATCH",headers:HD,body:JSON.stringify(patch)});
+        const finRes=await fetch(SB+'/rest/v1/deal_financing?deal_id=eq.'+dealId+'&select=id,status,funded_date,loan_term_months',{headers:HD});
+        const finData=await finRes.json();
+
+        if(finData&&finData.length>0){
+          const fin=finData[0];
+          const finPatch={status:finCascadeMap[newStatus]};
+
+          // On "closed" → set funded_date and maturity_date
+          if(newStatus==='closed'&&!fin.funded_date){
+            const today=new Date().toISOString().split('T')[0];
+            finPatch.funded_date=today;
+            const termMonths=fin.loan_term_months||8;
+            const maturity=new Date();
+            maturity.setMonth(maturity.getMonth()+termMonths);
+            finPatch.maturity_date=maturity.toISOString().split('T')[0];
+            cascadeMessages.push('Loan funded '+today+'. Maturity: '+finPatch.maturity_date);
+          }
+
+          await fetch(SB+'/rest/v1/deal_financing?id=eq.'+fin.id,{
+            method:'PATCH',headers:HD,
+            body:JSON.stringify(finPatch)
+          });
+
+          const label=finCascadeMap[newStatus].replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase());
+          cascadeMessages.push('Financing → '+label);
         }
-      }catch(e){console.error("[SH] Financing auto-advance (non-fatal):",e);}
+      }catch(e){console.error('Financing cascade error:',e);}
     }
+
+    // CASCADE 2: Property disposition auto-update
+    try{
+      const dealData=deals.find(x=>x.id===dealId);
+      if(dealData&&dealData.property_id){
+        if(newStatus==='sold'){
+          await fetch(SB+'/rest/v1/properties?id=eq.'+dealData.property_id,{
+            method:'PATCH',headers:HD,
+            body:JSON.stringify({disposition:'acquired'})
+          });
+          cascadeMessages.push('Property → Acquired');
+        }else if(['rejected','withdrawn','expired','dead'].includes(newStatus)){
+          await fetch(SB+'/rest/v1/properties?id=eq.'+dealData.property_id,{
+            method:'PATCH',headers:HD,
+            body:JSON.stringify({disposition:null})
+          });
+          cascadeMessages.push('Property returned to feed');
+        }else{
+          // Any active deal status → pursuing
+          await fetch(SB+'/rest/v1/properties?id=eq.'+dealData.property_id,{
+            method:'PATCH',headers:HD,
+            body:JSON.stringify({disposition:'pursuing'})
+          });
+        }
+      }
+    }catch(e){console.error('Disposition cascade error:',e);}
+
+    // CASCADE 3: Toast notification
+    const stageLabel=DEAL_STAGES[newStatus]?DEAL_STAGES[newStatus].label:newStatus;
+    const toastLines=[stageLabel];
+    if(cascadeMessages.length>0)toastLines.push(cascadeMessages.join(' · '));
+
+    const toastEl=document.createElement('div');
+    toastEl.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid #d4af37;color:#fff;padding:14px 24px;border-radius:10px;z-index:99999;font-size:14px;max-width:90vw;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.5);';
+    toastEl.innerHTML=toastLines.map((l,i)=>i===0?'<div style="font-weight:700;font-size:16px;">'+l+'</div>':'<div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:4px;">'+l+'</div>').join('');
+    document.body.appendChild(toastEl);
+    setTimeout(()=>toastEl.remove(),4000);
+
     // Full re-render — layout changes between stages (outcomes area, dead section)
     openDeal(dealId);
     renderDashboard();
