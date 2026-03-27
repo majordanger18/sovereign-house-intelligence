@@ -1483,12 +1483,22 @@ async function openFinancing(dealId){
   });
   h+=`</div>`;
 
-  // Upload closing docs button
-  h+=`<div style="margin-bottom:16px"><button onclick="openFinDocUpload()" class="btn" style="width:100%;padding:12px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">📄 Upload Closing Disclosure / Settlement Statement</button><div style="font-size:10px;color:#64748b;text-align:center;margin-top:4px">AI will read your loan docs and fill in everything</div></div>`;
+  // Upload loan docs button + existing docs list
+  h+=`<div style="margin-bottom:16px"><button onclick="openFinDocUpload()" class="btn" style="width:100%;padding:12px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">📄 Upload Loan Documents</button><div style="font-size:10px;color:#64748b;text-align:center;margin-top:4px">Upload closing disclosure, settlement statement, or other loan docs</div></div>`;
+  // Show already-uploaded closing docs
+  const closingDocs=renoDocs.filter(d=>d.doc_category==='closing');
+  if(closingDocs.length){
+    h+=`<div style="margin-bottom:16px">`;
+    closingDocs.forEach(cd=>{
+      const dt=cd.created_at?new Date(cd.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit',timeZone:'America/Los_Angeles'}):'';
+      h+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.04)"><span style="font-size:14px">📄</span><a href="${esc(cd.file_url)}" target="_blank" onclick="event.stopPropagation()" style="flex:1;font-size:12px;font-weight:600;color:#60a5fa;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(cd.file_name||'Loan Document')}</a><span style="font-size:10px;color:#475569;flex-shrink:0">${dt}</span></div>`;
+    });
+    h+=`</div>`;
+  }
 
   // Section 1: Loan Terms
   const s1sum=f?`${esc(f.lender_name||'—')} | ${f.interest_rate||'—'}% | ${f.loan_term_months||'—'}mo${f.maturity_date?' | Matures '+fmtDate(f.maturity_date):''}`:''
-  const s1open=isNew||!f?.lender_name;
+  const s1open=isNew;
   h+=finSection('fin1','LOAN TERMS',s1sum,s1open,`
     <div class="row2">
       <div class="fld"><label>LENDER NAME</label><input id="fin_lender_name" class="cinput" value="${esc(f?.lender_name||d.lender_name||'')}"/></div>
@@ -1518,7 +1528,7 @@ async function openFinancing(dealId){
 
   // Section 2: Funded Amounts
   const s2sum=f?`Principal: ${$r(f.funded_principal)} | Rehab: ${$r(f.rehab_holdback)} | Total: ${$r(f.total_loan_amount)}`:'';
-  const s2open=isNew||!f?.funded_principal;
+  const s2open=isNew;
   h+=finSection('fin2','FUNDED AMOUNTS',s2sum,s2open,`
     <div class="row2">
       <div class="fld"><label>PURCHASE PRICE</label><input id="fin_purchase_price" type="number" class="cinput" value="${f?.purchase_price||d.accepted_price||d.offer_price||''}"/></div>
@@ -1536,7 +1546,7 @@ async function openFinancing(dealId){
 
   // Section 3: Fees & Closing Costs
   const s3sum=f?`Origination: ${$r(f.origination_fee_amount)} | Closing: ${$r(f.total_closing_costs)} | Cash to Close: ${$r(f.total_cash_to_close)}`:'';
-  const s3open=isNew||!f?.total_cash_to_close;
+  const s3open=isNew;
   h+=finSection('fin3','FEES & CLOSING COSTS',s3sum,s3open,`
     <div class="row2">
       <div class="fld"><label>ORIGINATION FEE (%)</label><input id="fin_origination_fee_pct" type="number" step="0.01" class="cinput" value="${f?.origination_fee_pct||d.lender_origination_pct||''}" oninput="finCalcOrig()"/></div>
@@ -1575,7 +1585,7 @@ async function openFinancing(dealId){
 
   // Section 4: Draw Terms
   const s4sum=f?`Max Draws: ${f.max_draws||'—'} | Holdback: ${f.holdback_pct||'—'}% | Fee: ${$r(f.draw_fee)}/draw`:'';
-  const s4open=isNew||!f?.max_draws;
+  const s4open=isNew;
   h+=finSection('fin4','DRAW TERMS',s4sum,s4open,`
     <div class="row2">
       <div class="fld"><label>MAX DRAWS</label><input id="fin_max_draws" type="number" class="cinput" value="${f?.max_draws||d.lender_max_draws||''}"/></div>
@@ -1679,8 +1689,25 @@ function finRunningTotals(f,d){
 // ═══ FINANCING DOC PARSER ═══
 function openFinDocUpload(){
   const input=document.createElement('input');
-  input.type='file';input.accept='.pdf';
-  input.onchange=async function(){const file=input.files[0];if(!file)return;await parseFinDoc(file);};
+  input.type='file';input.accept='.pdf,.jpg,.jpeg,.png';input.multiple=true;
+  input.onchange=async function(){
+    const files=Array.from(input.files);if(!files.length)return;
+    // Index all uploaded files in deal_documents
+    for(const file of files){
+      const path=storagePath(finDealId,"financing",file);
+      const url=await uploadToStorage(file,"sovereign-docs",path);
+      if(url){
+        fetch(SB+"/rest/v1/deal_documents",{method:"POST",headers:RENO_WH,body:JSON.stringify({deal_id:finDealId,file_url:url,file_name:file.name,file_type:file.name.split('.').pop().toLowerCase(),doc_category:"closing",caption:"Loan document upload",uploaded_by:window.SH_USER?.email||"system"})}).catch(e=>console.error("Doc bridge:",e));
+      }
+    }
+    // Parse the first PDF with AI
+    const pdf=files.find(f=>f.name.toLowerCase().endsWith('.pdf'));
+    if(pdf)await parseFinDoc(pdf);
+    else showRenoToast(files.length+" file"+(files.length>1?"s":"")+" uploaded");
+    // Reload docs to show in list
+    try{const docs=await sb("deal_documents?deal_id=eq."+finDealId+"&order=created_at.desc");renoDocs=Array.isArray(docs)?docs:[];}catch(e){}
+    openFinancing(finDealId);
+  };
   input.click();
 }
 
