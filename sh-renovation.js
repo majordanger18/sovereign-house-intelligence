@@ -188,7 +188,8 @@ function renderRenoSub(){
 function renderGauge(pct,label,detail,color){
   const r=60,cx=70,cy=70,circ=2*Math.PI*r;
   const offset=circ-(Math.min(pct,100)/100)*circ;
-  return`<div style="text-align:center;flex:1"><svg width="140" height="140" viewBox="0 0 140 140"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="10" stroke-dasharray="${circ}" stroke-dashoffset="${offset}" stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})" style="transition:stroke-dashoffset 0.8s ease;"/><text x="${cx}" y="${cy}" text-anchor="middle" dy="8" style="font-size:28px;font-weight:800;fill:#fff;">${isNaN(pct)?"—":Math.round(pct)+"%"}</text></svg><div style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:1px;font-weight:600;margin-top:4px">${label}</div><div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:2px">${detail}</div></div>`;
+  const ghostRing=isNaN(pct)?"":`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-opacity="0.15" stroke-width="12" transform="rotate(-90 ${cx} ${cy})"/>`;
+  return`<div style="text-align:center;flex:1"><svg width="140" height="140" viewBox="0 0 140 140"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="12"/>${ghostRing}<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="12" stroke-dasharray="${circ}" stroke-dashoffset="${offset}" stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})" style="transition:stroke-dashoffset 0.8s ease;"/><text x="${cx}" y="${cy}" text-anchor="middle" dy="8" style="font-size:28px;font-weight:800;fill:#fff;">${isNaN(pct)?"—":Math.round(pct)+"%"}</text></svg><div style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:1px;font-weight:600;margin-top:4px">${label}</div><div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:2px">${detail}</div></div>`;
 }
 
 function getProjectStatus(budgetPct,timePct){
@@ -238,7 +239,7 @@ function renderProjectV(el){
   h+=`<div style="text-align:center;font-size:14px;font-weight:600;color:${status.color};padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">${status.text}</div>`;
 
   // ROW 3: Milestone placeholder
-  h+=`<div style="padding:16px 0;text-align:center;font-size:12px;color:#475569">No milestones yet</div>`;
+  h+=`<div style="padding:16px 0;text-align:center"><div style="font-size:12px;color:#475569;margin-bottom:10px">No milestones yet</div><button onclick="generateMilestones()" class="btn" style="width:100%;padding:12px;font-size:13px;font-weight:700;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;cursor:pointer">Generate Timeline</button></div>`;
 
   // ROW 4: Collapsible detail sections
 
