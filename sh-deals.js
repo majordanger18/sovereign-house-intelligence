@@ -86,51 +86,18 @@ async function getNextAction(dealId){
   const deal=deals.find(d=>d.id===dealId);
   if(!deal)return null;
 
-  // Fetch financing record
-  let financing=null;
-  try{
-    const fRes=await fetch(SB+'/rest/v1/deal_financing?deal_id=eq.'+dealId+'&select=*',{headers:HD});
-    const fData=await fRes.json();
-    if(fData&&fData.length>0)financing=fData[0];
-  }catch(e){}
+  // Fetch all deal data in parallel
+  const [finArr, sowLines, bids, expenses, draws, calcArr] = await Promise.all([
+    fetch(SB+'/rest/v1/deal_financing?deal_id=eq.'+dealId+'&select=*',{headers:HD}).then(r=>r.json()).catch(()=>[]),
+    fetch(SB+'/rest/v1/renovation_sow_lines?deal_id=eq.'+dealId+'&select=*',{headers:HD}).then(r=>r.json()).catch(()=>[]),
+    fetch(SB+'/rest/v1/contractor_bids?deal_id=eq.'+dealId+'&select=*',{headers:HD}).then(r=>r.json()).catch(()=>[]),
+    fetch(SB+'/rest/v1/renovation_expenses?deal_id=eq.'+dealId+'&select=*',{headers:HD}).then(r=>r.json()).catch(()=>[]),
+    fetch(SB+'/rest/v1/renovation_draws?deal_id=eq.'+dealId+'&select=*',{headers:HD}).then(r=>r.json()).catch(()=>[]),
+    deal.property_id?fetch(SB+'/rest/v1/calc_history?property_id=eq.'+deal.property_id+'&order=created_at.desc&limit=1',{headers:HD}).then(r=>r.json()).catch(()=>[]):Promise.resolve([])
+  ]);
 
-  // Fetch SOW lines
-  let sowLines=[];
-  try{
-    const sRes=await fetch(SB+'/rest/v1/renovation_sow_lines?deal_id=eq.'+dealId+'&select=*',{headers:HD});
-    sowLines=await sRes.json()||[];
-  }catch(e){}
-
-  // Fetch bids
-  let bids=[];
-  try{
-    const bRes=await fetch(SB+'/rest/v1/contractor_bids?deal_id=eq.'+dealId+'&select=*',{headers:HD});
-    bids=await bRes.json()||[];
-  }catch(e){}
-
-  // Fetch expenses
-  let expenses=[];
-  try{
-    const eRes=await fetch(SB+'/rest/v1/renovation_expenses?deal_id=eq.'+dealId+'&select=*',{headers:HD});
-    expenses=await eRes.json()||[];
-  }catch(e){}
-
-  // Fetch draws
-  let draws=[];
-  try{
-    const dRes=await fetch(SB+'/rest/v1/renovation_draws?deal_id=eq.'+dealId+'&select=*',{headers:HD});
-    draws=await dRes.json()||[];
-  }catch(e){}
-
-  // Fetch calc_history for original underwriting
-  let calcHistory=null;
-  if(deal.property_id){
-    try{
-      const cRes=await fetch(SB+'/rest/v1/calc_history?property_id=eq.'+deal.property_id+'&order=created_at.desc&limit=1',{headers:HD});
-      const cData=await cRes.json();
-      if(cData&&cData.length>0)calcHistory=cData[0];
-    }catch(e){}
-  }
+  const financing=finArr.length>0?finArr[0]:null;
+  const calcHistory=calcArr.length>0?calcArr[0]:null;
 
   // Calculate helper values
   const totalBudget=deal.contracted_reno_amount||sowLines.reduce((s,l)=>s+(l.planned_budget||0),0)||0;
