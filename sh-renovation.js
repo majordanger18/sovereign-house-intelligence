@@ -107,8 +107,12 @@ async function renderRenoView(){
   }
   // Sub-view pills
   const tkOpen=renoTasks.filter(t=>t.status!=='done').length;
+  const _now=new Date();_now.setHours(0,0,0,0);
+  const tkUrgent=renoTasks.filter(t=>t.status!=='done'&&(t.priority==='urgent'||(t.due_date&&new Date(t.due_date+"T00:00:00")<_now))).length;
   const sowCt=renoBLines.filter(l=>l.lender_approved>0||l.planned_budget>0||l.total_spent>0).length;
-  html+=`<div class="reno-pills"><button class="reno-pill${renoSub==="project"?" active":""}" data-pill="project" onclick="switchRenoSub('project')">Project</button><button class="reno-pill${renoSub==="sow"?" active":""}" data-pill="sow" onclick="switchRenoSub('sow')">SOW${sowCt?' ('+sowCt+')':''}</button><button class="reno-pill${renoSub==="draws"?" active":""}" data-pill="draws" onclick="switchRenoSub('draws')">Draws</button><button class="reno-pill${renoSub==="spend"?" active":""}" data-pill="spend" onclick="switchRenoSub('spend')">Spend</button><button class="reno-pill${renoSub==="tasks"?" active":""}" data-pill="tasks" onclick="switchRenoSub('tasks')">Tasks${tkOpen?' ('+tkOpen+')':''}</button><button class="reno-pill${renoSub==="docs"?" active":""}" data-pill="docs" onclick="switchRenoSub('docs')">Docs${renoDocs.length?' ('+renoDocs.length+')':''}</button></div>`;
+  const tkLabel=tkUrgent?'Tasks ⚠️ '+tkUrgent:('Tasks'+(tkOpen?' ('+tkOpen+')':''));
+  const tkStyle=tkUrgent&&renoSub!=="tasks"?';color:#f97316;border-color:rgba(249,115,22,0.4);background:rgba(249,115,22,0.08)':'';
+  html+=`<div class="reno-pills"><button class="reno-pill${renoSub==="project"?" active":""}" data-pill="project" onclick="switchRenoSub('project')">Project</button><button class="reno-pill${renoSub==="sow"?" active":""}" data-pill="sow" onclick="switchRenoSub('sow')">SOW${sowCt?' ('+sowCt+')':''}</button><button class="reno-pill${renoSub==="draws"?" active":""}" data-pill="draws" onclick="switchRenoSub('draws')">Draws</button><button class="reno-pill${renoSub==="spend"?" active":""}" data-pill="spend" onclick="switchRenoSub('spend')">Spend</button><button class="reno-pill${renoSub==="tasks"?" active":""}" data-pill="tasks" onclick="switchRenoSub('tasks')" style="${tkStyle}">${tkLabel}</button><button class="reno-pill${renoSub==="docs"?" active":""}" data-pill="docs" onclick="switchRenoSub('docs')">Docs${renoDocs.length?' ('+renoDocs.length+')':''}</button></div>`;
   // Content placeholder
   html+=`<div id="renoContent"><div style="text-align:center;padding:40px"><div style="width:24px;height:24px;border:2px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto"></div></div></div>`;
   html+='</div>';
@@ -240,15 +244,6 @@ function renderProjectV(el){
   const ts=ov?.total_spent||0,rem=tb-ts;
   const pct=tb>0?(ts/tb*100):0;
   let h='';
-
-  // Task warning bar
-  const urgTasks=renoTasks.filter(t=>t.status!=='done'&&t.priority==='urgent').length;
-  const now=new Date();now.setHours(0,0,0,0);
-  const overdueTasks=renoTasks.filter(t=>t.status!=='done'&&t.due_date&&new Date(t.due_date+"T00:00:00")<now).length;
-  if(urgTasks||overdueTasks){
-    const parts=[];if(urgTasks)parts.push(urgTasks+" urgent task"+(urgTasks>1?"s":""));if(overdueTasks)parts.push(overdueTasks+" overdue");
-    h+=`<div onclick="switchRenoSub('tasks')" style="padding:8px 12px;border-radius:10px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);margin-bottom:10px;cursor:pointer;font-size:12px;color:#f97316;font-weight:600">⚠️ ${parts.join(" · ")} → Tasks tab</div>`;
-  }
 
   // ROW 1: Two SVG gauges
   const budgetColor=pct>80?"#ef4444":pct>60?"#eab308":"#4ade80";
