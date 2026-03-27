@@ -1,4 +1,5 @@
 // Sovereign House Intelligence — Dashboard & Data
+let currentSort="sovereign_score";
 // ═══ DATA ═══
 async function loadData(){
   try{
@@ -103,15 +104,25 @@ function renderDashboard(){
   const dd=document.getElementById("dealsDot");
   if(dd)dd.style.display=activeDeals.length>0?"block":"none";
 
-  // Feed filter pills — only visible on feed views
+  // Feed filter pills — primary pills visible, secondary filters in dropdown
   const feedFilters=document.getElementById("feedFilters");
-  const fD=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["watched",`★ (${st.watched})`],["queued",`Queued (${st.queued})`],["reduced",`Reduced (${st.reduced})`],["golf",`Golf (${st.golf})`],["pending",`Pending (${st.pending})`],["passed",`Passed (${passedCount})`]];
-  feedFilters.innerHTML=fD.map(([v,l])=>{
+  const primaryPills=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["watched",`★ (${st.watched})`],["reduced",`Reduced (${st.reduced})`]];
+  const dropdownFilterViews=["maybe","queued","golf","pending","passed"];
+  feedFilters.innerHTML=primaryPills.map(([v,l])=>{
     const isOn=view===v;
-    if(v==="passed")return`<button class="filt${isOn?" on-red":""}" onclick="setView('${v}')">${l}</button>`;
     return`<button class="filt${isOn?" on":""}" onclick="setView('${v}')">${l}</button>`;
   }).join("");
   feedFilters.style.display=isFeed?"":"none";
+
+  // Rebuild sortBox with sort options + filter section
+  if(isFeed){
+    const sortBox=document.getElementById("sortBox");
+    const sortOpts=[["sovereign_score","Score ↓"],["price_asc","Price ↑"],["price_desc","Price ↓"],["dom","DOM ↓"],["ppsf","$/sf ↑"],["oldest","Oldest"],["newest","Newest"]];
+    const filterOpts=[["filter_maybe",`Maybe (${st.aiMaybe})`],["filter_queued",`Queued (${st.queued})`],["filter_golf",`Golf (${st.golf})`],["filter_pending",`Pending (${st.pending})`],["filter_passed",`Passed (${passedCount})`]];
+    sortBox.innerHTML=sortOpts.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")+`<option disabled>── FILTER ──</option>`+filterOpts.map(([v,l])=>`<option value="${v}">${l}</option>`).join("");
+    if(dropdownFilterViews.includes(view)){sortBox.value="filter_"+view;}
+    else{sortBox.value=currentSort;}
+  }
 
   renderList();
 }
@@ -129,7 +140,7 @@ function togglePulse(){
 function renderList(){
   if(view==="deals"){renderDeals();return;}
   const q=document.getElementById("searchBox").value.toLowerCase();
-  const sortBy=document.getElementById("sortBox").value;
+  const sortBy=currentSort;
   let list=[...props];
   list=list.filter(p=>{
     if(view==="passed")return p.disposition==="passed"&&(!q||(p.address||"").toLowerCase().includes(q)||(p.mls_number||"").toLowerCase().includes(q)||(p.zip_code||"").includes(q));
@@ -208,4 +219,4 @@ function renderList(){
 }
 
 document.getElementById("searchBox").addEventListener("input",()=>{const v=document.getElementById("searchBox").value;const c=document.getElementById("searchClear");if(c)c.style.display=v?"flex":"none";renderList();});
-document.getElementById("sortBox").addEventListener("change",renderList);
+document.getElementById("sortBox").addEventListener("change",function(){const v=this.value;if(v.startsWith("filter_")){setView(v.replace("filter_",""));}else{currentSort=v;if(["maybe","queued","golf","pending","passed"].includes(view)){setView("all");}else{renderList();}}});
