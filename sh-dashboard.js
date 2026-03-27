@@ -106,8 +106,8 @@ function renderDashboard(){
 
   // Feed filter pills — primary pills visible, secondary filters in dropdown
   const feedFilters=document.getElementById("feedFilters");
-  const primaryPills=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["watched",`★ (${st.watched})`],["reduced",`Reduced (${st.reduced})`]];
-  const dropdownFilterViews=["maybe","queued","golf","pending","passed"];
+  const primaryPills=[["all",`All (${st.total})`],["fresh",`New (${st.fresh})`],["go",`GO (${st.aiGo})`],["maybe",`Maybe (${st.aiMaybe})`],["watched",`★ (${st.watched})`]];
+  const dropdownFilterViews=["queued","golf","reduced","pending","passed"];
   feedFilters.innerHTML=primaryPills.map(([v,l])=>{
     const isOn=view===v;
     return`<button class="filt${isOn?" on":""}" onclick="setView('${v}')">${l}</button>`;
@@ -118,7 +118,7 @@ function renderDashboard(){
   if(isFeed){
     const sortBox=document.getElementById("sortBox");
     const sortOpts=[["sovereign_score","Score ↓"],["price_asc","Price ↑"],["price_desc","Price ↓"],["dom","DOM ↓"],["ppsf","$/sf ↑"],["oldest","Oldest"],["newest","Newest"]];
-    const filterOpts=[["filter_maybe",`Maybe (${st.aiMaybe})`],["filter_queued",`Queued (${st.queued})`],["filter_golf",`Golf (${st.golf})`],["filter_pending",`Pending (${st.pending})`],["filter_passed",`Passed (${passedCount})`]];
+    const filterOpts=[["filter_queued",`Queued (${st.queued})`],["filter_golf",`Golf (${st.golf})`],["filter_reduced",`Reduced (${st.reduced})`],["filter_pending",`Pending (${st.pending})`],["filter_passed",`Passed (${passedCount})`]];
     sortBox.innerHTML=sortOpts.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")+`<option disabled>── FILTER ──</option>`+filterOpts.map(([v,l])=>`<option value="${v}">${l}</option>`).join("");
     if(dropdownFilterViews.includes(view)){sortBox.value="filter_"+view;}
     else{sortBox.value=currentSort;}
