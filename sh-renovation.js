@@ -173,10 +173,30 @@ async function loadRenoData(did){
     const docs=await sb("deal_documents?deal_id=eq."+did+"&order=created_at.desc");
     renoDocs=Array.isArray(docs)?docs:[];
   }catch(e){console.error("[SH] Docs load error (non-fatal):",e);renoDocs=[];}
+  updatePillCounts();
 }
 
 function switchRenoDeal(did){renoDealId=did;renoSub="project";renoExpandedLine=null;renderRenoView();}
 function switchRenoSub(s){renoSub=s;renoExpandedLine=null;renderRenoSub();}
+
+function updatePillCounts(){
+  const tkOpen=renoTasks.filter(t=>t.status!=='done').length;
+  const _now=new Date();_now.setHours(0,0,0,0);
+  const urgentCount=renoTasks.filter(t=>t.status!=='done'&&t.priority==='urgent').length;
+  const overdueCount=renoTasks.filter(t=>t.status!=='done'&&t.due_date&&new Date(t.due_date+"T00:00:00")<_now).length;
+  const taskAlert=urgentCount+overdueCount;
+  const taskPill=document.querySelector('.reno-pill[data-pill="tasks"]');
+  if(taskPill){
+    taskPill.innerHTML=taskAlert>0?'Tasks <span style="background:#f97316;color:#000;font-size:9px;font-weight:800;padding:1px 5px;border-radius:8px;margin-left:3px;">'+taskAlert+'</span>':(tkOpen?'Tasks ('+tkOpen+')':'Tasks');
+    taskPill.style.color=taskAlert>0?'#f97316':'';
+    taskPill.style.borderColor=taskAlert>0?'rgba(249,115,22,0.3)':'';
+  }
+  const docPill=document.querySelector('.reno-pill[data-pill="docs"]');
+  if(docPill)docPill.innerHTML='Docs'+(renoDocs.length?' ('+renoDocs.length+')':'');
+  const sowPill=document.querySelector('.reno-pill[data-pill="sow"]');
+  const sowCt=renoBLines.filter(l=>l.lender_approved>0||l.planned_budget>0||l.total_spent>0).length;
+  if(sowPill)sowPill.innerHTML='SOW'+(sowCt?' ('+sowCt+')':'');
+}
 
 function renderRenoSub(){
   const el=document.getElementById("renoContent");if(!el)return;
@@ -187,6 +207,7 @@ function renderRenoSub(){
   else if(renoSub==="spend")renderExpV(el);
   else if(renoSub==="tasks")renderTasksV(el);
   else if(renoSub==="docs")renderDocsV(el);
+  updatePillCounts();
 }
 
 // ═══ PROJECT VIEW (Command Center) ═══
