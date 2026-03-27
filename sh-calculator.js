@@ -21,8 +21,6 @@ async function openCalc(id){
 async function openCalcForDeal(dealId){
   const d=deals.find(x=>x.id===dealId);if(!d)return;
   editingDealId=dealId;
-  // Close deal modal — calc will re-open it when done
-  document.getElementById("dealModal").style.display="none";
   // Use the real property if available, otherwise build from deal data
   let p=props.find(x=>x.id===d.property_id);
   if(!p){
@@ -35,6 +33,8 @@ async function openCalcForDeal(dealId){
   const ch=await sb(`calc_history?mls_number=eq.${p.mls_number}&order=created_at.desc`);
   calcHistory=Array.isArray(ch)?ch:[];
   renderCalc(calcHistory.length>0?calcHistory[0]:null);
+  // Close deal modal and open calc in the same frame — no flash
+  document.getElementById("dealModal").style.display="none";
   document.getElementById("calcModal").style.display="block";
   document.body.style.overflow="hidden";
 }

@@ -726,7 +726,7 @@ async function renderOriginalUnderwriting(dealId,propertyId){
     ?'Calculator · '+savedDate
     :'AI Screener · '+savedDate;
 
-  const editOnclick="openCalcForDeal('"+dealId+"')";
+  const editOnclick="event.stopPropagation();openCalcForDeal('"+dealId+"')";
 
   let rows='';
 

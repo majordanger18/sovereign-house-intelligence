@@ -831,10 +831,13 @@ async function saveNewDraw(num){
 // ═══ EXPENSES VIEW ═══
 function renderExpV(el){
   let h='';
-  // Receipt upload
-  h+=`<div style="margin-bottom:12px"><button onclick="openReceiptUpload()" class="btn" style="width:100%;padding:12px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">📸 Upload Receipt or Invoice</button></div>`;
-  h+=`<div style="font-size:10px;color:#475569;text-align:center;margin-bottom:10px">Or enter manually below</div>`;
-  // Quick entry form
+  // Action buttons row
+  h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">`;
+  h+=`<button onclick="toggleExpForm()" id="expFormToggle" class="btn" style="padding:10px;font-size:13px;background:transparent;border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">+ Log Expense</button>`;
+  h+=`<button onclick="openReceiptUpload()" class="btn" style="padding:10px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">📷 Scan Receipt</button>`;
+  h+=`</div>`;
+  // Collapsible expense form
+  h+=`<div id="expFormArea" style="display:none">`;
   h+=`<div class="reno-ef"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:10px">LOG EXPENSE</div><div class="reno-eg">`;
   h+=`<div class="fld"><label>DATE</label><input id="exD" type="date" class="cinput" value="${new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'})}"/></div>`;
   const sowFiltered=renoSOW.filter(l=>Number(l.lender_approved)>0||Number(l.planned_budget)>0);
@@ -847,7 +850,6 @@ function renderExpV(el){
   h+=`<div class="fld"><label>TYPE</label><select id="exT" class="cinput"><option value="material">Material</option><option value="labor">Labor</option><option value="permit">Permit</option><option value="fee">Fee</option><option value="other">Other</option></select></div>`;
   h+=`<div class="fld"><label>PAYMENT</label><select id="exPm" class="cinput"><option value="">—</option><option value="cash">Cash</option><option value="loc">Line of Credit</option><option value="credit_card">Credit Card</option><option value="check">Check</option><option value="wire">Wire</option></select></div>`;
   h+=`</div>`;
-
   // More details
   h+=`<button id="exMoreBtn" onclick="toggleExpMore()" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:700;cursor:pointer;padding:4px 0;margin-bottom:8px">More Details ▸</button>`;
   h+=`<div id="exMore" style="display:none"><div class="reno-eg">`;
@@ -858,7 +860,7 @@ function renderExpV(el){
   h+=`<div class="fld"><label>QUANTITY</label><input id="exQ" type="number" class="cinput" placeholder="0"/></div>`;
   h+=`<div class="fld"><label>NOTES</label><input id="exN" type="text" class="cinput" placeholder="Notes"/></div>`;
   h+=`</div></div>`;
-  h+=`<button onclick="saveExpense()" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;margin-top:8px">Log Expense</button></div>`;
+  h+=`<button onclick="saveExpense()" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;margin-top:8px">Log Expense</button></div></div>`;
 
   // Filters
   h+=`<div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;align-items:end">`;
@@ -872,6 +874,15 @@ function renderExpV(el){
   h+=`<div id="renoExpLog" style="margin-top:12px"></div>`;
   el.innerHTML=h;
   renderExpLog();
+}
+
+function toggleExpForm(){
+  const area=document.getElementById("expFormArea");
+  if(!area)return;
+  const show=area.style.display==="none";
+  area.style.display=show?"block":"none";
+  const btn=document.getElementById("expFormToggle");
+  if(btn)btn.textContent=show?"− Cancel":"+ Log Expense";
 }
 
 function toggleExpMore(){
@@ -937,8 +948,10 @@ async function saveExpense(){
       if(expId)fetch(SB+"/rest/v1/deal_documents",{method:"POST",headers:RENO_WH,body:JSON.stringify({deal_id:renoDealId,file_url:_pendingReceiptUrl,file_name:(p.vendor_name||"Receipt")+" receipt",file_type:"jpg",doc_category:"receipt",doc_subcategory:"expense_receipt",caption:"Auto-indexed from expense",uploaded_by:window.SH_USER?.email||"system"})}).catch(e=>console.error("Doc bridge:",e));
       _pendingReceiptUrl=null;
     }
-    // Clear form (keep date and payment method)
+    // Clear form and collapse
     ["exDe","exA","exV","exPn","exUC","exQ","exN"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
+    const fa=document.getElementById("expFormArea");if(fa)fa.style.display="none";
+    const fb=document.getElementById("expFormToggle");if(fb)fb.textContent="+ Log Expense";
     showRenoToast("Expense logged");
     await loadRenoData(renoDealId);renderRenoSub();
   }catch(e){console.error("Save expense failed:",e);showRenoToast("Failed to save expense");}
