@@ -58,12 +58,12 @@
     <div id="alertToast"></div>
     <div id="pulseArea"></div>
     <div id="feedFilters" class="filters" style="display:flex;gap:6px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:0 16px 8px 0;"></div>
-    <div class="search-row" style="padding:0;">
+    <div class="search-row">
       <div style="flex:1;position:relative">
         <input id="searchBox" type="text" placeholder="Search address, MLS#, zip..."/>
         <button id="searchClear" onclick="document.getElementById('searchBox').value='';document.getElementById('searchBox').dispatchEvent(new Event('input'));this.style.display='none';" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,0.08);border:none;color:#94a3b8;font-size:12px;cursor:pointer;align-items:center;justify-content:center">✕</button>
       </div>
-      <select id="sortBox" style="margin-right:0;padding-right:10px;">
+      <select id="sortBox">
         <option value="sovereign_score">Score ↓</option>
         <option value="price_asc">Price ↑</option>
         <option value="price_desc">Price ↓</option>

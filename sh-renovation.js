@@ -991,13 +991,13 @@ function renderExpV(el){
   h+=`<button onclick="saveExpense()" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;margin-top:8px">Log Expense</button></div></div>`;
 
   // Filters
-  h+=`<div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;align-items:end">`;
-  h+=`<div class="fld" style="margin-bottom:0;min-width:120px"><label>SOW LINE</label><select id="efS" onchange="renoExpF.sow=this.value;renderExpLog()" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px"><option value="all">All Lines</option>`;
+  h+=`<div class="reno-exp-row" style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;align-items:end">`;
+  h+=`<div class="fld" style="margin-bottom:0;flex:2;min-width:0"><label>SOW LINE</label><select id="efS" onchange="renoExpF.sow=this.value;renderExpLog()" class="cinput" style="min-height:44px;font-size:14px;padding:10px 12px"><option value="all">All Lines</option>`;
   renoSOW.forEach(l=>{h+=`<option value="${l.id}"${renoExpF.sow===l.id?" selected":""}>#${l.line_number} ${esc(l.category||"")}</option>`;});
   h+=`</select></div>`;
-  h+=`<div class="fld" style="margin-bottom:0;min-width:100px"><label>TYPE</label><select id="efT" onchange="renoExpF.type=this.value;renderExpLog()" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px"><option value="all">All</option><option value="material"${renoExpF.type==="material"?" selected":""}>Material</option><option value="labor"${renoExpF.type==="labor"?" selected":""}>Labor</option><option value="permit"${renoExpF.type==="permit"?" selected":""}>Permit</option><option value="fee"${renoExpF.type==="fee"?" selected":""}>Fee</option><option value="other"${renoExpF.type==="other"?" selected":""}>Other</option></select></div>`;
-  h+=`<div class="fld" style="margin-bottom:0"><label>FROM</label><input id="efF" type="date" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${renoExpF.from}" onchange="renoExpF.from=this.value;renderExpLog()"/></div>`;
-  h+=`<div class="fld" style="margin-bottom:0"><label>TO</label><input id="efTo" type="date" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="${renoExpF.to}" onchange="renoExpF.to=this.value;renderExpLog()"/></div>`;
+  h+=`<div class="fld" style="margin-bottom:0;flex:1;min-width:0"><label>TYPE</label><select id="efT" onchange="renoExpF.type=this.value;renderExpLog()" class="cinput" style="min-height:44px;font-size:14px;padding:10px 12px"><option value="all">All</option><option value="material"${renoExpF.type==="material"?" selected":""}>Material</option><option value="labor"${renoExpF.type==="labor"?" selected":""}>Labor</option><option value="permit"${renoExpF.type==="permit"?" selected":""}>Permit</option><option value="fee"${renoExpF.type==="fee"?" selected":""}>Fee</option><option value="other"${renoExpF.type==="other"?" selected":""}>Other</option></select></div>`;
+  h+=`<div class="fld" style="margin-bottom:0;flex:1;min-width:0"><label>FROM</label><input id="efF" type="date" class="cinput" style="min-height:44px;font-size:14px;padding:10px 12px" value="${renoExpF.from}" onchange="renoExpF.from=this.value;renderExpLog()"/></div>`;
+  h+=`<div class="fld" style="margin-bottom:0;flex:1;min-width:0"><label>TO</label><input id="efTo" type="date" class="cinput" style="min-height:44px;font-size:14px;padding:10px 12px" value="${renoExpF.to}" onchange="renoExpF.to=this.value;renderExpLog()"/></div>`;
   h+=`</div>`;
   h+=`<div id="renoExpLog" style="margin-top:12px"></div>`;
   el.innerHTML=h;
