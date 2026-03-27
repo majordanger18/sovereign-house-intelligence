@@ -68,7 +68,7 @@ function $r(n){if(n==null)return"—";const v=Number(n);if(isNaN(v))return"—";
 
 // ═══ TAB INJECTION ═══
 const _origRD=renderDashboard;
-renderDashboard=function(){_origRD();injectRenoTab();if(view==="renovation")renderRenoView();};
+renderDashboard=function(){_origRD();injectRenoTab();if(view==="renovation"){renderRenoView();}};
 const _origSV=setView;
 setView=function(v){if(v==="renovation"){view="renovation";renderDashboard();return;}_origSV(v);};
 
@@ -127,6 +127,7 @@ async function renderRenoView(){
 }
 
 async function loadRenoData(did){
+  if(view!=="renovation")return;
   console.log("[SH] loadRenoData called with deal_id:",did,"(type:"+typeof did+")");
   console.log("[SH] SOW fetch URL:",SB+"/rest/v1/renovation_sow_lines?deal_id=eq."+did+"&order=line_number");
   try{
@@ -185,6 +186,36 @@ function renderRenoSub(){
 }
 
 // ═══ PROJECT VIEW (Command Center) ═══
+async function generateMilestones(){
+  if(!renoDealId||!renoDeal)return;
+  const btn=event.target;
+  btn.disabled=true;
+  btn.textContent='Generating...';
+  try{
+    let apiKey=localStorage.getItem("sh_claude_key");
+    if(!apiKey){apiKey=prompt("Enter your Claude API key:");if(!apiKey){btn.disabled=false;btn.textContent='Generate Timeline';return;}localStorage.setItem("sh_claude_key",apiKey);}
+    const sowSummary=renoSOW.map(l=>l.line_number+'. '+l.description+' ($'+(l.planned_budget||l.lender_approved||0).toLocaleString()+')').join('\n');
+    const holdMonths=renoFin?.loan_term_months||8;
+    const startDate=renoFin?.funded_date?new Date(new Date(renoFin.funded_date).getTime()+7*864e5).toISOString().split('T')[0]:new Date(Date.now()+7*864e5).toISOString().split('T')[0];
+    const budget=renoDeal.contracted_reno_amount||renoSOW.reduce((s,l)=>s+(l.planned_budget||0),0)||250000;
+    const response=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:`You are planning a renovation timeline for a luxury home flip. Respond ONLY with a JSON array, no markdown, no backticks.\n\nProperty: ${renoDeal.address||'Luxury home'}\nBudget: $${budget.toLocaleString()}\nHold period: ${holdMonths} months\nStart date: ${startDate}\nMust complete within ${holdMonths-1} months.\n\nSOW Lines:\n${sowSummary}\n\nGenerate 6-10 phases in construction order:\n{"phase_name":"Demo","phase_order":1,"description":"what is included","planned_start":"YYYY-MM-DD","planned_end":"YYYY-MM-DD","planned_duration_days":number}\n\nPhases should be sequential. Leave 1-2 weeks buffer before hold period ends.`}]})
+    });
+    if(!response.ok){if(response.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+response.status);}
+    const data=await response.json();
+    const text=data.content[0].text;
+    const milestones=JSON.parse(text.replace(/```json|```/g,'').trim());
+    for(const m of milestones){
+      await fetch(SB+'/rest/v1/renovation_milestones',{method:'POST',headers:RENO_WH,body:JSON.stringify({deal_id:renoDealId,phase_name:m.phase_name,phase_order:m.phase_order,description:m.description,planned_start:m.planned_start,planned_end:m.planned_end,planned_duration_days:m.planned_duration_days,status:'not_started'})});
+    }
+    showRenoToast(milestones.length+' milestones generated');
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){console.error('Milestone generation failed:',e);showRenoToast('Failed to generate milestones');}
+  finally{btn.disabled=false;btn.textContent='Generate Timeline';}
+}
+
 function renderGauge(pct,label,detail,color){
   const r=60,cx=70,cy=70,circ=2*Math.PI*r;
   const offset=circ-(Math.min(pct,100)/100)*circ;
