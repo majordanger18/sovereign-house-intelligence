@@ -16,7 +16,7 @@ const DRAW_PIPE=[
   {key:"disbursed",label:"Disbursed",df:"date_disbursed"}
 ];
 
-let renoDealId=null,renoSub="project",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null,renoTasks=[],renoChangeOrders=[];
+let renoDealId=null,renoSub="project",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null,renoTasks=[],renoChangeOrders=[],renoMilestones=[];
 let renoExpF={sow:"all",type:"all",from:"",to:""};
 let renoDocs=[],renoDocFilter="all",renoDocRoom="all",renoDocPhase="all",renoCompareMode=false,renoCompareRoom="kitchen";
 let renoTaskFilter={cat:"all",assignee:"all"};
@@ -173,6 +173,11 @@ async function loadRenoData(did){
     const docs=await sb("deal_documents?deal_id=eq."+did+"&order=created_at.desc");
     renoDocs=Array.isArray(docs)?docs:[];
   }catch(e){console.error("[SH] Docs load error (non-fatal):",e);renoDocs=[];}
+  // Milestones fetch
+  try{
+    const ms=await sb("renovation_milestones?deal_id=eq."+did+"&order=phase_order");
+    renoMilestones=Array.isArray(ms)?ms:[];
+  }catch(e){console.error("[SH] Milestones load error (non-fatal):",e);renoMilestones=[];}
   updatePillCounts();
 }
 
@@ -285,8 +290,31 @@ function renderProjectV(el){
   const status=getProjectStatus(pct,timePct);
   h+=`<div style="text-align:center;font-size:14px;font-weight:600;color:${status.color};padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">${status.text}</div>`;
 
-  // ROW 3: Milestone placeholder
-  h+=`<div style="padding:16px 0;text-align:center"><div style="font-size:12px;color:#475569;margin-bottom:10px">No milestones yet</div><button onclick="generateMilestones()" class="btn" style="width:100%;padding:12px;font-size:13px;font-weight:700;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;cursor:pointer">Generate Timeline</button></div>`;
+  // ROW 3: Milestones
+  if(renoMilestones.length===0){
+    h+=`<div style="padding:16px 0;text-align:center"><div style="font-size:12px;color:#475569;margin-bottom:10px">No milestones yet</div><button onclick="generateMilestones()" class="btn" style="width:100%;padding:12px;font-size:13px;font-weight:700;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;cursor:pointer">Generate Timeline</button></div>`;
+  }else{
+    const msTotal=renoMilestones.length;
+    const msDone=renoMilestones.filter(m=>m.status==='complete').length;
+    const msInProg=renoMilestones.filter(m=>m.status==='in_progress').length;
+    const msPct=msTotal>0?Math.round(msDone/msTotal*100):0;
+    h+=`<div style="padding:12px 0">`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:10px;font-weight:800;letter-spacing:1.5px;color:#d4af37">MILESTONES</span><span style="font-size:11px;color:#94a3b8;font-weight:600">${msDone}/${msTotal} complete</span></div>`;
+    h+=`<div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;margin-bottom:10px"><div style="height:100%;width:${msPct}%;background:linear-gradient(90deg,#22c55e,#4ade80);border-radius:3px;transition:width 0.3s"></div></div>`;
+    renoMilestones.forEach(m=>{
+      const sc=m.status==='complete'?'#22c55e':m.status==='in_progress'?'#3b82f6':'#475569';
+      const icon=m.status==='complete'?'✅':m.status==='in_progress'?'🔨':'○';
+      const dates=m.planned_start&&m.planned_end?new Date(m.planned_start+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'})+' – '+new Date(m.planned_end+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'}):'';
+      h+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">`;
+      h+=`<span style="font-size:14px;flex-shrink:0;width:20px;text-align:center">${icon}</span>`;
+      h+=`<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:${sc}">${esc(m.phase_name)}</div>`;
+      if(m.description)h+=`<div style="font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.description)}</div>`;
+      h+=`</div>`;
+      if(dates)h+=`<span style="font-size:10px;color:#475569;flex-shrink:0;white-space:nowrap">${dates}</span>`;
+      h+=`</div>`;
+    });
+    h+=`</div>`;
+  }
 
   // ROW 4: Collapsible detail sections
 
