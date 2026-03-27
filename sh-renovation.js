@@ -2303,7 +2303,7 @@ function renderDocsV(el){
     filteredPhotos.forEach((p,i)=>{
       const pc=DOC_PHASE_COLORS[p.phase]||'#64748b';
       h+=`<div class="docs-thumb" onclick="openDocLightbox(${i},'photo')">
-        <img src="${esc(p.file_url)}" alt="${esc(p.caption||p.ai_description||'')}" loading="lazy"/>
+        <img src="${esc(p.file_url)}${p.file_url&&p.file_url.includes('/storage/v1/')?'?width=300&height=300':''}" alt="${esc(p.caption||p.ai_description||'')}" loading="lazy" width="200" height="200" style="object-fit:cover;width:100%;aspect-ratio:1;border-radius:8px;"/>
         ${p.is_starred?'<div style="position:absolute;top:4px;right:4px;font-size:14px;">⭐</div>':''}
         <div class="docs-meta">
           <div style="font-size:11px;font-weight:600;color:#e2e8f0">${roomLabel(p.room)}</div>
@@ -2366,7 +2366,7 @@ function renderRoomCompare(photos){
     const pc=DOC_PHASE_COLORS[phase]||'#64748b';
     h+=`<div class="docs-compare-col">
       <div style="text-align:center;font-size:10px;font-weight:700;color:${pc};letter-spacing:1px;margin-bottom:6px">${roomLabel(phase).toUpperCase()}</div>
-      ${pp.length?pp.map(p=>`<img src="${esc(p.file_url)}" style="width:100%;border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="openDocLightbox(${renoDocs.indexOf(p)},'photo')" loading="lazy"/>`).join(''):`<div style="padding:20px;text-align:center;font-size:11px;color:#333;border:1px dashed rgba(255,255,255,0.08);border-radius:8px">—</div>`}
+      ${pp.length?pp.map(p=>`<img src="${esc(p.file_url)}${p.file_url&&p.file_url.includes('/storage/v1/')?'?width=300&height=300':''}" width="200" height="200" style="object-fit:cover;width:100%;aspect-ratio:1;border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="openDocLightbox(${renoDocs.indexOf(p)},'photo')" loading="lazy"/>`).join(''):`<div style="padding:20px;text-align:center;font-size:11px;color:#333;border:1px dashed rgba(255,255,255,0.08);border-radius:8px">—</div>`}
     </div>`;
   });
   h+=`</div>`;
