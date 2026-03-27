@@ -3,14 +3,17 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,viewport-fit=cover"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="theme-color" content="#09090b"/>
 <title>Sovereign House Intelligence v3.2</title>
-<style>body{background:#0a0a0f;color:#fff;margin:0;}html{background:#0a0a0f;}</style>
+<style>html,body,#loading{background:#0a0a0f;color:#fff;margin:0;}</style>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="icon" type="image/x-icon" href="/favicon.ico"/>
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png"/>
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"/>
 <link rel="stylesheet" href="styles.css"/>
 </head>
 <body style="background:#0a0a0f;color:#fff;margin:0;">
@@ -30,7 +33,7 @@
   </div>
 </div>
 
-<div id="loading" style="min-height:100dvh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+<div id="loading" style="background:#0a0a0f;min-height:100dvh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px">
   <div style="width:36px;height:36px;border:3px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite"></div>
   <div style="color:#d4af37;font-size:12px;font-weight:700;letter-spacing:3px">SOVEREIGN HOUSE</div>
 </div>
