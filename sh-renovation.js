@@ -20,7 +20,7 @@ let renoDealId=null,renoSub="project",renoOv=null,renoBLines=[],renoDS=null,reno
 let renoExpF={sow:"all",type:"all",from:"",to:""};
 let renoDocs=[],renoDocFilter="all",renoDocRoom="all",renoDocPhase="all",renoCompareMode=false,renoCompareRoom="kitchen";
 let renoTaskFilter={cat:"all",assignee:"all"};
-let renoEditingTask=null,renoShowDone=false;
+let renoEditingTask=null,renoShowDone=false,renoExpandedMs=null;
 const TASK_CAT_COLORS={financing:"#22c55e",contractor:"#f97316",materials:"#3b82f6",design:"#ec4899",permits:"#6366f1",administrative:"#64748b",listing_prep:"#a855f7"};
 const TASK_ASSIGNEES={"j@jmarshallhunt.com":"King J","lisa@lisaahunt.com":"Lisa"};
 let _pendingReceiptUrl=null,_pendingFinUrl=null,_pendingSowUrl=null;
@@ -246,6 +246,47 @@ async function generateMilestones(){
   finally{btn.disabled=false;btn.textContent='Generate Timeline';}
 }
 
+function toggleMsExpand(id){renoExpandedMs=renoExpandedMs===id?null:id;renderRenoSub();}
+
+async function saveMilestone(id){
+  const m=renoMilestones.find(x=>x.id===id);if(!m)return;
+  const newStatus=document.getElementById('msStatus_'+id)?.value||m.status;
+  const actualStart=document.getElementById('msStart_'+id)?.value||null;
+  const actualEnd=document.getElementById('msEnd_'+id)?.value||null;
+  const notes=(document.getElementById('msNotes_'+id)?.value||'').trim()||null;
+  const blockingReason=(document.getElementById('msBlock_'+id)?.value||'').trim()||null;
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  const patch={status:newStatus,notes:notes,blocking_reason:blockingReason};
+  // Auto-fill actual_start when moving to in_progress
+  patch.actual_start=actualStart||(newStatus==='in_progress'&&!m.actual_start?today:m.actual_start||null);
+  // Auto-fill actual_end when moving to complete
+  patch.actual_end=actualEnd||(newStatus==='complete'&&!m.actual_end?today:m.actual_end||null);
+  // Calculate actual_duration_days
+  if(patch.actual_start&&patch.actual_end){
+    patch.actual_duration_days=Math.ceil((new Date(patch.actual_end+'T00:00:00')-new Date(patch.actual_start+'T00:00:00'))/864e5);
+  }
+  // Calculate drift_days
+  if(patch.actual_end&&m.planned_end){
+    patch.drift_days=Math.ceil((new Date(patch.actual_end+'T00:00:00')-new Date(m.planned_end+'T00:00:00'))/864e5);
+  }
+  try{
+    const res=await fetch(SB+'/rest/v1/renovation_milestones?id=eq.'+id,{method:'PATCH',headers:RENO_WH,body:JSON.stringify(patch)});
+    if(!res.ok){showRenoToast('Failed to save milestone');return;}
+    showRenoToast('Milestone updated');
+    renoExpandedMs=null;
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){console.error('Save milestone error:',e);showRenoToast('Failed to save milestone');}
+}
+
+async function regenMilestones(){
+  if(!confirm('This will delete all current milestones and generate new ones. Continue?'))return;
+  try{
+    await fetch(SB+'/rest/v1/renovation_milestones?deal_id=eq.'+renoDealId,{method:'DELETE',headers:RENO_WH});
+    renoMilestones=[];
+    await generateMilestones();
+  }catch(e){console.error('Regen milestones error:',e);showRenoToast('Failed to regenerate milestones');}
+}
+
 function renderGauge(pct,label,detail,color){
   const r=60,cx=70,cy=70,circ=2*Math.PI*r;
   const offset=circ-(Math.min(pct,100)/100)*circ;
@@ -296,24 +337,67 @@ function renderProjectV(el){
   }else{
     const msTotal=renoMilestones.length;
     const msDone=renoMilestones.filter(m=>m.status==='complete').length;
-    const msInProg=renoMilestones.filter(m=>m.status==='in_progress').length;
-    const msPct=msTotal>0?Math.round(msDone/msTotal*100):0;
-    h+=`<div style="padding:12px 0">`;
-    h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:10px;font-weight:800;letter-spacing:1.5px;color:#d4af37">MILESTONES</span><span style="font-size:11px;color:#94a3b8;font-weight:600">${msDone}/${msTotal} complete</span></div>`;
-    h+=`<div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;margin-bottom:10px"><div style="height:100%;width:${msPct}%;background:linear-gradient(90deg,#22c55e,#4ade80);border-radius:3px;transition:width 0.3s"></div></div>`;
+    const totalDays=renoMilestones.reduce((s,m)=>s+(m.planned_duration_days||1),0);
+    // Calculate total drift
+    const totalDrift=renoMilestones.filter(m=>m.drift_days!=null).reduce((s,m)=>s+m.drift_days,0);
+    const driftLabel=totalDrift===0?'On track':totalDrift<0?Math.abs(totalDrift)+'d ahead':totalDrift+'d behind';
+    const driftColor=totalDrift===0?'#94a3b8':totalDrift<0?'#4ade80':'#ef4444';
+    // Mini segmented bar for summary
+    const miniBar=renoMilestones.map(m=>{const w=((m.planned_duration_days||1)/totalDays*100);const c=m.status==='complete'?'#4ade80':m.status==='in_progress'?'#f97316':m.status==='blocked'?'#ef4444':m.status==='skipped'?'rgba(255,255,255,0.03)':'rgba(255,255,255,0.06)';return`<div style="width:${w}%;height:100%;background:${c}"></div>`;}).join('');
+    h+=`<details open style="margin-top:12px;border:1px solid rgba(255,255,255,0.06);border-radius:12px;background:rgba(255,255,255,0.02)">`;
+    h+=`<summary style="padding:12px 14px;cursor:pointer;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#d4af37;list-style:none;display:flex;align-items:center;gap:10px"><span>MILESTONES</span><div style="flex:0 0 80px;height:6px;border-radius:3px;overflow:hidden;display:flex">${miniBar}</div><span style="font-size:11px;font-weight:600;color:#94a3b8;letter-spacing:0;margin-left:auto">${msDone}/${msTotal} · <span style="color:${driftColor}">${driftLabel}</span></span></summary>`;
+    h+=`<div style="padding:0 14px 14px">`;
+    // Full segmented progress bar
+    h+=`<div style="height:8px;border-radius:4px;overflow:hidden;display:flex;margin-bottom:4px">${renoMilestones.map(m=>{const w=((m.planned_duration_days||1)/totalDays*100);const c=m.status==='complete'?'#4ade80':m.status==='in_progress'?'#f97316':m.status==='blocked'?'#ef4444':m.status==='skipped'?'rgba(255,255,255,0.03)':'rgba(255,255,255,0.06)';return`<div style="width:${w}%;height:100%;background:${c}"></div>`;}).join('')}</div>`;
+    h+=`<div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-size:11px;color:#94a3b8;font-weight:600">${msDone} of ${msTotal} complete</span><span style="font-size:11px;font-weight:600;color:${driftColor}">${driftLabel}</span></div>`;
+    // Milestone rows
     renoMilestones.forEach(m=>{
-      const sc=m.status==='complete'?'#22c55e':m.status==='in_progress'?'#3b82f6':'#475569';
-      const icon=m.status==='complete'?'✅':m.status==='in_progress'?'🔨':'○';
+      const MS_ICONS={complete:'✅',in_progress:'🔨',blocked:'⚠️',skipped:'⊘',not_started:'○'};
+      const MS_COLORS={complete:'#4ade80',in_progress:'#f97316',blocked:'#ef4444',skipped:'#475569',not_started:'#64748b'};
+      const MS_BADGES={complete:['#22c55e','Complete'],in_progress:['#f97316','In Progress'],blocked:['#ef4444','Blocked'],skipped:['#475569','Skipped'],not_started:['#64748b','Not Started']};
+      const st=m.status||'not_started';
+      const icon=MS_ICONS[st]||'○';
+      const sc=MS_COLORS[st]||'#64748b';
+      const [bc,bl]=MS_BADGES[st]||['#64748b','Not Started'];
       const dates=m.planned_start&&m.planned_end?new Date(m.planned_start+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'})+' – '+new Date(m.planned_end+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'}):'';
-      h+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">`;
-      h+=`<span style="font-size:14px;flex-shrink:0;width:20px;text-align:center">${icon}</span>`;
-      h+=`<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:${sc}">${esc(m.phase_name)}</div>`;
-      if(m.description)h+=`<div style="font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.description)}</div>`;
+      const isExp=renoExpandedMs===m.id;
+      // Day X of Y for in_progress
+      let dayInfo='';
+      if(st==='in_progress'&&m.actual_start){const elapsed=Math.max(1,Math.ceil((Date.now()-new Date(m.actual_start+'T00:00:00').getTime())/864e5));dayInfo='Day '+elapsed+' of '+(m.planned_duration_days||'?');}
+      // Drift for complete
+      let driftInfo='';
+      if(st==='complete'&&m.drift_days!=null){driftInfo=m.drift_days===0?'On time':m.drift_days<0?Math.abs(m.drift_days)+'d early':m.drift_days+'d late';}
+      h+=`<div onclick="toggleMsExpand('${m.id}')" style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer" onmouseover="this.style.background='rgba(212,175,55,0.04)'" onmouseout="this.style.background='transparent'">`;
+      h+=`<div style="display:flex;align-items:center;gap:10px">`;
+      h+=`<span style="font-size:16px;flex-shrink:0;width:24px;text-align:center;color:${sc}">${icon}</span>`;
+      h+=`<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#e2e8f0">${esc(m.phase_name)}</div>`;
+      if(m.description)h+=`<div style="font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.description)}</div>`;
       h+=`</div>`;
-      if(dates)h+=`<span style="font-size:10px;color:#475569;flex-shrink:0;white-space:nowrap">${dates}</span>`;
+      h+=`<div style="flex-shrink:0;text-align:right">`;
+      h+=`<span style="display:inline-block;font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;background:${bc}18;color:${bc};border:1px solid ${bc}30">${bl}</span>`;
+      if(dayInfo)h+=`<div style="font-size:10px;color:#f97316;margin-top:2px">${dayInfo}</div>`;
+      if(driftInfo){const dc=m.drift_days<=0?'#4ade80':'#ef4444';h+=`<div style="font-size:10px;color:${dc};margin-top:2px">${driftInfo}</div>`;}
+      if(dates)h+=`<div style="font-size:10px;color:#475569;margin-top:2px">${dates}</div>`;
+      h+=`</div></div>`;
+      // Inline edit panel
+      if(isExp){
+        const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+        h+=`<div onclick="event.stopPropagation()" style="border-left:3px solid #d4af37;background:rgba(255,255,255,0.02);padding:14px;margin:8px 0 4px;border-radius:0 12px 12px 0">`;
+        h+=`<div class="reno-eg">`;
+        h+=`<div class="fld"><label>STATUS</label><select id="msStatus_${m.id}" class="cinput"><option value="not_started"${st==='not_started'?' selected':''}>Not Started</option><option value="in_progress"${st==='in_progress'?' selected':''}>In Progress</option><option value="complete"${st==='complete'?' selected':''}>Complete</option><option value="blocked"${st==='blocked'?' selected':''}>Blocked</option><option value="skipped"${st==='skipped'?' selected':''}>Skipped</option></select></div>`;
+        h+=`<div class="fld"><label>ACTUAL START</label><input id="msStart_${m.id}" type="date" class="cinput" value="${m.actual_start||''}"/></div>`;
+        h+=`<div class="fld"><label>ACTUAL END</label><input id="msEnd_${m.id}" type="date" class="cinput" value="${m.actual_end||''}"/></div>`;
+        if(st==='blocked')h+=`<div class="fld"><label>BLOCKING REASON</label><input id="msBlock_${m.id}" type="text" class="cinput" value="${esc(m.blocking_reason||'')}" placeholder="What is blocking this phase?"/></div>`;
+        h+=`<div class="fld"><label>NOTES</label><input id="msNotes_${m.id}" type="text" class="cinput" value="${esc(m.notes||'')}" placeholder="Notes"/></div>`;
+        h+=`</div>`;
+        h+=`<div style="display:flex;gap:8px;margin-top:8px"><button onclick="saveMilestone('${m.id}')" class="btn" style="flex:1;padding:10px;font-size:13px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none">Save</button><button onclick="renoExpandedMs=null;renderRenoSub()" class="btn" style="flex:1;padding:10px;font-size:13px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700">Cancel</button></div>`;
+        h+=`</div>`;
+      }
       h+=`</div>`;
     });
-    h+=`</div>`;
+    // Regenerate link
+    h+=`<div style="text-align:center;padding:12px 0"><a onclick="regenMilestones()" style="font-size:11px;color:#475569;cursor:pointer;text-decoration:none">Regenerate Timeline</a></div>`;
+    h+=`</div></details>`;
   }
 
   // ROW 4: Collapsible detail sections
