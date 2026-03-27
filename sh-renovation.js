@@ -16,7 +16,7 @@ const DRAW_PIPE=[
   {key:"disbursed",label:"Disbursed",df:"date_disbursed"}
 ];
 
-let renoDealId=null,renoSub="budget",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null,renoTasks=[],renoChangeOrders=[];
+let renoDealId=null,renoSub="project",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null,renoTasks=[],renoChangeOrders=[];
 let renoExpF={sow:"all",type:"all",from:"",to:""};
 let renoDocs=[],renoDocFilter="all",renoDocRoom="all",renoDocPhase="all",renoCompareMode=false,renoCompareRoom="kitchen";
 let renoTaskFilter={cat:"all",assignee:"all"};
@@ -107,7 +107,8 @@ async function renderRenoView(){
   }
   // Sub-view pills
   const tkOpen=renoTasks.filter(t=>t.status!=='done').length;
-  html+=`<div class="reno-pills"><button class="reno-pill${renoSub==="budget"?" active":""}" onclick="switchRenoSub('budget')">Budget</button><button class="reno-pill${renoSub==="draws"?" active":""}" onclick="switchRenoSub('draws')">Draws</button><button class="reno-pill${renoSub==="expenses"?" active":""}" onclick="switchRenoSub('expenses')">Expenses</button><button class="reno-pill${renoSub==="tasks"?" active":""}" onclick="switchRenoSub('tasks')">Tasks${tkOpen?' ('+tkOpen+')':''}</button><button class="reno-pill${renoSub==="docs"?" active":""}" onclick="switchRenoSub('docs')">Docs${renoDocs.length?' ('+renoDocs.length+')':''}</button></div>`;
+  const sowCt=renoBLines.filter(l=>l.lender_approved>0||l.planned_budget>0||l.total_spent>0).length;
+  html+=`<div class="reno-pills"><button class="reno-pill${renoSub==="project"?" active":""}" data-pill="project" onclick="switchRenoSub('project')">Project</button><button class="reno-pill${renoSub==="sow"?" active":""}" data-pill="sow" onclick="switchRenoSub('sow')">SOW${sowCt?' ('+sowCt+')':''}</button><button class="reno-pill${renoSub==="draws"?" active":""}" data-pill="draws" onclick="switchRenoSub('draws')">Draws</button><button class="reno-pill${renoSub==="spend"?" active":""}" data-pill="spend" onclick="switchRenoSub('spend')">Spend</button><button class="reno-pill${renoSub==="tasks"?" active":""}" data-pill="tasks" onclick="switchRenoSub('tasks')">Tasks${tkOpen?' ('+tkOpen+')':''}</button><button class="reno-pill${renoSub==="docs"?" active":""}" data-pill="docs" onclick="switchRenoSub('docs')">Docs${renoDocs.length?' ('+renoDocs.length+')':''}</button></div>`;
   // Content placeholder
   html+=`<div id="renoContent"><div style="text-align:center;padding:40px"><div style="width:24px;height:24px;border:2px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto"></div></div></div>`;
   html+='</div>';
@@ -169,30 +170,43 @@ async function loadRenoData(did){
   }catch(e){console.error("[SH] Docs load error (non-fatal):",e);renoDocs=[];}
 }
 
-function switchRenoDeal(did){renoDealId=did;renoSub="budget";renoExpandedLine=null;renderRenoView();}
+function switchRenoDeal(did){renoDealId=did;renoSub="project";renoExpandedLine=null;renderRenoView();}
 function switchRenoSub(s){renoSub=s;renoExpandedLine=null;renderRenoSub();}
 
 function renderRenoSub(){
   const el=document.getElementById("renoContent");if(!el)return;
-  document.querySelectorAll(".reno-pill").forEach(p=>{p.classList.toggle("active",p.textContent.toLowerCase().startsWith(renoSub));});
-  if(renoSub==="budget")renderBudget(el);
+  document.querySelectorAll(".reno-pill").forEach(p=>{p.classList.toggle("active",p.dataset.pill===renoSub);});
+  if(renoSub==="project")renderProjectV(el);
+  else if(renoSub==="sow")renderSOWV(el);
   else if(renoSub==="draws")renderDrawsV(el);
-  else if(renoSub==="expenses")renderExpV(el);
+  else if(renoSub==="spend")renderExpV(el);
   else if(renoSub==="tasks")renderTasksV(el);
   else if(renoSub==="docs")renderDocsV(el);
 }
 
-// ═══ BUDGET VIEW ═══
-function renderBudget(el){
+// ═══ PROJECT VIEW (Command Center) ═══
+function renderGauge(pct,label,detail,color){
+  const r=60,cx=70,cy=70,circ=2*Math.PI*r;
+  const offset=circ-(Math.min(pct,100)/100)*circ;
+  return`<div style="text-align:center;flex:1"><svg width="140" height="140" viewBox="0 0 140 140"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="10" stroke-dasharray="${circ}" stroke-dashoffset="${offset}" stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})" style="transition:stroke-dashoffset 0.8s ease;"/><text x="${cx}" y="${cy}" text-anchor="middle" dy="8" style="font-size:28px;font-weight:800;fill:#fff;">${isNaN(pct)?"—":Math.round(pct)+"%"}</text></svg><div style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:1px;font-weight:600;margin-top:4px">${label}</div><div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:2px">${detail}</div></div>`;
+}
+
+function getProjectStatus(budgetPct,timePct){
+  if(budgetPct<5&&timePct<5)return{text:'Project starting',color:'rgba(255,255,255,0.4)'};
+  const overBudget=budgetPct>timePct+15;
+  if(overBudget)return{text:'Spending ahead of schedule — watch the budget',color:'#eab308'};
+  if(budgetPct<=timePct+5)return{text:'On track',color:'#4ade80'};
+  return{text:'In progress',color:'rgba(255,255,255,0.5)'};
+}
+
+function renderProjectV(el){
   const ov=renoOv;
-  if(!ov&&!renoBLines.length){el.innerHTML=`<div style="text-align:center;padding:40px 20px;color:#475569"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:14px;font-weight:600;color:#94a3b8">No scope of work loaded for this deal.</div></div>`;return;}
+  if(!ov&&!renoBLines.length){el.innerHTML=`<div style="text-align:center;padding:40px 20px;color:#475569"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:14px;font-weight:600;color:#94a3b8">No scope of work loaded for this deal.</div><div style="margin-top:12px"><button onclick="switchRenoSub('sow')" class="btn" style="padding:8px 20px;font-size:12px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.2);color:#d4af37;font-weight:700;min-height:auto">Go to SOW</button></div></div>`;return;}
 
   const contractedBudget=renoDeal?.contracted_reno_amount||null;
   const tb=contractedBudget||ov?.total_planned_budget||0;
   const ts=ov?.total_spent||0,rem=tb-ts;
   const pct=tb>0?(ts/tb*100):0;
-  const sc=pct>100?"#ef4444":pct>80?"#eab308":"#22c55e";
-  const rc=rem<0?"#ef4444":"#22c55e";
   let h='';
 
   // Task warning bar
@@ -204,18 +218,72 @@ function renderBudget(el){
     h+=`<div onclick="switchRenoSub('tasks')" style="padding:8px 12px;border-radius:10px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);margin-bottom:10px;cursor:pointer;font-size:12px;color:#f97316;font-weight:600">⚠️ ${parts.join(" · ")} → Tasks tab</div>`;
   }
 
-  // Big Three
-  const tla=ov?.total_lender_approved||0;
-  h+=`<div class="reno-hero"><div class="reno-hcard"><div class="reno-hl">TOTAL BUDGET</div><div class="reno-hv">${$r(tb)}</div>${tla&&tla!==tb?`<div style="font-size:10px;color:#64748b;margin-top:2px">Lender: ${$r(tla)}</div>`:''}${contractedBudget?`<div style="font-size:10px;color:rgba(212,175,55,0.6);margin-top:2px">Contracted: ${esc(renoDeal?.contracted_reno_contractor||"—")}</div>`:''}</div><div class="reno-hcard"><div class="reno-hl">TOTAL SPENT</div><div class="reno-hv" style="color:${sc}">${$r(ts)}</div></div><div class="reno-hcard"><div class="reno-hl">REMAINING</div><div class="reno-hv" style="color:${rc}">${$r(rem)}</div></div></div>`;
+  // ROW 1: Two SVG gauges
+  const budgetColor=pct>80?"#ef4444":pct>60?"#eab308":"#4ade80";
+  let timePct=0,timeDetail="Not funded yet";
+  if(renoFin&&renoFin.funded_date){
+    const msFunded=(Date.now()-new Date(renoFin.funded_date+"T00:00:00").getTime())/(864e5*30.44);
+    const totalMonths=renoFin.loan_term_months||8;
+    timePct=Math.min(msFunded/totalMonths*100,100);
+    timeDetail=`${msFunded.toFixed(1)} / ${totalMonths} months`;
+  }
+  const timeColor=!renoFin?.funded_date?"#64748b":timePct>80?"#ef4444":timePct>60?"#eab308":"#3b82f6";
+  h+=`<div class="reno-gauges">`;
+  h+=renderGauge(pct,"BUDGET",`${$r(ts)} / ${$r(tb)}`,budgetColor);
+  h+=renderGauge(renoFin?.funded_date?timePct:NaN,"TIME",timeDetail,timeColor);
+  h+=`</div>`;
 
-  // Progress bar
-  const _barGrad=pct>100?"linear-gradient(90deg,#dc2626,#991b1b)":pct>80?"linear-gradient(90deg,#ef4444,#f87171)":pct>60?"linear-gradient(90deg,#eab308,#f59e0b)":"linear-gradient(90deg,#10b981,#34d399)";
-  const _barW=Math.min(pct,100);
-  const _labelInside=_barW>=15;
-  const _barPulse=pct>100?"animation:overBudgetPulse 2s ease-in-out infinite;":"";
-  h+=`<div style="margin:16px 0"><div style="position:relative;height:40px;border-radius:20px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);overflow:hidden"><div style="height:100%;width:${_barW}%;background:${_barGrad};border-radius:20px;transition:width .6s ease;box-shadow:inset 0 1px 0 rgba(255,255,255,0.2);${_barPulse}"></div><div style="position:absolute;top:0;${_labelInside?'right:16px':'left:'+(_barW+2)+'%'};height:100%;display:flex;align-items:center;font-size:14px;font-weight:700;${_labelInside?'color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.6)':'color:rgba(255,255,255,0.5)'}">${pct.toFixed(1)}% spent</div></div><div style="display:flex;justify-content:space-between;margin-top:4px"><div style="font-size:12px;color:rgba(255,255,255,0.35)">${$r(rem)} remaining</div><div style="font-size:12px;color:rgba(255,255,255,0.35)">${$r(ts)} of ${$r(tb)}</div></div></div>`;
+  // ROW 2: Status line
+  const status=getProjectStatus(pct,timePct);
+  h+=`<div style="text-align:center;font-size:14px;font-weight:600;color:${status.color};padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">${status.text}</div>`;
 
-  // Hold Period & Burn card
+  // ROW 3: Milestone placeholder
+  h+=`<div style="padding:16px 0;text-align:center;font-size:12px;color:#475569">No milestones yet</div>`;
+
+  // ROW 4: Collapsible detail sections
+
+  // === FINANCIAL DETAIL ===
+  const la=renoFin?.rehab_holdback||ov?.total_lender_approved||0;
+  const rb2=ov?.total_reimbursed||0,ue=ov?.unreimbursed_exposure||0,du=ov?.draws_used||0;
+  const md=renoFin?.max_draws||renoDeal?.lender_max_draws||"?";
+  h+=`<details style="margin-top:12px;border:1px solid rgba(255,255,255,0.06);border-radius:12px;background:rgba(255,255,255,0.02)"><summary style="padding:12px 14px;cursor:pointer;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#d4af37;list-style:none;display:flex;justify-content:space-between;align-items:center"><span>FINANCIAL DETAIL</span><span style="font-size:11px;font-weight:600;color:#64748b;letter-spacing:0">Lender: ${$r(la)} · Reimbursed: ${$r(rb2)} · Exposure: ${$r(ue)}</span></summary><div style="padding:0 14px 14px">`;
+  // Secondary metrics grid
+  const ueBg=ue>50000?"rgba(239,68,68,0.08)":"rgba(255,255,255,0.02)";
+  const ueBr=ue>50000?"rgba(239,68,68,0.2)":"rgba(255,255,255,0.06)";
+  h+=`<div class="reno-sgrid">`;
+  h+=`<div class="reno-scard"><div class="reno-sl">${renoFin?.rehab_holdback?'REHAB HOLDBACK':'LENDER APPROVED'}</div><div class="reno-sv">${$r(la)}</div></div>`;
+  h+=`<div class="reno-scard"><div class="reno-sl">REIMBURSED</div><div class="reno-sv" style="color:#22c55e">${$r(rb2)}</div></div>`;
+  h+=`<div class="reno-scard" style="background:${ueBg};border-color:${ueBr}"><div class="reno-sl">UNREIMBURSED</div><div class="reno-sv" style="color:${ue>50000?"#ef4444":"#f1f5f9"}">${$r(ue)}</div></div>`;
+  h+=`<div class="reno-scard"><div class="reno-sl">DRAWS USED</div><div class="reno-sv">${du} / ${md}</div></div>`;
+  h+=`</div>`;
+  // LOC Exposure card
+  const _locKiavi=renoFin?.rehab_holdback||ov?.total_lender_approved||0;
+  const _locPlanned=renoDeal?.contracted_reno_amount||ov?.total_planned_budget||0;
+  const _locGap=Math.max(_locPlanned-_locKiavi,0);
+  const _locLimit=renoFin?.loc_limit||0;
+  const _locHead=_locLimit-_locGap;
+  if(_locGap>0||_locLimit>0){
+    const _gapColor=_locGap>0?"#f59e0b":"#22c55e";
+    const _headColor=_locHead>=100000?"#22c55e":_locHead>=50000?"#eab308":"#ef4444";
+    h+=`<div style="margin:12px 0;padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
+    h+=`<div style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:#d4af37;margin-bottom:10px">LOC EXPOSURE</div>`;
+    h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">KIAVI APPROVED</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_locKiavi)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">PLANNED BUDGET</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_locPlanned)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">COVERAGE GAP</div><div style="font-size:15px;font-weight:800;color:${_gapColor};margin-top:2px">${$r(_locGap)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC LIMIT</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${_locLimit?$r(_locLimit):"Not set"}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC DRAWN</div><div style="font-size:15px;font-weight:800;color:${_gapColor};margin-top:2px">${$r(_locGap)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC HEADROOM</div><div style="font-size:15px;font-weight:800;color:${_locLimit?_headColor:"#64748b"};margin-top:2px">${_locLimit?$r(_locHead):"—"}</div></div>`;
+    h+=`</div></div>`;
+  }
+  // Monthly interest (no financing button)
+  if(renoFin?.monthly_interest_payment){
+    h+=`<div class="reno-scard" style="margin-top:8px;text-align:left;padding:12px 14px"><div><div class="reno-sl">MONTHLY INTEREST</div><div class="reno-sv" style="color:#f59e0b;font-size:18px">${$r(renoFin.monthly_interest_payment)}</div></div></div>`;
+  }
+  h+=`</div></details>`;
+
+  // === HOLD PERIOD ===
+  h+=`<details style="margin-top:8px;border:1px solid rgba(255,255,255,0.06);border-radius:12px;background:rgba(255,255,255,0.02)"><summary style="padding:12px 14px;cursor:pointer;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#d4af37;list-style:none;display:flex;justify-content:space-between;align-items:center"><span>HOLD PERIOD</span><span style="font-size:11px;font-weight:600;color:#64748b;letter-spacing:0">${renoFin?.funded_date?"Funded "+new Date(renoFin.funded_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"numeric",timeZone:"America/Los_Angeles"}):"Not funded yet"}</span></summary><div style="padding:0 14px 14px">`;
   if(renoDeal&&["in_renovation","renovation_complete","listed","sold"].includes(renoDeal.status)){
     const _coe=renoDeal.coe_date?new Date(renoDeal.coe_date+"T00:00:00"):null;
     const _today=new Date();_today.setHours(0,0,0,0);
@@ -236,84 +304,68 @@ function renderBudget(el){
     const _matDate=renoFin?.maturity_date?new Date(renoFin.maturity_date+"T00:00:00"):null;
     const _matDays=_matDate?Math.ceil((_matDate-_today)/864e5):null;
     const _matColor=_matDays==null?"#64748b":_matDays<60?"#ef4444":_matDays<90?"#eab308":"#22c55e";
-    h+=`<div style="margin:12px 0 16px;padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
+    h+=`<div style="margin:8px 0;padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
     h+=`<div style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:#d4af37;margin-bottom:10px">HOLD PERIOD & BURN</div>`;
     h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">`;
-    // Days Elapsed
     h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">DAYS ELAPSED</div><div style="font-size:17px;font-weight:800;color:${_holdColor};margin-top:2px">${_elapsed!=null?_elapsed:"—"}</div></div>`;
-    // Hold Progress
     h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">HOLD PROGRESS</div><div style="margin-top:4px"><div class="reno-pbar" style="height:6px"><div class="reno-pfill" style="width:${_holdPct}%;background:${_holdColor}"></div></div><div style="font-size:10px;color:${_holdColor};font-weight:700;margin-top:2px">${_elapsed!=null?Math.round(_holdPct)+"%":"—"}</div></div></div>`;
-    // Interest Accrued
     h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">INTEREST ACCRUED</div><div style="font-size:17px;font-weight:800;color:${_intAccrued!=null?"#f59e0b":"#64748b"};margin-top:2px">${_intAccrued!=null?$r(_intAccrued):"—"}</div></div>`;
-    // Interest Budget
     h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">INTEREST BUDGET</div><div style="font-size:17px;font-weight:800;color:${_intColor};margin-top:2px">${_intBudget!=null?$r(_intBudget):"—"}</div>${_intAccrued!=null&&_intBudget?`<div class="reno-pbar" style="height:4px;margin-top:4px"><div class="reno-pfill" style="width:${_intPct}%;background:${_intColor}"></div></div>`:""}</div>`;
-    // Budget Consumed
     h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">BUDGET CONSUMED</div><div style="margin-top:4px"><div class="reno-pbar" style="height:6px"><div class="reno-pfill" style="width:${_burnPct}%;background:${_burnColor}"></div></div><div style="font-size:10px;color:${_burnColor};font-weight:700;margin-top:2px">${_burnPct.toFixed(1)}%</div></div></div>`;
-    // Maturity Countdown
     h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">MATURITY</div><div style="font-size:17px;font-weight:800;color:${_matColor};margin-top:2px">${_matDays!=null?_matDays+"d":"—"}</div></div>`;
     h+=`</div></div>`;
   }
-
-  // Maturity countdown bar (if financing data exists)
   if(renoFin&&renoFin.funded_date){
-    const msFunded=((Date.now()-new Date(renoFin.funded_date+"T00:00:00").getTime())/(864e5*30.44));
+    const msFunded2=((Date.now()-new Date(renoFin.funded_date+"T00:00:00").getTime())/(864e5*30.44));
     const msUntilMat=renoFin.maturity_date?((new Date(renoFin.maturity_date+"T00:00:00").getTime()-Date.now())/(864e5*30.44)):null;
     const matBarColor=msUntilMat===null?'#3b82f6':msUntilMat<2?'#ef4444':msUntilMat<4?'#eab308':'#22c55e';
-    const totalMonths=renoFin.loan_term_months||(msFunded+(msUntilMat||0));
-    const holdPct=totalMonths>0?Math.min(msFunded/totalMonths*100,100):0;
-    h+=`<div class="fin-hold-bar" style="border-color:${matBarColor}30;background:${matBarColor}08">`;
+    const totalMonths2=renoFin.loan_term_months||(msFunded2+(msUntilMat||0));
+    const holdPct2=totalMonths2>0?Math.min(msFunded2/totalMonths2*100,100):0;
+    h+=`<div class="fin-hold-bar" style="margin-top:8px;border-color:${matBarColor}30;background:${matBarColor}08">`;
     h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:${matBarColor}">HOLD PERIOD</span>`;
     h+=`<span style="font-size:10px;color:#64748b">Funded ${new Date(renoFin.funded_date+"T00:00:00").toLocaleDateString("en-US",{month:"numeric",day:"numeric",year:"numeric",timeZone:"America/Los_Angeles"})}</span></div>`;
-    h+=`<div class="reno-pbar" style="margin-bottom:6px"><div class="reno-pfill" style="width:${holdPct}%;background:${matBarColor}"></div></div>`;
+    h+=`<div class="reno-pbar" style="margin-bottom:6px"><div class="reno-pfill" style="width:${holdPct2}%;background:${matBarColor}"></div></div>`;
     h+=`<div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700">`;
-    h+=`<span style="color:#94a3b8">${msFunded.toFixed(1)} months elapsed</span>`;
+    h+=`<span style="color:#94a3b8">${msFunded2.toFixed(1)} months elapsed</span>`;
     if(msUntilMat!==null)h+=`<span style="color:${matBarColor}">${msUntilMat.toFixed(1)} months until maturity</span>`;
     h+=`</div></div>`;
-  }
-
-  // Secondary metrics (use financing data when available)
-  const la=renoFin?.rehab_holdback||ov?.total_lender_approved||0;
-  const rb2=ov?.total_reimbursed||0,ue=ov?.unreimbursed_exposure||0,du=ov?.draws_used||0;
-  const md=renoFin?.max_draws||renoDeal?.lender_max_draws||"?";
-  const ueBg=ue>50000?"rgba(239,68,68,0.08)":"rgba(255,255,255,0.02)";
-  const ueBr=ue>50000?"rgba(239,68,68,0.2)":"rgba(255,255,255,0.06)";
-  h+=`<div class="reno-sgrid">`;
-  h+=`<div class="reno-scard"><div class="reno-sl">${renoFin?.rehab_holdback?'REHAB HOLDBACK':'LENDER APPROVED'}</div><div class="reno-sv">${$r(la)}</div></div>`;
-  h+=`<div class="reno-scard"><div class="reno-sl">REIMBURSED</div><div class="reno-sv" style="color:#22c55e">${$r(rb2)}</div></div>`;
-  h+=`<div class="reno-scard" style="background:${ueBg};border-color:${ueBr}"><div class="reno-sl">UNREIMBURSED</div><div class="reno-sv" style="color:${ue>50000?"#ef4444":"#f1f5f9"}">${$r(ue)}</div></div>`;
-  h+=`<div class="reno-scard"><div class="reno-sl">DRAWS USED</div><div class="reno-sv">${du} / ${md}</div></div>`;
-  h+=`</div>`;
-
-  // LOC Exposure card
-  const _locKiavi=renoFin?.rehab_holdback||ov?.total_lender_approved||0;
-  const _locPlanned=renoDeal?.contracted_reno_amount||ov?.total_planned_budget||0;
-  const _locGap=Math.max(_locPlanned-_locKiavi,0);
-  const _locLimit=renoFin?.loc_limit||0;
-  const _locHead=_locLimit-_locGap;
-  if(_locGap>0||_locLimit>0){
-    const _gapColor=_locGap>0?"#f59e0b":"#22c55e";
-    const _headColor=_locHead>=100000?"#22c55e":_locHead>=50000?"#eab308":"#ef4444";
-    h+=`<div style="margin:12px 0 16px;padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
-    h+=`<div style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:#d4af37;margin-bottom:10px">LOC EXPOSURE</div>`;
-    h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">KIAVI APPROVED</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_locKiavi)}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">PLANNED BUDGET</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_locPlanned)}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">COVERAGE GAP</div><div style="font-size:15px;font-weight:800;color:${_gapColor};margin-top:2px">${$r(_locGap)}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC LIMIT</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${_locLimit?$r(_locLimit):"Not set"}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC DRAWN</div><div style="font-size:15px;font-weight:800;color:${_gapColor};margin-top:2px">${$r(_locGap)}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC HEADROOM</div><div style="font-size:15px;font-weight:800;color:${_locLimit?_headColor:"#64748b"};margin-top:2px">${_locLimit?$r(_locHead):"—"}</div></div>`;
-    h+=`</div></div>`;
-  }
-
-  // Monthly interest card (if financing data has monthly payment)
-  if(renoFin?.monthly_interest_payment){
-    h+=`<div class="reno-scard" style="margin-bottom:16px;text-align:left;padding:12px 14px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div class="reno-sl">MONTHLY INTEREST</div><div class="reno-sv" style="color:#f59e0b;font-size:18px">${$r(renoFin.monthly_interest_payment)}</div></div><button onclick="openFinancing('${renoDealId}')" style="background:none;border:1px solid rgba(6,182,212,0.2);border-radius:8px;padding:6px 12px;color:#22d3ee;font-size:10px;font-weight:700;cursor:pointer">💰 Financing</button></div></div>`;
   } else {
-    // Just show the financing button if no monthly payment
-    h+=`<div style="margin-bottom:12px;text-align:right"><button onclick="openFinancing('${renoDealId}')" class="btn" style="padding:8px 20px;font-size:12px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);color:#22d3ee;font-weight:700;min-height:auto">💰 Financing</button></div>`;
+    h+=`<div style="padding:12px 0;font-size:12px;color:#475569;text-align:center">Not funded yet</div>`;
   }
+  h+=`</div></details>`;
 
-  // Lender info collapsible (Bug 2)
+  // === BUDGET BREAKDOWN ===
+  const sc=pct>100?"#ef4444":pct>80?"#eab308":"#22c55e";
+  const rc=rem<0?"#ef4444":"#22c55e";
+  const tla=ov?.total_lender_approved||0;
+  h+=`<details style="margin-top:8px;border:1px solid rgba(255,255,255,0.06);border-radius:12px;background:rgba(255,255,255,0.02)"><summary style="padding:12px 14px;cursor:pointer;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#d4af37;list-style:none;display:flex;justify-content:space-between;align-items:center"><span>BUDGET BREAKDOWN</span><span style="font-size:11px;font-weight:600;color:#64748b;letter-spacing:0">${$r(ts)} of ${$r(tb)} across ${renoBLines.length} SOW lines</span></summary><div style="padding:0 14px 14px">`;
+  // Big Three cards
+  h+=`<div class="reno-hero" style="margin-top:8px"><div class="reno-hcard"><div class="reno-hl">TOTAL BUDGET</div><div class="reno-hv">${$r(tb)}</div>${tla&&tla!==tb?`<div style="font-size:10px;color:#64748b;margin-top:2px">Lender: ${$r(tla)}</div>`:''}${contractedBudget?`<div style="font-size:10px;color:rgba(212,175,55,0.6);margin-top:2px">Contracted: ${esc(renoDeal?.contracted_reno_contractor||"—")}</div>`:''}</div><div class="reno-hcard"><div class="reno-hl">TOTAL SPENT</div><div class="reno-hv" style="color:${sc}">${$r(ts)}</div></div><div class="reno-hcard"><div class="reno-hl">REMAINING</div><div class="reno-hv" style="color:${rc}">${$r(rem)}</div></div></div>`;
+  // Progress bar
+  const _barGrad=pct>100?"linear-gradient(90deg,#dc2626,#991b1b)":pct>80?"linear-gradient(90deg,#ef4444,#f87171)":pct>60?"linear-gradient(90deg,#eab308,#f59e0b)":"linear-gradient(90deg,#10b981,#34d399)";
+  const _barW=Math.min(pct,100);
+  const _labelInside=_barW>=15;
+  const _barPulse=pct>100?"animation:overBudgetPulse 2s ease-in-out infinite;":"";
+  h+=`<div style="margin:16px 0"><div style="position:relative;height:40px;border-radius:20px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);overflow:hidden"><div style="height:100%;width:${_barW}%;background:${_barGrad};border-radius:20px;transition:width .6s ease;box-shadow:inset 0 1px 0 rgba(255,255,255,0.2);${_barPulse}"></div><div style="position:absolute;top:0;${_labelInside?'right:16px':'left:'+(_barW+2)+'%'};height:100%;display:flex;align-items:center;font-size:14px;font-weight:700;${_labelInside?'color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.6)':'color:rgba(255,255,255,0.5)'}">${pct.toFixed(1)}% spent</div></div><div style="display:flex;justify-content:space-between;margin-top:4px"><div style="font-size:12px;color:rgba(255,255,255,0.35)">${$r(rem)} remaining</div><div style="font-size:12px;color:rgba(255,255,255,0.35)">${$r(ts)} of ${$r(tb)}</div></div></div>`;
+  // Out of Pocket
+  if(tb>la&&la>0){
+    const oop=tb-la;
+    const csb=renoFin?.cash_source_breakdown;
+    const fundSrcs=[];if(csb?.cash)fundSrcs.push("Cash");if(csb?.loc)fundSrcs.push("LOC");if(csb?.commission_credit)fundSrcs.push("Lisa Commission");
+    h+=`<div class="reno-oop"><div style="font-size:9px;color:#f59e0b;font-weight:700;letter-spacing:1.5px;margin-bottom:6px">OUT-OF-POCKET SUMMARY</div><div class="reno-oop-r"><span>Total Planned</span><span>${$r(tb)}</span></div><div class="reno-oop-r"><span>Lender Covers</span><span>${$r(la)}</span></div><div class="reno-oop-r reno-oop-t"><span>Your Out-of-Pocket</span><span style="color:#f59e0b">${$r(oop)}</span></div>${fundSrcs.length?`<div style="font-size:10px;color:#64748b;margin-top:6px">Funded by: ${fundSrcs.join(" + ")}</div>`:''}</div>`;
+  }
+  // Quick link to SOW
+  h+=`<div style="margin-top:12px;text-align:center"><button onclick="switchRenoSub('sow')" style="background:none;border:none;color:#d4af37;font-size:12px;font-weight:700;cursor:pointer;padding:4px 0">View full SOW →</button></div>`;
+  h+=`</div></details>`;
+
+  el.innerHTML=h;
+}
+
+// ═══ SOW VIEW (Line Item Detail) ═══
+function renderSOWV(el){
+  let h='';
+
+  // Lender Terms collapsible
   if(renoDeal){
     const di=renoDeal;
     h+=`<div style="margin-bottom:16px"><button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.nextElementSibling.style.display==='none'?'ℹ️ Lender Terms':'ℹ️ Lender Terms ▾'" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:700;cursor:pointer;padding:4px 0">ℹ️ Lender Terms</button>`;
@@ -330,7 +382,7 @@ function renderBudget(el){
   }
 
   // SOW action buttons + table
-  h+=`<div style="margin-top:20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">SCOPE OF WORK</div><div style="display:flex;gap:6px"><button onclick="event.stopPropagation();openSOWUpload()" class="btn" style="padding:6px 14px;font-size:11px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:700;min-height:32px">📄 Upload Lender SOW</button><button onclick="event.stopPropagation();openAddLineForm()" class="btn" style="padding:6px 14px;font-size:11px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700;min-height:32px">+ Add Line</button><button onclick="exportCPAReport()" class="btn" style="padding:6px 14px;font-size:11px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700;min-height:32px">📊 CPA Report</button></div></div>`;
+  h+=`<div style="margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">SCOPE OF WORK</div><div style="display:flex;gap:6px"><button onclick="event.stopPropagation();openSOWUpload()" class="btn" style="padding:6px 14px;font-size:11px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:700;min-height:32px">📄 Upload Lender SOW</button><button onclick="event.stopPropagation();openAddLineForm()" class="btn" style="padding:6px 14px;font-size:11px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700;min-height:32px">+ Add Line</button><button onclick="exportCPAReport()" class="btn" style="padding:6px 14px;font-size:11px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700;min-height:32px">📊 CPA Report</button></div></div>`;
   h+=`<div id="sowUploadArea"></div><div id="sowAddLineArea"></div>`;
   const fl=renoBLines.filter(l=>l.lender_approved>0||l.planned_budget>0||l.total_spent>0);
   if(fl.length){
@@ -361,6 +413,8 @@ function renderBudget(el){
       h+=`<div style="display:flex;gap:16px;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);margin-top:8px;font-size:12px"><span style="color:#64748b">Actual vs Planned:</span><span style="font-weight:700;color:#f1f5f9">${$r(_sowTotalActual)} actual</span><span style="color:#64748b">vs</span><span style="font-weight:700;color:#94a3b8">${$r(_sowTotalPlanned)} planned</span><span style="font-weight:800;color:${_sowDeltaC}">${_sowDelta<=0?"":"+"} ${$r(_sowDelta)} (${_sowTotalPlanned>0?(_sowDelta/_sowTotalPlanned*100).toFixed(1):"0"}%)</span><span style="color:#475569;font-size:10px">${_sowLinesWithActual.length}/${fl.length} lines</span></div>`;
     }
     h+=`</div>`;
+  } else {
+    h+=`<div style="text-align:center;padding:40px 20px;color:#475569"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:14px;font-weight:600;color:#94a3b8">No scope of work lines yet.</div></div>`;
   }
 
   // Change Orders
@@ -393,13 +447,6 @@ function renderBudget(el){
   }
   h+=`</div>`;
 
-  // Out of Pocket
-  if(tb>la&&la>0){
-    const oop=tb-la;
-    const csb=renoFin?.cash_source_breakdown;
-    const fundSrcs=[];if(csb?.cash)fundSrcs.push("Cash");if(csb?.loc)fundSrcs.push("LOC");if(csb?.commission_credit)fundSrcs.push("Lisa Commission");
-    h+=`<div class="reno-oop"><div style="font-size:9px;color:#f59e0b;font-weight:700;letter-spacing:1.5px;margin-bottom:6px">OUT-OF-POCKET SUMMARY</div><div class="reno-oop-r"><span>Total Planned</span><span>${$r(tb)}</span></div><div class="reno-oop-r"><span>Lender Covers</span><span>${$r(la)}</span></div><div class="reno-oop-r reno-oop-t"><span>Your Out-of-Pocket</span><span style="color:#f59e0b">${$r(oop)}</span></div>${fundSrcs.length?`<div style="font-size:10px;color:#64748b;margin-top:6px">Funded by: ${fundSrcs.join(" + ")}</div>`:''}</div>`;
-  }
   el.innerHTML=h;
   if(renoExpandedLine)loadLineExp(renoExpandedLine);
 }
@@ -446,7 +493,7 @@ async function loadLineExp(lid){
     }else{
       h+=`<div style="color:#475569;font-size:11px">No expenses yet</div>`;
     }
-    h+=`<button onclick="event.stopPropagation();renoSub='expenses';renoExpF.sow='${lid}';renderRenoSub()" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;padding:4px 0;margin-top:6px">+ Add Expense</button>`;
+    h+=`<button onclick="event.stopPropagation();renoSub='spend';renoExpF.sow='${lid}';renderRenoSub()" style="background:none;border:none;color:#60a5fa;font-size:10px;font-weight:700;cursor:pointer;padding:4px 0;margin-top:6px">+ Add Expense</button>`;
     h+=`</div>`;
 
     // Part C — Draw History For This Line
@@ -477,7 +524,7 @@ async function saveSOWField(lid,field,value){
     const s=renoSOW.find(x=>x.id===lid);if(s)s[field]=value;
     showRenoToast(field.replace(/_/g," ")+" saved");
     await loadRenoData(renoDealId);
-    const el=document.getElementById("renoContent");if(el&&renoSub==="budget")renderBudget(el);
+    const el=document.getElementById("renoContent");if(el&&renoSub==="sow")renderSOWV(el);
   }catch(e){console.error("Save SOW field failed:",e);showRenoToast("Failed to save");}
 }
 
@@ -1694,7 +1741,7 @@ async function saveFinancing(dealId){
     _pendingFinUrl=null;
     showRenoToast("Financing saved");
     await loadFinancing(dealId);
-    if(renoDealId===dealId){await loadRenoData(dealId);if(renoSub==="budget"){const el=document.getElementById("renoContent");if(el)renderBudget(el);}}
+    if(renoDealId===dealId){await loadRenoData(dealId);if(renoSub==="project"){const el=document.getElementById("renoContent");if(el)renderProjectV(el);}}
     closeRenoModal();
   }catch(e){console.error("Save financing failed:",e);showRenoToast("Failed to save financing");}
 }
