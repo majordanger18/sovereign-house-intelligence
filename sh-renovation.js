@@ -1689,29 +1689,33 @@ function finRunningTotals(f,d){
 // ═══ FINANCING DOC PARSER ═══
 function openFinDocUpload(){
   const input=document.createElement('input');
-  input.type='file';input.accept='.pdf,.jpg,.jpeg,.png';input.multiple=true;
+  input.type='file';input.accept='.pdf,image/*';input.multiple=true;
   input.onchange=async function(){
     const files=Array.from(input.files);if(!files.length)return;
+    console.log('[SH FIN PARSER] Files selected:',files.map(f=>f.name+' '+f.type+' '+f.size));
     // Index all uploaded files in deal_documents
     for(const file of files){
       const path=storagePath(finDealId,"financing",file);
       const url=await uploadToStorage(file,"sovereign-docs",path);
       if(url){
-        fetch(SB+"/rest/v1/deal_documents",{method:"POST",headers:RENO_WH,body:JSON.stringify({deal_id:finDealId,file_url:url,file_name:file.name,file_type:file.name.split('.').pop().toLowerCase(),doc_category:"closing",caption:"Loan document upload",uploaded_by:window.SH_USER?.email||"system"})}).catch(e=>console.error("Doc bridge:",e));
+        fetch(SB+"/rest/v1/deal_documents",{method:"POST",headers:RENO_WH,body:JSON.stringify({deal_id:finDealId,file_url:url,file_name:file.name,file_type:file.name.split('.').pop().toLowerCase(),doc_category:"closing",doc_subcategory:file.name.toLowerCase().includes('settlement')?'settlement_statement':'closing_disclosure',ai_description:'Loan document: '+file.name,caption:"Loan document upload",uploaded_by:window.SH_USER?.email||"system"})}).catch(e=>console.error("Doc bridge:",e));
       }
     }
-    // Parse the first PDF with AI
-    const pdf=files.find(f=>f.name.toLowerCase().endsWith('.pdf'));
-    if(pdf)await parseFinDoc(pdf);
-    else showRenoToast(files.length+" file"+(files.length>1?"s":"")+" uploaded");
-    // Reload docs to show in list
+    // Parse parseable files (PDFs and images) with AI
+    const parseable=files.filter(f=>f.type==='application/pdf'||f.type.startsWith('image/'));
+    if(parseable.length){
+      for(const file of parseable){await parseFinDoc(file);}
+    }else{
+      showRenoToast(files.length+" file"+(files.length>1?"s":"")+" uploaded");
+    }
+    // Reload docs list in background (do NOT re-render modal — prefilled fields must persist)
     try{const docs=await sb("deal_documents?deal_id=eq."+finDealId+"&order=created_at.desc");renoDocs=Array.isArray(docs)?docs:[];}catch(e){}
-    openFinancing(finDealId);
   };
   input.click();
 }
 
 async function parseFinDoc(file){
+  console.log('[SH FIN PARSER] File selected:',file.name,file.type,file.size);
   // Show loading in modal header area
   const btn=document.querySelector('.fin-pipe');
   const loadEl=document.createElement('div');
@@ -1737,9 +1741,14 @@ async function parseFinDoc(file){
   let binary="";const chunk=8192;
   for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
   const b64=btoa(binary);
+  console.log('[SH FIN PARSER] Base64 encoded, length:',b64.length);
 
+  const isPdf=file.type==='application/pdf';
+  const docBlock=isPdf
+    ?{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}
+    :{type:"image",source:{type:"base64",media_type:file.type,data:b64}};
   const content=[
-    {type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}},
+    docBlock,
     {type:"text",text:"Parse this loan closing document (closing disclosure, settlement statement, or loan document). Extract ALL financial details and return ONLY a JSON object, no markdown, no explanation:\n\n{\"lender_name\":\"Lender company name\",\"loan_number\":\"Loan number\",\"loan_officer\":\"Loan officer name if visible\",\"purchase_price\":null,\"funded_principal\":null,\"rehab_holdback\":null,\"total_loan_amount\":null,\"down_payment\":null,\"interest_rate\":null,\"interest_rate_type\":\"fixed or variable\",\"origination_fee_pct\":null,\"origination_fee_amount\":null,\"service_fee\":null,\"prorated_interest\":null,\"monthly_interest_payment\":null,\"loan_term_months\":null,\"maturity_date\":\"YYYY-MM-DD or null\",\"first_payment_date\":\"YYYY-MM-DD or null\",\"payment_due_day\":null,\"escrow_fee\":null,\"lenders_title_insurance\":null,\"recording_fees\":null,\"notary_doc_prep\":null,\"wire_fee\":null,\"total_closing_costs\":null,\"total_cash_to_close\":null,\"max_draws\":null,\"holdback_pct\":null,\"draw_fee\":null,\"other_lender_fees\":null}\n\nExtract every number you can find. If a field isn't in the document, use null. Return ONLY the JSON."}
   ];
 
@@ -1749,19 +1758,23 @@ async function parseFinDoc(file){
       headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
       body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:content}]})
     });
+    console.log('[SH FIN PARSER] API response status:',res.status);
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
     const parsed=await robustParseJSON(data,apiKey);
+    console.log('[SH FIN PARSER] Parsed fields:',parsed);
     const ld=document.getElementById('finDocLoading');if(ld)ld.remove();
+    console.log('[SH FIN PARSER] Calling prefillFinancing');
     prefillFinancing(parsed);
   }catch(e){
-    console.error("Fin doc parse error:",e);
+    console.error("[SH FIN PARSER] Parse error:",e);
     const ld=document.getElementById('finDocLoading');if(ld)ld.remove();
     showRenoToast("Failed to parse document: "+e.message);
   }
 }
 
 function prefillFinancing(parsed){
+  console.log('[SH FIN PARSER] prefillFinancing called with:',parsed);
   const fields={
     fin_lender_name:parsed.lender_name,fin_loan_number:parsed.loan_number,fin_loan_officer:parsed.loan_officer,
     fin_interest_rate:parsed.interest_rate,fin_interest_rate_type:parsed.interest_rate_type,
@@ -1778,9 +1791,18 @@ function prefillFinancing(parsed){
     fin_wire_fee:parsed.wire_fee,
     fin_max_draws:parsed.max_draws,fin_holdback_pct:parsed.holdback_pct,fin_draw_fee:parsed.draw_fee
   };
+  let filled=0,skipped=0;
   for(const[id,val]of Object.entries(fields)){
-    if(val!=null){const el=document.getElementById(id);if(el){el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));}}
+    if(val!=null&&val!==''&&val!==0){
+      const el=document.getElementById(id);
+      if(!el){console.warn('[SH FIN PARSER] Element not found:',id);skipped++;continue;}
+      if(el.value&&el.value!==''){console.log('[SH FIN PARSER] Skipping (already filled):',id,'=',el.value);skipped++;continue;}
+      el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));
+      console.log('[SH FIN PARSER] Set:',id,'→',el.value);
+      filled++;
+    }else{skipped++;}
   }
+  console.log('[SH FIN PARSER] Filled',filled,'fields, skipped',skipped);
   // Expand all sections so user can see filled values
   ['fin1','fin2','fin3','fin4'].forEach(id=>{
     const body=document.getElementById(id+'_body');
@@ -1791,7 +1813,7 @@ function prefillFinancing(parsed){
     if(sum)sum.style.display='none';
   });
   finCalcTotal();finCalcClosing();finCalcCash();finCalcOrig();finCalcCSB();
-  showRenoToast("Loan docs parsed — review and save");
+  showRenoToast("Loan docs parsed — "+filled+" fields filled. Review and save");
 }
 
 // ═══ FINANCING LIVE CALCULATIONS ═══
