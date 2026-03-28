@@ -226,12 +226,16 @@ async function generateMilestones(){
     const sowSummary=renoSOW.map(l=>l.line_number+'. '+l.description+' ($'+(l.planned_budget||l.lender_approved||0).toLocaleString()+')').join('\n');
     const holdMonths=renoFin?.loan_term_months||8;
     const renoMonths = Math.max(1, holdMonths - 2);
-    const startDate=renoFin?.funded_date?new Date(new Date(renoFin.funded_date).getTime()+7*864e5).toISOString().split('T')[0]:new Date(Date.now()+7*864e5).toISOString().split('T')[0];
+    const startDate = renoDeal?.coe_date
+      ? renoDeal.coe_date
+      : renoFin?.funded_date
+        ? new Date(new Date(renoFin.funded_date).getTime() + 7*864e5).toISOString().split('T')[0]
+        : new Date(Date.now() + 7*864e5).toISOString().split('T')[0];
     const budget=renoDeal.contracted_reno_amount||renoSOW.reduce((s,l)=>s+(l.planned_budget||0),0)||250000;
     const response=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:`You are planning a renovation timeline for a luxury home flip. Respond ONLY with a JSON array, no markdown, no backticks.\n\nProperty: ${renoDeal.address||'Luxury home'}\nBudget: $${budget.toLocaleString()}\nHold period: ${holdMonths} months\nStart date: ${startDate}\nMust complete ALL renovation within ${renoMonths} months of start date. The remaining ${holdMonths - renoMonths} months are reserved for staging, photography, listing, and sale. Do NOT schedule any renovation work in the final 2 months.\n\nSOW Lines:\n${sowSummary}\n\nGenerate 6-10 phases in construction order:\n{"phase_name":"Demo","phase_order":1,"description":"what is included","planned_start":"YYYY-MM-DD","planned_end":"YYYY-MM-DD","planned_duration_days":number}\n\nPhases should be sequential. Leave 1-2 weeks buffer before hold period ends.`}]})
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:`You are planning a renovation timeline for a luxury home flip. Respond ONLY with a JSON array, no markdown, no backticks.\n\nProperty: ${renoDeal.address||'Luxury home'}\nBudget: $${budget.toLocaleString()}\nHold period: ${holdMonths} months\nRenovation starts on ${startDate} (this is when the buyer gets keys to the property). All phases must start on or after this date.\nMust complete ALL renovation within ${renoMonths} months of start date. The remaining ${holdMonths - renoMonths} months are reserved for staging, photography, listing, and sale. Do NOT schedule any renovation work in the final 2 months.\n\nSOW Lines:\n${sowSummary}\n\nGenerate 6-10 phases in construction order:\n{"phase_name":"Demo","phase_order":1,"description":"what is included","planned_start":"YYYY-MM-DD","planned_end":"YYYY-MM-DD","planned_duration_days":number}\n\nPhases should be sequential. Leave 1-2 weeks buffer before hold period ends.`}]})
     });
     if(!response.ok){if(response.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+response.status);}
     const data=await response.json();
