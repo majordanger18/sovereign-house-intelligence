@@ -267,6 +267,16 @@ async function saveMilestone(id){
   // Auto-fill actual_end when moving to complete
   patch.actual_end = actualEnd || (newStatus === 'complete' && !m.actual_end ? today : m.actual_end || null);
 
+  // Smart status: if user didn't change dropdown but entered dates, infer status
+  if (newStatus === m.status) {
+    // User didn't touch the dropdown — infer from dates
+    if (patch.actual_start && patch.actual_end && newStatus !== 'complete' && newStatus !== 'skipped') {
+      patch.status = 'complete';
+    } else if (patch.actual_start && !patch.actual_end && newStatus === 'not_started') {
+      patch.status = 'in_progress';
+    }
+  }
+
   // Override: clear everything when skipped
   if (newStatus === 'skipped') {
     patch.drift_days = null;
