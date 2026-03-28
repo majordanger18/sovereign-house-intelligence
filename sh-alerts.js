@@ -3,7 +3,13 @@
 // Collapse duplicate alerts (same property + type within 24h) — keep most recent
 function dedupeAlerts(list){
   const seen=new Map();
-  const sorted=[...list].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const sorted=[...list].sort((a,b)=>{
+    // RESURRECTION alerts always sort first
+    const aRes=a.alert_type==='RESURRECTION'?1:0;
+    const bRes=b.alert_type==='RESURRECTION'?1:0;
+    if(aRes!==bRes)return bRes-aRes;
+    return new Date(b.created_at)-new Date(a.created_at);
+  });
   return sorted.filter(a=>{
     const key=(a.property_id||a.mls_number||"")+"__"+(a.alert_type||"");
     if(seen.has(key))return false;
@@ -43,6 +49,10 @@ function updateAlertPageCount(){
 }
 function dismissOne(aid){removeAlertRow(aid);}
 function dismissAndOpen(aid,pid){removeAlertRow(aid,()=>{openDetail(pid);});}
+function stillPass(aid,pid){
+  fetch(SB+'/rest/v1/properties?id=eq.'+pid,{method:'PATCH',headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({disposition_date:new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'})})}).catch(e=>console.error('Still pass update failed:',e));
+  removeAlertRow(aid);
+}
 function dismissAllAlerts(){
   try{
     const dismissed=JSON.parse(localStorage.getItem("sh_dismissed_alerts")||"[]");
@@ -61,10 +71,19 @@ function openAlerts(){
     const matchProp=props.find(p=>p.mls_number&&a.mls_number&&p.mls_number===a.mls_number);
     const propId=matchProp?matchProp.id:null;
     const addr=matchProp?matchProp.address:(a.message||'').replace(/\s*(went|price|dropped|from|–).*/i,'').replace(/\s*\$[\d,.]+.*/,'').trim()||'Unknown';
-    const ico=a.alert_type==="NEW_LISTING"?"🆕":a.alert_type==="PRICE_CHANGE"?"💰":a.alert_type==="STATUS_CHANGE"?"🏠":a.alert_type?.includes("WATCHLIST")?"⭐":"📋";
-    const col=a.alert_type==="NEW_LISTING"?"#22c55e":a.alert_type==="PRICE_CHANGE"?"#f59e0b":a.alert_type==="STATUS_CHANGE"?"#a855f7":a.alert_type?.includes("WATCHLIST")?"#d4af37":"#94a3b8";
-    let label='',line1='',line2='';
-    if(a.alert_type==="PRICE_CHANGE"){
+    const ico=a.alert_type==="RESURRECTION"?"🔄":a.alert_type==="NEW_LISTING"?"🆕":a.alert_type==="PRICE_CHANGE"?"💰":a.alert_type==="STATUS_CHANGE"?"🏠":a.alert_type?.includes("WATCHLIST")?"⭐":"📋";
+    const col=a.alert_type==="RESURRECTION"?"#d4af37":a.alert_type==="NEW_LISTING"?"#22c55e":a.alert_type==="PRICE_CHANGE"?"#f59e0b":a.alert_type==="STATUS_CHANGE"?"#a855f7":a.alert_type?.includes("WATCHLIST")?"#d4af37":"#94a3b8";
+    let label='',line1='',line2='',extraHtml='';
+    if(a.alert_type==="RESURRECTION"){
+      label="🔄 RESURRECTION";
+      line1=addr;
+      const oldP=a.old_value?Number(a.old_value):null,newP=a.new_value?Number(a.new_value):null;
+      if(oldP&&newP){const pct=Math.round(((oldP-newP)/oldP)*100);line2='$'+oldP.toLocaleString()+' → $'+newP.toLocaleString()+(pct>0?' (↓'+pct+'%)':'');}
+      else{line2=a.details||a.message||'';}
+      const reason=matchProp?.disposition_reason||a.metadata?.disposition_reason||'';
+      if(reason)extraHtml+=`<div style="font-size:10px;color:#94a3b8;margin-top:3px;font-style:italic">Passed: ${esc(reason)}</div>`;
+      extraHtml+=`<div style="display:flex;gap:6px;margin-top:6px"><button onclick="event.stopPropagation();closeAlerts();openDetail('${propId||a.property_id}')" style="flex:1;padding:6px 10px;font-size:11px;font-weight:700;border-radius:8px;border:1px solid rgba(212,175,55,0.3);background:rgba(212,175,55,0.08);color:#d4af37;cursor:pointer">Re-analyze</button><button onclick="event.stopPropagation();stillPass('${a.id}','${propId||a.property_id}')" style="flex:1;padding:6px 10px;font-size:11px;font-weight:700;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#94a3b8;cursor:pointer">Still Pass</button></div>`;
+    }else if(a.alert_type==="PRICE_CHANGE"){
       label="PRICE DROP";
       line1=addr;
       const oldP=a.old_value?Number(a.old_value):null,newP=a.new_value?Number(a.new_value):null;
@@ -85,7 +104,8 @@ function openAlerts(){
     }else{
       label=a.alert_type||"ALERT";line1=a.message||'';line2=a.details||'';
     }
-    return`<div class="swipe-wrap" data-aid="${a.id}"><div class="swipe-bg"><span>Delete</span></div><div class="swipe-card" onclick="${propId?`closeAlerts();openDetail('${propId}')`:''}" style="${propId?'cursor:pointer':''}"><span style="color:${col};flex-shrink:0;font-size:20px">${ico}</span><div style="flex:1;min-width:0"><span style="font-size:9px;font-weight:800;letter-spacing:1px;color:${col};text-transform:uppercase">${label}</span><div style="color:#e2e8f0;font-weight:600;font-size:13px;margin-top:2px">${esc(line1)}</div>${line2?`<div style="font-size:11px;color:#94a3b8;margin-top:2px">${esc(line2)}</div>`:''}<div style="font-size:9px;color:#475569;margin-top:3px">${a.created_at?new Date(a.created_at).toLocaleString():""}</div></div><button onclick="event.stopPropagation();dismissOne('${a.id}')" class="alert-x">✕</button></div></div>`;
+    const resBorder=a.alert_type==='RESURRECTION'?'border:1px solid rgba(212,175,55,0.2);background:rgba(212,175,55,0.08);':'';
+    return`<div class="swipe-wrap" data-aid="${a.id}"><div class="swipe-bg"><span>Delete</span></div><div class="swipe-card" onclick="${propId?`closeAlerts();openDetail('${propId}')`:''}" style="${resBorder}${propId?'cursor:pointer':''}"><span style="color:${col};flex-shrink:0;font-size:20px">${ico}</span><div style="flex:1;min-width:0"><span style="font-size:9px;font-weight:800;letter-spacing:1px;color:${col};text-transform:uppercase">${label}</span><div style="color:#e2e8f0;font-weight:600;font-size:13px;margin-top:2px">${esc(line1)}</div>${line2?`<div style="font-size:11px;color:#94a3b8;margin-top:2px">${esc(line2)}</div>`:''}${extraHtml}<div style="font-size:9px;color:#475569;margin-top:3px">${a.created_at?new Date(a.created_at).toLocaleString():""}</div></div><button onclick="event.stopPropagation();dismissOne('${a.id}')" class="alert-x">✕</button></div></div>`;
   };
   const m=document.getElementById("alertModal");
   m.innerHTML=`<div class="sheet" style="position:relative"><div class="handle"></div><button class="close-x" onclick="closeAlerts()">✕</button>
