@@ -285,11 +285,9 @@ async function saveMilestone(id){
     const res=await fetch(SB+'/rest/v1/renovation_milestones?id=eq.'+id,{method:'PATCH',headers:RENO_WH,body:JSON.stringify(patch)});
     console.log('[SH MILESTONE] Save response status:', res.status);
     if(!res.ok){showRenoToast('Failed to save milestone');return;}
-    // Cascade: shift downstream not_started milestones when this one slips or finishes early
-    const effectiveEnd = patch.actual_end || null;
-    const plannedEnd = m.planned_end || null;
-    if (effectiveEnd && plannedEnd) {
-      const slipDays = Math.ceil((new Date(effectiveEnd+'T00:00:00') - new Date(plannedEnd+'T00:00:00')) / 864e5);
+    // Cascade: shift downstream not_started milestones when completing with slip
+    if (newStatus === 'complete' && patch.actual_end && m.planned_end) {
+      const slipDays = Math.ceil((new Date(patch.actual_end+'T00:00:00') - new Date(m.planned_end+'T00:00:00')) / 864e5);
       if (slipDays !== 0) {
         const downstream = renoMilestones.filter(dm => dm.phase_order > m.phase_order && dm.status === 'not_started');
         for (const dm of downstream) {
@@ -312,30 +310,6 @@ async function saveMilestone(id){
           const dir = slipDays > 0 ? 'forward' : 'back';
           showRenoToast(downstream.length + ' phase' + (downstream.length > 1 ? 's' : '') + ' shifted ' + Math.abs(slipDays) + 'd ' + dir);
         }
-      }
-    }
-    // Also cascade when status is skipped: shift downstream to start where this phase's planned_start was
-    if (newStatus === 'skipped' && m.planned_start && m.planned_end) {
-      const skipDays = -Math.ceil((new Date(m.planned_end+'T00:00:00') - new Date(m.planned_start+'T00:00:00')) / 864e5);
-      const downstream = renoMilestones.filter(dm => dm.phase_order > m.phase_order && dm.status === 'not_started');
-      for (const dm of downstream) {
-        const dPatch = {};
-        if (dm.planned_start) {
-          const newStart = new Date(new Date(dm.planned_start+'T00:00:00').getTime() + skipDays * 864e5);
-          dPatch.planned_start = newStart.toLocaleDateString('en-CA', {timeZone: 'America/Los_Angeles'});
-        }
-        if (dm.planned_end) {
-          const newEnd = new Date(new Date(dm.planned_end+'T00:00:00').getTime() + skipDays * 864e5);
-          dPatch.planned_end = newEnd.toLocaleDateString('en-CA', {timeZone: 'America/Los_Angeles'});
-        }
-        if (Object.keys(dPatch).length > 0) {
-          try {
-            await fetch(SB + '/rest/v1/renovation_milestones?id=eq.' + dm.id, {method: 'PATCH', headers: RENO_WH, body: JSON.stringify(dPatch)});
-          } catch(e) { console.error('Skip cascade failed:', e); }
-        }
-      }
-      if (downstream.length > 0) {
-        showRenoToast(downstream.length + ' phase' + (downstream.length > 1 ? 's' : '') + ' shifted ' + Math.abs(skipDays) + 'd earlier (skipped phase)');
       }
     }
     showRenoToast('Milestone updated');
@@ -406,8 +380,9 @@ function renderProjectV(el){
     const msDone = activeMilestones.filter(m => m.status === 'complete').length;
     const totalDays=renoMilestones.reduce((s,m)=>s+(m.planned_duration_days||1),0);
     // Calculate total drift
-    const totalDrift = renoMilestones.filter(m => m.status !== 'skipped' && m.drift_days != null).reduce((s,m) => s + m.drift_days, 0);
-    const hasDriftData = renoMilestones.some(m => m.status !== 'skipped' && m.drift_days != null);
+    const completedMs = renoMilestones.filter(m => m.status === 'complete' && m.drift_days != null);
+    const totalDrift = completedMs.reduce((s, m) => s + m.drift_days, 0);
+    const hasDriftData = completedMs.length > 0;
     const driftLabel = !hasDriftData ? 'On track' : totalDrift === 0 ? 'On track' : totalDrift < 0 ? Math.abs(totalDrift) + 'd ahead' : totalDrift + 'd behind';
     const driftColor = !hasDriftData ? '#94a3b8' : totalDrift === 0 ? '#94a3b8' : totalDrift < 0 ? '#4ade80' : '#ef4444';
     // Mini segmented bar for summary
@@ -429,12 +404,12 @@ function renderProjectV(el){
       const [bc,bl]=MS_BADGES[st]||['#64748b','Not Started'];
       let dates = '';
       const fmtD = d => new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'});
-      if (st === 'complete' && m.actual_start && m.actual_end) {
-        dates = fmtD(m.actual_start) + ' – ' + fmtD(m.actual_end);
-      } else if (st === 'in_progress' && m.actual_start) {
-        dates = 'Started ' + fmtD(m.actual_start) + ' → ' + fmtD(m.planned_end || m.actual_start);
-      } else if (st === 'skipped') {
+      if (st === 'skipped') {
         dates = 'Skipped';
+      } else if (m.actual_start && m.actual_end) {
+        dates = fmtD(m.actual_start) + ' – ' + fmtD(m.actual_end);
+      } else if (m.actual_start) {
+        dates = 'Started ' + fmtD(m.actual_start) + ' → ' + fmtD(m.planned_end || m.actual_start);
       } else if (m.planned_start && m.planned_end) {
         dates = fmtD(m.planned_start) + ' – ' + fmtD(m.planned_end);
       }
@@ -455,7 +430,7 @@ function renderProjectV(el){
       h+=`<span style="display:inline-block;font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;background:${bc}18;color:${bc};border:1px solid ${bc}30">${bl}</span>`;
       if(dayInfo)h+=`<div style="font-size:10px;color:#f97316;margin-top:2px">${dayInfo}</div>`;
       if(driftInfo){const dc=m.drift_days<=0?'#4ade80':'#ef4444';h+=`<div style="font-size:10px;color:${dc};margin-top:2px">${driftInfo}</div>`;}
-      const dateColor = st === 'complete' ? '#4ade80' : st === 'in_progress' ? '#f97316' : st === 'blocked' ? '#ef4444' : st === 'skipped' ? '#475569' : '#64748b';
+      const dateColor = m.actual_start && m.actual_end ? '#4ade80' : m.actual_start ? '#f97316' : st === 'blocked' ? '#ef4444' : st === 'skipped' ? '#475569' : '#64748b';
       if(dates)h+=`<div style="font-size:10px;color:${dateColor};margin-top:2px">${dates}</div>`;
       h+=`</div></div>`;
       // Inline edit panel
