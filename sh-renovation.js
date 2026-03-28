@@ -226,12 +226,13 @@ async function generateMilestones(){
     if(!apiKey){apiKey=prompt("Enter your Claude API key:");if(!apiKey){btn.disabled=false;btn.textContent='Generate Timeline';return;}localStorage.setItem("sh_claude_key",apiKey);}
     const sowSummary=renoSOW.map(l=>l.line_number+'. '+l.description+' ($'+(l.planned_budget||l.lender_approved||0).toLocaleString()+')').join('\n');
     const holdMonths=renoFin?.loan_term_months||8;
+    const renoMonths = Math.max(1, holdMonths - 2);
     const startDate=renoFin?.funded_date?new Date(new Date(renoFin.funded_date).getTime()+7*864e5).toISOString().split('T')[0]:new Date(Date.now()+7*864e5).toISOString().split('T')[0];
     const budget=renoDeal.contracted_reno_amount||renoSOW.reduce((s,l)=>s+(l.planned_budget||0),0)||250000;
     const response=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:`You are planning a renovation timeline for a luxury home flip. Respond ONLY with a JSON array, no markdown, no backticks.\n\nProperty: ${renoDeal.address||'Luxury home'}\nBudget: $${budget.toLocaleString()}\nHold period: ${holdMonths} months\nStart date: ${startDate}\nMust complete within ${holdMonths-1} months.\n\nSOW Lines:\n${sowSummary}\n\nGenerate 6-10 phases in construction order:\n{"phase_name":"Demo","phase_order":1,"description":"what is included","planned_start":"YYYY-MM-DD","planned_end":"YYYY-MM-DD","planned_duration_days":number}\n\nPhases should be sequential. Leave 1-2 weeks buffer before hold period ends.`}]})
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:`You are planning a renovation timeline for a luxury home flip. Respond ONLY with a JSON array, no markdown, no backticks.\n\nProperty: ${renoDeal.address||'Luxury home'}\nBudget: $${budget.toLocaleString()}\nHold period: ${holdMonths} months\nStart date: ${startDate}\nMust complete ALL renovation within ${renoMonths} months of start date. The remaining ${holdMonths - renoMonths} months are reserved for staging, photography, listing, and sale. Do NOT schedule any renovation work in the final 2 months.\n\nSOW Lines:\n${sowSummary}\n\nGenerate 6-10 phases in construction order:\n{"phase_name":"Demo","phase_order":1,"description":"what is included","planned_start":"YYYY-MM-DD","planned_end":"YYYY-MM-DD","planned_duration_days":number}\n\nPhases should be sequential. Leave 1-2 weeks buffer before hold period ends.`}]})
     });
     if(!response.ok){if(response.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+response.status);}
     const data=await response.json();
@@ -269,9 +270,33 @@ async function saveMilestone(id){
   if(patch.actual_end&&m.planned_end){
     patch.drift_days=Math.ceil((new Date(patch.actual_end+'T00:00:00')-new Date(m.planned_end+'T00:00:00'))/864e5);
   }
+  console.log('[SH MILESTONE] Saving patch:', JSON.stringify(patch));
   try{
     const res=await fetch(SB+'/rest/v1/renovation_milestones?id=eq.'+id,{method:'PATCH',headers:RENO_WH,body:JSON.stringify(patch)});
+    console.log('[SH MILESTONE] Save response status:', res.status);
     if(!res.ok){showRenoToast('Failed to save milestone');return;}
+    // Cascade: if this milestone's actual_end extends past planned_end, shift downstream milestones
+    if (patch.actual_end && m.planned_end) {
+      const slipDays = Math.ceil((new Date(patch.actual_end+'T00:00:00') - new Date(m.planned_end+'T00:00:00')) / 864e5);
+      if (slipDays > 0) {
+        const downstream = renoMilestones.filter(dm => dm.phase_order > m.phase_order && dm.status === 'not_started');
+        for (const dm of downstream) {
+          const newStart = dm.planned_start ? new Date(new Date(dm.planned_start+'T00:00:00').getTime() + slipDays * 864e5).toLocaleDateString('en-CA', {timeZone: 'America/Los_Angeles'}) : null;
+          const newEnd = dm.planned_end ? new Date(new Date(dm.planned_end+'T00:00:00').getTime() + slipDays * 864e5).toLocaleDateString('en-CA', {timeZone: 'America/Los_Angeles'}) : null;
+          if (newStart || newEnd) {
+            const dPatch = {};
+            if (newStart) dPatch.planned_start = newStart;
+            if (newEnd) dPatch.planned_end = newEnd;
+            try {
+              await fetch(SB + '/rest/v1/renovation_milestones?id=eq.' + dm.id, {method: 'PATCH', headers: RENO_WH, body: JSON.stringify(dPatch)});
+            } catch(e) { console.error('Cascade milestone shift failed:', e); }
+          }
+        }
+        if (downstream.length > 0) {
+          showRenoToast(downstream.length + ' milestone' + (downstream.length > 1 ? 's' : '') + ' shifted by ' + slipDays + ' days');
+        }
+      }
+    }
     showRenoToast('Milestone updated');
     renoExpandedMs=null;
     await loadRenoData(renoDealId);renderRenoSub();
@@ -359,7 +384,14 @@ function renderProjectV(el){
       const icon=MS_ICONS[st]||'○';
       const sc=MS_COLORS[st]||'#64748b';
       const [bc,bl]=MS_BADGES[st]||['#64748b','Not Started'];
-      const dates=m.planned_start&&m.planned_end?new Date(m.planned_start+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'})+' – '+new Date(m.planned_end+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'}):'';
+      let dates = '';
+      if (st === 'complete' && m.actual_start && m.actual_end) {
+        dates = new Date(m.actual_start+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'}) + ' – ' + new Date(m.actual_end+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'});
+      } else if (st === 'in_progress' && m.actual_start) {
+        dates = 'Started ' + new Date(m.actual_start+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'}) + ' → ' + new Date((m.planned_end||m.actual_start)+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'});
+      } else if (m.planned_start && m.planned_end) {
+        dates = new Date(m.planned_start+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'}) + ' – ' + new Date(m.planned_end+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/Los_Angeles'});
+      }
       const isExp=renoExpandedMs===m.id;
       // Day X of Y for in_progress
       let dayInfo='';
@@ -377,7 +409,8 @@ function renderProjectV(el){
       h+=`<span style="display:inline-block;font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;background:${bc}18;color:${bc};border:1px solid ${bc}30">${bl}</span>`;
       if(dayInfo)h+=`<div style="font-size:10px;color:#f97316;margin-top:2px">${dayInfo}</div>`;
       if(driftInfo){const dc=m.drift_days<=0?'#4ade80':'#ef4444';h+=`<div style="font-size:10px;color:${dc};margin-top:2px">${driftInfo}</div>`;}
-      if(dates)h+=`<div style="font-size:10px;color:#475569;margin-top:2px">${dates}</div>`;
+      const dateColor = st === 'complete' ? '#4ade80' : st === 'in_progress' ? '#f97316' : st === 'blocked' ? '#ef4444' : '#475569';
+      if(dates)h+=`<div style="font-size:10px;color:${dateColor};margin-top:2px">${dates}</div>`;
       h+=`</div></div>`;
       // Inline edit panel
       if(isExp){
