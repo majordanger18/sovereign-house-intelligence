@@ -256,25 +256,29 @@ async function saveMilestone(id){
   const notes=(document.getElementById('msNotes_'+id)?.value||'').trim()||null;
   const blockingReason=(document.getElementById('msBlock_'+id)?.value||'').trim()||null;
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
-  const patch={status:newStatus,notes:notes,blocking_reason:blockingReason};
-  // Clear dates/drift when skipped
+  const patch = {status: newStatus, notes: notes, blocking_reason: blockingReason};
+
+  // Auto-fill actual_start when moving to in_progress
+  patch.actual_start = actualStart || (newStatus === 'in_progress' && !m.actual_start ? today : m.actual_start || null);
+  // Auto-fill actual_end when moving to complete
+  patch.actual_end = actualEnd || (newStatus === 'complete' && !m.actual_end ? today : m.actual_end || null);
+
+  // Override: clear everything when skipped
   if (newStatus === 'skipped') {
     patch.drift_days = null;
     patch.actual_start = null;
     patch.actual_end = null;
     patch.actual_duration_days = null;
+    patch.blocking_reason = null;
   }
-  // Auto-fill actual_start when moving to in_progress
-  patch.actual_start=actualStart||(newStatus==='in_progress'&&!m.actual_start?today:m.actual_start||null);
-  // Auto-fill actual_end when moving to complete
-  patch.actual_end=actualEnd||(newStatus==='complete'&&!m.actual_end?today:m.actual_end||null);
-  // Calculate actual_duration_days
-  if(patch.actual_start&&patch.actual_end){
-    patch.actual_duration_days=Math.ceil((new Date(patch.actual_end+'T00:00:00')-new Date(patch.actual_start+'T00:00:00'))/864e5);
+
+  // Calculate actual_duration_days (only if not skipped)
+  if (newStatus !== 'skipped' && patch.actual_start && patch.actual_end) {
+    patch.actual_duration_days = Math.ceil((new Date(patch.actual_end + 'T00:00:00') - new Date(patch.actual_start + 'T00:00:00')) / 864e5);
   }
-  // Calculate drift_days
-  if(patch.actual_end&&m.planned_end){
-    patch.drift_days=Math.ceil((new Date(patch.actual_end+'T00:00:00')-new Date(m.planned_end+'T00:00:00'))/864e5);
+  // Calculate drift_days (only if not skipped)
+  if (newStatus !== 'skipped' && patch.actual_end && m.planned_end) {
+    patch.drift_days = Math.ceil((new Date(patch.actual_end + 'T00:00:00') - new Date(m.planned_end + 'T00:00:00')) / 864e5);
   }
   console.log('[SH MILESTONE] Saving patch:', JSON.stringify(patch));
   try{
