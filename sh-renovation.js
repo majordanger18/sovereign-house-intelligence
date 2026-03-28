@@ -235,7 +235,7 @@ async function generateMilestones(){
     const response=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:`You are planning a renovation timeline for a luxury home flip. Respond ONLY with a JSON array, no markdown, no backticks.\n\nProperty: ${renoDeal.address||'Luxury home'}\nBudget: $${budget.toLocaleString()}\nHold period: ${holdMonths} months\nRenovation starts on ${startDate} (this is when the buyer gets keys to the property). All phases must start on or after this date.\nMust complete ALL renovation within ${renoMonths} months of start date. The remaining ${holdMonths - renoMonths} months are reserved for staging, photography, listing, and sale. Do NOT schedule any renovation work in the final 2 months.\n\nSOW Lines:\n${sowSummary}\n\nGenerate 6-10 phases in construction order:\n{"phase_name":"Demo","phase_order":1,"description":"what is included","planned_start":"YYYY-MM-DD","planned_end":"YYYY-MM-DD","planned_duration_days":number}\n\nPhases should be sequential. Leave 1-2 weeks buffer before hold period ends.`}]})
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:`You are planning a renovation timeline for a luxury home flip. Respond ONLY with a JSON array, no markdown, no backticks.\n\nProperty: ${renoDeal.address||'Luxury home'}\nBudget: $${budget.toLocaleString()}\nHold period: ${holdMonths} months\nRenovation starts on ${startDate} (this is when the buyer gets keys to the property). All phases must start on or after this date.\nMust complete ALL renovation within ${renoMonths} months of start date. The remaining ${holdMonths - renoMonths} months are reserved for staging, photography, listing, and sale. Do NOT schedule any renovation work in the final 2 months.\n\nSOW Lines:\n${sowSummary}\n\nGenerate 6-10 phases in construction order:\n{"phase_name":"Demo","phase_order":1,"description":"what is included","planned_start":"YYYY-MM-DD","planned_end":"YYYY-MM-DD","planned_duration_days":number}\n\nIMPORTANT: Permits/Planning and Demolition must ALWAYS be separate phases, never combined. Permits may need to happen at a different time than demo. Keep them as two distinct phases.\n\nPhases should be sequential. Leave 1-2 weeks buffer before hold period ends.`}]})
     });
     if(!response.ok){if(response.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+response.status);}
     const data=await response.json();
@@ -294,8 +294,26 @@ async function saveMilestone(id){
   if (newStatus !== 'skipped' && patch.actual_end && m.planned_end) {
     patch.drift_days = Math.ceil((new Date(patch.actual_end + 'T00:00:00') - new Date(m.planned_end + 'T00:00:00')) / 864e5);
   }
-  if(patch.status==='not_started'&&patch.actual_start){patch.status='in_progress';}
-  if(patch.status!=='skipped'&&patch.actual_start&&patch.actual_end){patch.status='complete';}
+  // Only auto-infer status if user didn't change the dropdown from its current saved value
+  const userChangedStatus = (newStatus !== m.status);
+  if (!userChangedStatus) {
+    if(patch.status==='not_started'&&patch.actual_start){patch.status='in_progress';}
+    if(patch.status==='not_started'&&patch.actual_start&&patch.actual_end){patch.status='complete';}
+  }
+  // If user explicitly changed status, also clear dates when going backward
+  if (userChangedStatus) {
+    if (newStatus === 'not_started') {
+      patch.actual_start = null;
+      patch.actual_end = null;
+      patch.actual_duration_days = null;
+      patch.drift_days = null;
+    }
+    if (newStatus === 'in_progress' && m.status === 'complete') {
+      patch.actual_end = null;
+      patch.actual_duration_days = null;
+      patch.drift_days = null;
+    }
+  }
   console.log('[SH MILESTONE] Saving patch:', JSON.stringify(patch));
   try{
     const res=await fetch(SB+'/rest/v1/renovation_milestones?id=eq.'+id,{method:'PATCH',headers:RENO_WH,body:JSON.stringify(patch)});
