@@ -261,13 +261,6 @@ async function saveMilestone(id){
   patch.actual_start=actualStart||(newStatus==='in_progress'&&!m.actual_start?today:m.actual_start||null);
   // Auto-fill actual_end when moving to complete
   patch.actual_end=actualEnd||(newStatus==='complete'&&!m.actual_end?today:m.actual_end||null);
-  // Auto-detect status from dates
-  if (patch.actual_start && !patch.actual_end && patch.status === 'not_started') {
-    patch.status = 'in_progress';
-  }
-  if (patch.actual_start && patch.actual_end && patch.status !== 'complete') {
-    patch.status = 'complete';
-  }
   // Calculate actual_duration_days
   if(patch.actual_start&&patch.actual_end){
     patch.actual_duration_days=Math.ceil((new Date(patch.actual_end+'T00:00:00')-new Date(patch.actual_start+'T00:00:00'))/864e5);
@@ -426,8 +419,8 @@ function renderProjectV(el){
         h+=`<div onclick="event.stopPropagation()" style="border-left:3px solid #d4af37;background:rgba(255,255,255,0.02);padding:14px;margin:8px 0 4px;border-radius:0 12px 12px 0">`;
         h+=`<div class="reno-eg">`;
         h+=`<div class="fld"><label>STATUS</label><select id="msStatus_${m.id}" class="cinput"><option value="not_started"${st==='not_started'?' selected':''}>Not Started</option><option value="in_progress"${st==='in_progress'?' selected':''}>In Progress</option><option value="complete"${st==='complete'?' selected':''}>Complete</option><option value="blocked"${st==='blocked'?' selected':''}>Blocked</option><option value="skipped"${st==='skipped'?' selected':''}>Skipped</option></select></div>`;
-        h+=`<div class="fld"><label>ACTUAL START</label><input id="msStart_${m.id}" type="date" class="cinput" value="${m.actual_start||''}" onchange="const sel=document.getElementById('msStatus_${m.id}');if(sel&&sel.value==='not_started')sel.value='in_progress';"/></div>`;
-        h+=`<div class="fld"><label>ACTUAL END</label><input id="msEnd_${m.id}" type="date" class="cinput" value="${m.actual_end||''}" onchange="const sel=document.getElementById('msStatus_${m.id}');if(sel)sel.value='complete';"/></div>`;
+        h+=`<div class="fld"><label>ACTUAL START</label><input id="msStart_${m.id}" type="date" class="cinput" value="${m.actual_start||''}"/></div>`;
+        h+=`<div class="fld"><label>ACTUAL END</label><input id="msEnd_${m.id}" type="date" class="cinput" value="${m.actual_end||''}"/></div>`;
         if(st==='blocked')h+=`<div class="fld"><label>BLOCKING REASON</label><input id="msBlock_${m.id}" type="text" class="cinput" value="${esc(m.blocking_reason||'')}" placeholder="What is blocking this phase?"/></div>`;
         h+=`<div class="fld"><label>NOTES</label><input id="msNotes_${m.id}" type="text" class="cinput" value="${esc(m.notes||'')}" placeholder="Notes"/></div>`;
         h+=`</div>`;
