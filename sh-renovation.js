@@ -293,6 +293,8 @@ async function saveMilestone(id){
           }
         }
         if (downstream.length > 0) {
+          // Clear drift on this milestone since downstream absorbed the slip
+          await fetch(SB + '/rest/v1/renovation_milestones?id=eq.' + id, {method: 'PATCH', headers: RENO_WH, body: JSON.stringify({drift_days: 0})});
           showRenoToast(downstream.length + ' milestone' + (downstream.length > 1 ? 's' : '') + ' shifted by ' + slipDays + ' days');
         }
       }
