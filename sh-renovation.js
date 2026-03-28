@@ -218,12 +218,11 @@ function renderRenoSub(){
 // ═══ PROJECT VIEW (Command Center) ═══
 async function generateMilestones(){
   if(!renoDealId||!renoDeal)return;
-  const btn=event.target;
-  btn.disabled=true;
-  btn.textContent='Generating...';
+  const btn=document.querySelector('[onclick*="generateMilestones"]');
+  if(btn){btn.disabled=true;btn.textContent='Generating...';}
   try{
     let apiKey=localStorage.getItem("sh_claude_key");
-    if(!apiKey){apiKey=prompt("Enter your Claude API key:");if(!apiKey){btn.disabled=false;btn.textContent='Generate Timeline';return;}localStorage.setItem("sh_claude_key",apiKey);}
+    if(!apiKey){apiKey=prompt("Enter your Claude API key:");if(!apiKey){if(btn){btn.disabled=false;btn.textContent='Generate Timeline';}return;}localStorage.setItem("sh_claude_key",apiKey);}
     const sowSummary=renoSOW.map(l=>l.line_number+'. '+l.description+' ($'+(l.planned_budget||l.lender_approved||0).toLocaleString()+')').join('\n');
     const holdMonths=renoFin?.loan_term_months||8;
     const renoMonths = Math.max(1, holdMonths - 2);
@@ -244,7 +243,7 @@ async function generateMilestones(){
     showRenoToast(milestones.length+' milestones generated');
     await loadRenoData(renoDealId);renderRenoSub();
   }catch(e){console.error('Milestone generation failed:',e);showRenoToast('Failed to generate milestones');}
-  finally{btn.disabled=false;btn.textContent='Generate Timeline';}
+  finally{if(btn){btn.disabled=false;btn.textContent='Generate Timeline';}}
 }
 
 function toggleMsExpand(id){renoExpandedMs=renoExpandedMs===id?null:id;renderRenoSub();}
