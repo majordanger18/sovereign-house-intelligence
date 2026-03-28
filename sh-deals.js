@@ -433,7 +433,7 @@ async function openDeal(dealId){
       <button onclick="logCounter('${d.id}')" class="btn" style="width:100%;margin-top:8px;padding:12px;font-size:13px;background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.3);color:#f97316;font-weight:800">↩️ Log Counter Offer</button>
     </div>`:''}
 
-    <!-- CONCESSIONS -->
+    ${['offer_drafted','offer_submitted','counter_received','counter_sent','accepted'].includes(d.status)?`<!-- CONCESSIONS -->
     <div style="margin-bottom:16px;padding:14px;border-radius:14px;background:rgba(139,92,246,0.03);border:1px solid rgba(139,92,246,0.12)">
       <div style="font-size:10px;color:#8b5cf6;font-weight:700;letter-spacing:2px;margin-bottom:8px">CONCESSIONS (${conc.length})</div>
       <div id="concList">${conc.length?conc.map((c,i)=>`<div style="display:flex;align-items:start;gap:8px;padding:8px;margin-bottom:4px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04)"><div style="flex:1"><div style="font-size:11px;font-weight:700;color:${c.party==='buyer'?'#3b82f6':'#f59e0b'}">${c.party==='buyer'?'BUYER':'SELLER'}</div><div style="font-size:12px;color:#e2e8f0;font-weight:600">${esc(c.item)}</div>${c.detail?`<div style="font-size:10px;color:#64748b;margin-top:2px">${esc(c.detail)}</div>`:''}</div><button onclick="removeConcession('${d.id}',${i})" style="flex-shrink:0;width:28px;height:28px;border-radius:6px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.05);color:#ef4444;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center">✕</button></div>`).join(''):`<div style="font-size:11px;color:#475569;padding:8px">No concessions logged</div>`}</div>
@@ -445,8 +445,27 @@ async function openDeal(dealId){
         <input id="conc_item" class="cinput" placeholder="e.g. As-is condition" style="flex:1;font-size:12px;min-height:40px"/>
         <button onclick="addConcession('${d.id}')" class="btn" style="padding:8px 14px;font-size:12px;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);color:#8b5cf6;font-weight:800;white-space:nowrap">+ Add</button>
       </div>
-    </div>
+    </div>`:''}
 
+    ${['financing','closing','clear_to_close','closed','in_renovation','renovation_complete','listing_prep','listed','sold'].includes(d.status)?`
+    <details style="margin-bottom:16px;border:1px solid rgba(255,255,255,0.06);border-radius:14px;background:rgba(255,255,255,0.02)">
+      <summary style="padding:12px 14px;cursor:pointer;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#d4af37;list-style:none;display:flex;justify-content:space-between;align-items:center">
+        <span>DEAL TERMS</span>
+        <span style="font-size:11px;font-weight:600;color:#94a3b8;letter-spacing:0">${$(d.accepted_price||d.offer_price)} · ${d.accepted_commission_pct!=null?d.accepted_commission_pct:d.lisa_buy_commission_pct||0}% · COE ${d.coe_date?new Date(d.coe_date+'T00:00:00').toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric',timeZone:'America/Los_Angeles'}):'—'}</span>
+      </summary>
+      <div style="padding:0 14px 14px">
+        <div class="row2">
+          <div class="fld"><label>CONTRACT DATE</label><input id="deal_contractdate" type="date" class="cinput" value="${d.contract_date||''}" onchange="saveDealField('${d.id}','contract_date',this.value)"/></div>
+          <div class="fld"><label>COE DATE</label><input id="deal_coedate" type="date" class="cinput" value="${d.coe_date||''}" onchange="saveDealField('${d.id}','coe_date',this.value)"/></div>
+        </div>
+        <div class="row2">
+          <div class="fld"><label>ACCEPTED PRICE</label><input id="deal_acceptedprice" type="number" class="cinput" value="${d.accepted_price||''}" onchange="saveDealField('${d.id}','accepted_price',Number(this.value))"/></div>
+          <div class="fld"><label>ACCEPTED COMMISSION %</label><input id="deal_acceptedcomm" type="number" step="0.5" class="cinput" value="${d.accepted_commission_pct!=null?d.accepted_commission_pct:''}" onchange="saveDealField('${d.id}','accepted_commission_pct',Number(this.value))"/></div>
+        </div>
+        ${conc.length?`<div style="margin-top:8px"><div style="font-size:9px;color:#8b5cf6;font-weight:700;letter-spacing:1px;margin-bottom:4px">CONCESSIONS (${conc.length})</div>${conc.map(c=>'<div style="font-size:11px;color:#94a3b8;padding:2px 0">'+esc(c.item)+' ('+c.party+')</div>').join('')}</div>`:''}
+      </div>
+    </details>
+    `:`
     <!-- KEY DATES EDIT -->
     <div style="margin-bottom:16px;padding:14px;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">
       <div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:10px">KEY DATES</div>
@@ -458,7 +477,7 @@ async function openDeal(dealId){
         <div class="fld"><label>ACCEPTED PRICE</label><input id="deal_acceptedprice" type="number" class="cinput" value="${d.accepted_price||''}" onchange="saveDealField('${d.id}','accepted_price',Number(this.value))"/></div>
         <div class="fld"><label>ACCEPTED COMMISSION %</label><input id="deal_acceptedcomm" type="number" step="0.5" class="cinput" value="${d.accepted_commission_pct!=null?d.accepted_commission_pct:''}" onchange="saveDealField('${d.id}','accepted_commission_pct',Number(this.value))"/></div>
       </div>
-    </div>
+    </div>`}
 
     <!-- TIMELINE -->
     <div style="margin-bottom:16px">
