@@ -294,9 +294,8 @@ async function saveMilestone(id){
   if (newStatus !== 'skipped' && patch.actual_end && m.planned_end) {
     patch.drift_days = Math.ceil((new Date(patch.actual_end + 'T00:00:00') - new Date(m.planned_end + 'T00:00:00')) / 864e5);
   }
-  // Smart status inference: if user entered dates but didn't change dropdown
-  if(patch.status==='not_started'&&patch.actual_start&&!patch.actual_end){patch.status='in_progress';}
-  if(patch.status!=='skipped'&&patch.status!=='complete'&&patch.actual_start&&patch.actual_end){patch.status='complete';}
+  if(patch.status==='not_started'&&patch.actual_start){patch.status='in_progress';}
+  if(patch.status!=='skipped'&&patch.actual_start&&patch.actual_end){patch.status='complete';}
   console.log('[SH MILESTONE] Saving patch:', JSON.stringify(patch));
   try{
     const res=await fetch(SB+'/rest/v1/renovation_milestones?id=eq.'+id,{method:'PATCH',headers:RENO_WH,body:JSON.stringify(patch)});
