@@ -662,7 +662,9 @@ Extract everything visible. Use null for fields not found. Make your best guess 
     });
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
+    console.log("[Contact Scanner] Raw API response:",JSON.stringify(data));
     const parsed=await robustParseJSON(data,apiKey);
+    console.log("[Contact Scanner] Parsed result:",JSON.stringify(parsed));
     prefillContactForm(parsed);
 
     // Upload to storage in background (non-blocking)
@@ -670,6 +672,7 @@ Extract everything visible. Use null for fields not found. Make your best guess 
     uploadToStorage(file,"sovereign-docs",contactPath).catch(e=>console.warn("Contact storage upload failed:",e));
   }catch(e){
     console.error("Contact parse error:",e);
+    console.log("[Contact Scanner] Error:",e.message,e.stack);
     showCtToast("Failed to parse contact: "+e.message);
     openCtForm();
   }finally{

@@ -37,15 +37,16 @@ function storagePath(dealId,type,file){const ext=file.name.split('.').pop()||'pd
 
 async function robustParseJSON(data,apiKey,matchArray){
   let text=data.content?.[0]?.text||"";
+  console.log("[robustParseJSON] Input text:",text.substring(0,500));
   text=text.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
   const regex=matchArray?/\[[\s\S]*\]/:(/\{[\s\S]*\}/);
   let jm=text.match(regex);
-  if(!jm)throw new Error("No JSON found in response");
+  if(!jm){console.log("[robustParseJSON] No JSON match found in:",text.substring(0,300));throw new Error("No JSON found in response");}
   let jsonStr=jm[0];
   jsonStr=jsonStr.replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
   jsonStr=jsonStr.replace(/[\u201C\u201D]/g,'\\"');
   jsonStr=jsonStr.replace(/[\u2018\u2019]/g,"'");
-  try{return JSON.parse(jsonStr);}catch(e1){}
+  try{const r=JSON.parse(jsonStr);console.log("[robustParseJSON] Parsed OK on first try");return r;}catch(e1){console.log("[robustParseJSON] First parse failed:",e1.message);}
   const lastBrace=jsonStr.lastIndexOf(matchArray?']':'}');
   jsonStr=jsonStr.substring(0,lastBrace+1);
   try{return JSON.parse(jsonStr);}catch(e2){}
