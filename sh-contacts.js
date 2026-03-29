@@ -1304,6 +1304,56 @@ async function awardBid(bidId){
     await fetch(SB+"/rest/v1/contractor_bids?id=eq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify({status:"accepted",final_contracted:amount})});
     await fetch(SB+"/rest/v1/contractor_bids?deal_id=eq."+b.deal_id+"&id=neq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify({status:"rejected"})});
     await fetch(SB+"/rest/v1/deals?id=eq."+b.deal_id,{method:"PATCH",headers:HD,body:JSON.stringify({contracted_reno_amount:amount,contracted_reno_contractor:ctrName,contracted_reno_date:new Date().toISOString().split("T")[0]})});
+    // Update SOW planned_budget from awarded bid's parsed sections
+    if(b.parsed_line_items&&b.parsed_line_items.sections){
+      try{
+        const sowRes=await fetch(SB+'/rest/v1/renovation_sow_lines?deal_id=eq.'+b.deal_id+'&order=line_number',{headers:HD});
+        const sowLines=await sowRes.json();
+        if(Array.isArray(sowLines)&&sowLines.length){
+          const sowAmounts={};
+          sowLines.forEach(l=>{sowAmounts[l.line_number]=0;});
+          (b.parsed_line_items.sections||[]).forEach(section=>{
+            const secName=(section.section_name||'').toUpperCase().trim();
+            let mapCats=BID_SOW_MAP[secName];
+            if(!mapCats){
+              const keys=Object.keys(BID_SOW_MAP).sort((a,b)=>b.length-a.length);
+              for(const key of keys){if(secName.includes(key)){mapCats=BID_SOW_MAP[key];break;}}
+            }
+            if(!mapCats||!mapCats.length)return;
+            const lineNums=mapCats.filter(c=>typeof c==='number');
+            const catNames=mapCats.filter(c=>typeof c==='string');
+            catNames.forEach(cat=>{
+              const catLower=cat.toLowerCase();
+              sowLines.forEach(l=>{
+                if((l.category||'').toLowerCase().includes(catLower)){
+                  if(!lineNums.includes(l.line_number))lineNums.push(l.line_number);
+                }
+              });
+            });
+            if(!lineNums.length)return;
+            const perLine=(section.section_total||0)/lineNums.length;
+            lineNums.forEach(ln=>{
+              if(sowAmounts[ln]!==undefined)sowAmounts[ln]+=perLine;
+            });
+          });
+          const overheadPct=(b.parsed_line_items.overhead_pct||0)/100;
+          if(overheadPct>0){
+            Object.keys(sowAmounts).forEach(ln=>{sowAmounts[ln]=Math.round(sowAmounts[ln]*(1+overheadPct));});
+          }else{
+            Object.keys(sowAmounts).forEach(ln=>{sowAmounts[ln]=Math.round(sowAmounts[ln]);});
+          }
+          for(const[ln,amt]of Object.entries(sowAmounts)){
+            if(amt>0){
+              const sowLine=sowLines.find(l=>l.line_number===Number(ln));
+              if(sowLine){
+                await fetch(SB+'/rest/v1/renovation_sow_lines?id=eq.'+sowLine.id,{method:'PATCH',headers:HD,body:JSON.stringify({planned_budget:amt})});
+              }
+            }
+          }
+          console.log('[SH] SOW planned_budget updated from awarded bid:',sowAmounts);
+        }
+      }catch(e){console.error('SOW budget update from bid failed:',e);}
+    }
     const d=deals.find(x=>x.id===b.deal_id);
     if(d){
       const tl=Array.isArray(d.timeline)?[...d.timeline]:[];
@@ -1323,6 +1373,16 @@ async function undoAward(bidId){
     await fetch(SB+"/rest/v1/contractor_bids?id=eq."+bidId,{method:"PATCH",headers:HD,body:JSON.stringify({status:"received",final_contracted:null})});
     await fetch(SB+"/rest/v1/contractor_bids?deal_id=eq."+b.deal_id+"&status=eq.rejected",{method:"PATCH",headers:HD,body:JSON.stringify({status:"received"})});
     await fetch(SB+"/rest/v1/deals?id=eq."+b.deal_id,{method:"PATCH",headers:HD,body:JSON.stringify({contracted_reno_amount:null,contracted_reno_contractor:null,contracted_reno_date:null})});
+    // Reset SOW planned_budget to lender_approved
+    try{
+      const sowRes=await fetch(SB+'/rest/v1/renovation_sow_lines?deal_id=eq.'+b.deal_id,{headers:HD});
+      const sowLines=await sowRes.json();
+      if(Array.isArray(sowLines)){
+        for(const l of sowLines){
+          await fetch(SB+'/rest/v1/renovation_sow_lines?id=eq.'+l.id,{method:'PATCH',headers:HD,body:JSON.stringify({planned_budget:l.lender_approved||0})});
+        }
+      }
+    }catch(e){console.error('SOW budget reset failed:',e);}
     const dlResp=await fetch(SB+"/rest/v1/deals?id=eq."+b.deal_id+"&select=timeline",{headers:HD});
     const dlData=await dlResp.json();
     const curTl=Array.isArray(dlData[0]?.timeline)?dlData[0].timeline:[];
