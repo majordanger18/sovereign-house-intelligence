@@ -83,7 +83,7 @@ function renderDirectory(el){
   h+=`<select id="ctSF" class="cinput ct-fsel" onchange="ctStatusF=this.value;renderCtSub()"><option value="active"${ctStatusF==="active"?" selected":""}>Active</option><option value="inactive"${ctStatusF==="inactive"?" selected":""}>Inactive</option><option value="do_not_use"${ctStatusF==="do_not_use"?" selected":""}>Do Not Use</option><option value="all"${ctStatusF==="all"?" selected":""}>All</option></select></div>`;
 
   // + Add Contact button
-  h+=`<div style="margin:12px 0;display:flex;gap:8px"><button onclick="openCtForm()" class="btn" style="flex:1;padding:8px 16px;font-size:12px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;border-radius:10px;min-height:auto">+ Add Contact</button><button onclick="openContactUpload()" class="btn" style="padding:8px 16px;font-size:12px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;border-radius:10px;min-height:auto">📷 Scan Contact</button></div>`;
+  h+=`<div style="margin:12px 0;display:flex;gap:8px"><button onclick="openCtForm()" class="btn" style="flex:1;padding:8px 16px;font-size:12px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;border-radius:10px;min-height:auto">+ Add Contact</button><button id="ctScanBtn" onclick="openContactUpload()" class="btn" style="padding:8px 16px;font-size:12px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;border-radius:10px;min-height:auto">📷 Scan Contact</button></div>`;
 
   // Filter contacts
   let list=[...ctList];
@@ -604,16 +604,14 @@ function openContactUpload(){
 }
 
 async function parseContact(file){
-  showCtToast("Reading contact info...");
-
-  // Upload to storage
-  const contactPath=storagePath(null,"contacts",file);
-  await uploadToStorage(file,"sovereign-docs",contactPath);
+  const scanBtn=document.getElementById('ctScanBtn');
+  if(scanBtn){scanBtn.textContent='Scanning...';scanBtn.disabled=true;scanBtn.style.opacity='0.6';}
+  showCtToast("Scanning...");
 
   let apiKey=localStorage.getItem("sh_claude_key");
   if(!apiKey){
     apiKey=prompt("Enter your Claude API key:");
-    if(!apiKey)return;
+    if(!apiKey){if(scanBtn){scanBtn.textContent='📷 Scan Contact';scanBtn.disabled=false;scanBtn.style.opacity='1';}return;}
     localStorage.setItem("sh_claude_key",apiKey);
   }
 
@@ -626,9 +624,34 @@ async function parseContact(file){
   const mediaType=file.type.startsWith('image/')?file.type:'application/pdf';
   const docType=file.type.startsWith('image/')?'image':'document';
 
+  const promptText=`Extract contact information from this image. This could be a business card, a phone screenshot, a contact detail screen, a text message, an email signature, a website, a social media profile, a Google search result, or any other source that contains a person's or company's contact details.
+
+Look for ANY of these details anywhere in the image:
+- Person's name (first and last)
+- Company or business name
+- Phone number(s)
+- Email address(es)
+- Physical address
+- Website or social media URLs
+- Job title or role
+- License numbers
+- Any contextual clues about what type of contact this is (contractor, agent, vendor, etc.)
+
+For phone screenshots: the contact name is usually large text at the top. Phone numbers and emails may be in labeled rows below. Look for the iOS/Android contact detail layout.
+
+For text messages: the sender name or number is at the top of the conversation.
+
+For Google/web results: look for the business knowledge panel, phone numbers, addresses, and hours.
+
+Return ONLY a JSON object with no markdown, no explanation, no backticks:
+
+{"first_name":"First name or null","last_name":"Last name or null","company":"Company name or null","contact_type":"best guess from: contractor, subcontractor, supplier, lender, agent, inspector, insurance, title_escrow, designer, attorney, other","phone":"Primary phone formatted as (XXX) XXX-XXXX or null","phone2":"Secondary phone or null","email":"Email address or null","address":"Street address or null","city":"City or null","state":"State abbreviation or null","zip":"ZIP code or null","website":"Website or null","license_number":"License number or null","specialty_tags":["best guess tags"],"notes":"Job title, hours, or any other useful info found"}
+
+Extract everything visible. Use null for fields not found. Make your best guess on contact_type from context.`;
+
   const content=[
     {type:docType,source:{type:"base64",media_type:mediaType,data:b64}},
-    {type:"text",text:"Extract contact information from this image or document. Return ONLY a JSON object, no markdown, no explanation:\n\n{\"first_name\":\"First name\",\"last_name\":\"Last name\",\"company\":\"Company name\",\"contact_type\":\"best guess from: contractor, subcontractor, supplier, lender, agent, inspector, insurance, title_escrow, designer, other\",\"phone\":\"Phone number formatted as (XXX) XXX-XXXX\",\"email\":\"Email address\",\"address\":\"Street address if visible\",\"city\":\"City\",\"state\":\"State abbreviation\",\"zip\":\"ZIP code\",\"website\":\"Website if visible\",\"license_number\":\"License number if visible\",\"specialty_tags\":[\"best guess tags like: general_contractor, plumbing, electrical, tile, etc.\"],\"notes\":\"Any other relevant info found\"}\n\nExtract everything you can find. If a field isn't visible, use null. Make your best guess on contact_type and specialty_tags based on context clues. Return ONLY the JSON."}
+    {type:"text",text:promptText}
   ];
 
   try{
@@ -641,10 +664,16 @@ async function parseContact(file){
     const data=await res.json();
     const parsed=await robustParseJSON(data,apiKey);
     prefillContactForm(parsed);
+
+    // Upload to storage in background (non-blocking)
+    const contactPath=storagePath(null,"contacts",file);
+    uploadToStorage(file,"sovereign-docs",contactPath).catch(e=>console.warn("Contact storage upload failed:",e));
   }catch(e){
     console.error("Contact parse error:",e);
     showCtToast("Failed to parse contact: "+e.message);
     openCtForm();
+  }finally{
+    if(scanBtn){scanBtn.textContent='📷 Scan Contact';scanBtn.disabled=false;scanBtn.style.opacity='1';}
   }
 }
 
