@@ -45,8 +45,8 @@ function renderDashboard(){
     reduced:base.filter(p=>p.original_list_price&&p.list_price<p.original_list_price).length,
     golf:base.filter(p=>isGolf(p)).length,
     fresh:base.filter(p=>p.days_on_market!=null&&p.days_on_market<=7).length,
-    aiGo:base.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="GO").length,
-    aiMaybe:base.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="CONDITIONAL_GO").length,
+    aiGo:base.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="GO"&&p.listing_status!=="Pending"&&p.listing_status!=="ActiveUnderContract").length,
+    aiMaybe:base.filter(p=>analysisMap[p.id]&&analysisMap[p.id].verdict==="CONDITIONAL_GO"&&p.listing_status!=="Pending"&&p.listing_status!=="ActiveUnderContract").length,
     queued:base.filter(p=>!analysisMap[p.id]).length,
     pending:props.filter(p=>isPend(p)&&p.disposition!=="passed"&&p.disposition!=="acquired"&&p.listing_status!=="Closed"&&p.listing_status!=="Gone"&&!p.gone_date).length,
     avgScore:props.length?Math.round(props.reduce((a,p)=>a+(p.sovereign_score||0),0)/props.length):0,
@@ -151,8 +151,8 @@ function renderList(){
     if(view==="watched"&&!watchIds.has(p.id))return false;
     if(view==="reduced"&&!(p.original_list_price&&p.list_price<p.original_list_price))return false;
     if(view==="golf"&&!isGolf(p))return false;
-    if(view==="go"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="GO"))return false;
-    if(view==="maybe"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="CONDITIONAL_GO"))return false;
+    if(view==="go"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="GO"||p.listing_status==="Pending"||p.listing_status==="ActiveUnderContract"))return false;
+    if(view==="maybe"&&(!analysisMap[p.id]||analysisMap[p.id].verdict!=="CONDITIONAL_GO"||p.listing_status==="Pending"||p.listing_status==="ActiveUnderContract"))return false;
     if(view==="queued"&&!!analysisMap[p.id])return false;
     if(view==="fresh"&&!(p.days_on_market!=null&&p.days_on_market<=7))return false;
     if(q)return(p.address||"").toLowerCase().includes(q)||(p.mls_number||"").toLowerCase().includes(q)||(p.zip_code||"").includes(q);
