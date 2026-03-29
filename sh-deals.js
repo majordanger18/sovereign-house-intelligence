@@ -1335,6 +1335,7 @@ async function loadPostmortemUI(dealId,el){
   const pms=pm.postmortem_status||'pending';
   const hasSaleData=!!pm.actual_sale_price;
   const insights=Array.isArray(pm.insights)?pm.insights:[];
+  const isComplete=pms==='complete';
 
   const pf=(v)=>v!=null?'$'+Math.round(Number(v)).toLocaleString():'—';
   const pp=(v)=>v!=null?Number(v).toFixed(1)+'%':'—';
@@ -1361,13 +1362,19 @@ async function loadPostmortemUI(dealId,el){
   h+=`<div style="padding:16px;border-radius:14px;background:rgba(212,175,55,0.03);border:1px solid rgba(212,175,55,0.12);margin-bottom:12px">`;
   h+=`<div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:12px">🏆 DEAL POSTMORTEM</div>`;
 
-  if(!hasSaleData){
+  if(pms==='pending'){
     h+=`<div style="font-size:12px;color:#94a3b8;margin-bottom:12px">Enter your actual sale results to generate the postmortem comparison.</div>`;
+    h+=`<div class="row2"><div class="fld"><label>ACTUAL SALE PRICE</label><input id="pm_sale_price" type="number" class="cinput" value="${pm.actual_sale_price||''}" placeholder="1575000"/></div><div class="fld"><label>BUYER AGENT %</label><input id="pm_buyer_agent_pct" type="number" step="0.5" class="cinput" value="${pm.actual_buyer_agent_pct||2.5}"/></div></div>`;
+    h+=`<div class="row2"><div class="fld"><label>SALE DATE</label><input id="pm_sale_date" type="date" class="cinput" value="${pm.actual_sale_date||''}" onchange="pmAutoDOM()"/></div><div class="fld"><label>LISTING DATE</label><input id="pm_listing_date" type="date" class="cinput" value="${pm.actual_listing_date||''}" onchange="pmAutoDOM()"/></div></div>`;
+    h+=`<div class="fld"><label>DAYS ON MARKET</label><input id="pm_dom" type="number" class="cinput" value="${pm.days_on_market||''}" placeholder="Auto-calculated from dates"/></div>`;
+    h+=`<button onclick="saveSaleData('${dealId}','${pm.id||''}')" style="width:100%;margin-top:10px;padding:14px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Calculate Results</button>`;
+  }else{
+    const sd=pm.actual_sale_date?new Date(pm.actual_sale_date+'T00:00:00').toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric',timeZone:'America/Los_Angeles'}):'';
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:14px;font-weight:800;color:#e2e8f0"><span style="color:#22c55e">Sold</span> ${pf(pm.actual_sale_price)}${pm.days_on_market?' · '+pm.days_on_market+' DOM':''}${sd?' · Closed '+sd:''}</div>${isComplete?'':`<button id="pmEditToggle" onclick="expandSaleEdit()" style="padding:4px 10px;border-radius:6px;border:1px solid rgba(212,175,55,0.25);background:rgba(212,175,55,0.08);color:#d4af37;font-size:10px;font-weight:700;cursor:pointer">Edit</button>`}</div>`;
+    if(!isComplete){
+      h+=`<div id="pmSaleEdit" style="display:none;margin-top:12px"><div class="row2"><div class="fld"><label>ACTUAL SALE PRICE</label><input id="pm_sale_price" type="number" class="cinput" value="${pm.actual_sale_price||''}"/></div><div class="fld"><label>BUYER AGENT %</label><input id="pm_buyer_agent_pct" type="number" step="0.5" class="cinput" value="${pm.actual_buyer_agent_pct||2.5}"/></div></div><div class="row2"><div class="fld"><label>SALE DATE</label><input id="pm_sale_date" type="date" class="cinput" value="${pm.actual_sale_date||''}" onchange="pmAutoDOM()"/></div><div class="fld"><label>LISTING DATE</label><input id="pm_listing_date" type="date" class="cinput" value="${pm.actual_listing_date||''}" onchange="pmAutoDOM()"/></div></div><div class="fld"><label>DAYS ON MARKET</label><input id="pm_dom" type="number" class="cinput" value="${pm.days_on_market||''}"/></div><button onclick="saveSaleData('${dealId}','${pm.id||''}')" style="width:100%;margin-top:8px;padding:12px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">Recalculate</button></div>`;
+    }
   }
-  h+=`<div class="row2"><div class="fld"><label>ACTUAL SALE PRICE</label><input id="pm_sale_price" type="number" class="cinput" value="${pm.actual_sale_price||''}" placeholder="1575000"/></div><div class="fld"><label>BUYER AGENT %</label><input id="pm_buyer_agent_pct" type="number" step="0.5" class="cinput" value="${pm.actual_buyer_agent_pct||2.5}"/></div></div>`;
-  h+=`<div class="row2"><div class="fld"><label>SALE DATE</label><input id="pm_sale_date" type="date" class="cinput" value="${pm.actual_sale_date||''}" onchange="pmAutoDOM()"/></div><div class="fld"><label>LISTING DATE</label><input id="pm_listing_date" type="date" class="cinput" value="${pm.actual_listing_date||''}" onchange="pmAutoDOM()"/></div></div>`;
-  h+=`<div class="fld"><label>DAYS ON MARKET</label><input id="pm_dom" type="number" class="cinput" value="${pm.days_on_market||''}" placeholder="Auto-calculated from dates"/></div>`;
-  h+=`<button onclick="saveSaleData('${dealId}','${pm.id||''}')" style="width:100%;margin-top:10px;padding:14px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">${hasSaleData?'Recalculate':'Calculate Results'}</button>`;
   h+=`</div>`;
 
   // ── SECTION 2: COMPARISON TABLE ──
@@ -1386,41 +1393,45 @@ async function loadPostmortemUI(dealId,el){
     h+=`</div></details>`;
   }
 
-  // ── SECTION 3: LESSONS LEARNED ──
-  h+=`<details open style="margin-bottom:12px;border:1px solid rgba(168,85,247,0.12);border-radius:14px;background:rgba(168,85,247,0.03)"><summary style="padding:14px 16px;cursor:pointer;font-size:10px;font-weight:700;letter-spacing:2px;color:#a855f7;list-style:none;display:flex;justify-content:space-between;align-items:center"><span>LESSONS LEARNED</span><span style="font-size:11px;color:#475569;letter-spacing:0">▾</span></summary><div style="padding:0 16px 16px">`;
-  h+=`<div class="fld"><textarea id="pm_notes" rows="3" class="cinput" style="font-size:13px;min-height:60px" placeholder="What went right? What went wrong? Type or paste your thoughts...">${esc(pm.notes||'')}</textarea></div>`;
-  h+=`<div style="display:flex;gap:8px;margin-top:8px"><button onclick="savePostmortemNotes('${dealId}','${pm.id||''}')" class="btn" style="flex:1;padding:10px;font-size:12px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);color:#a855f7;font-weight:700">Save Notes</button><button id="pmAiBtn" onclick="analyzePostmortemAI('${dealId}','${pm.id||''}')" style="flex:1;padding:10px;font-size:12px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:700;border-radius:10px;cursor:pointer">🤖 Analyze with AI</button></div>`;
-  if(!insights.length){
-    h+=`<div style="margin-top:8px"><button onclick="addLisaNotes('${dealId}','${pm.id||''}')" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:600;cursor:pointer;padding:4px 0">+ Add Lisa's Notes</button></div>`;
-    h+=`<div id="pmLisaArea" style="display:none;margin-top:8px"><div class="fld"><textarea id="pm_lisa_notes" rows="2" class="cinput" style="font-size:13px;min-height:50px" placeholder="Lisa's thoughts on this deal..."></textarea></div></div>`;
+  // ── SECTION 3: LESSONS LEARNED (actuals_entered and beyond) ──
+  if(pms!=='pending'){
+    h+=`<details open style="margin-bottom:12px;border:1px solid rgba(168,85,247,0.12);border-radius:14px;background:rgba(168,85,247,0.03)"><summary style="padding:14px 16px;cursor:pointer;font-size:10px;font-weight:700;letter-spacing:2px;color:#a855f7;list-style:none;display:flex;justify-content:space-between;align-items:center"><span>LESSONS LEARNED</span><span style="font-size:11px;color:#475569;letter-spacing:0">▾</span></summary><div style="padding:0 16px 16px">`;
+    if(pms==='actuals_entered'){
+      h+=`<div class="fld"><textarea id="pm_notes" rows="3" class="cinput" style="font-size:13px;min-height:60px" placeholder="What went right? What went wrong? Type or paste your thoughts...">${esc(pm.notes||'')}</textarea></div>`;
+      h+=`<div style="display:flex;gap:8px;margin-top:8px"><button onclick="savePostmortemNotes('${dealId}','${pm.id||''}')" class="btn" style="flex:1;padding:10px;font-size:12px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);color:#a855f7;font-weight:700">Save Notes</button><button id="pmAiBtn" onclick="analyzePostmortemAI('${dealId}','${pm.id||''}')" style="flex:1;padding:10px;font-size:12px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:700;border-radius:10px;cursor:pointer">🤖 Analyze with AI</button></div>`;
+      h+=`<div style="margin-top:8px"><button onclick="addLisaNotes('${dealId}','${pm.id||''}')" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:600;cursor:pointer;padding:4px 0">+ Add Lisa's Notes</button></div>`;
+      h+=`<div id="pmLisaArea" style="display:none;margin-top:8px"><div class="fld"><textarea id="pm_lisa_notes" rows="2" class="cinput" style="font-size:13px;min-height:50px" placeholder="Lisa's thoughts on this deal..."></textarea></div></div>`;
+      h+=`<div id="pmDraftArea"></div>`;
+      h+=`<div id="pmInsightsArea"></div>`;
+    }else{
+      insights.forEach(ins=>{
+        const cat=INSIGHT_CATS[ins.category]||INSIGHT_CATS.other;
+        const sIcon=ins.sentiment==='positive'?'<span style="color:#22c55e">✓</span>':ins.sentiment==='negative'?'<span style="color:#ef4444">✗</span>':'<span style="color:#64748b">—</span>';
+        h+=`<div style="padding:10px 12px;margin-top:8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:9px;font-weight:800;letter-spacing:0.5px;color:${cat.color};background:${cat.color}15;border:1px solid ${cat.color}30;padding:2px 8px;border-radius:4px">${cat.label.toUpperCase()}</span>${ins.source?`<span style="font-size:9px;color:#475569">${esc(ins.source)}</span>`:''}${sIcon}</div><div style="font-size:12px;color:#e2e8f0;line-height:1.5">${esc(ins.text||'')}</div></div>`;
+      });
+      if(pms==='insights_captured'){
+        h+=`<div style="margin-top:8px"><button onclick="reanalyzePostmortem('${dealId}','${pm.id||''}')" style="background:none;border:none;color:#475569;font-size:10px;font-weight:600;cursor:pointer;padding:4px 0;text-decoration:underline">Re-analyze</button></div>`;
+      }
+    }
+    h+=`</div></details>`;
   }
-  h+=`<div id="pmDraftArea"></div>`;
-  h+=`<div id="pmInsightsArea">`;
-  if(insights.length){
-    insights.forEach(ins=>{
-      const cat=INSIGHT_CATS[ins.category]||INSIGHT_CATS.other;
-      const sIcon=ins.sentiment==='positive'?'<span style="color:#22c55e">✓</span>':ins.sentiment==='negative'?'<span style="color:#ef4444">✗</span>':'<span style="color:#64748b">—</span>';
-      h+=`<div style="padding:10px 12px;margin-top:8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:9px;font-weight:800;letter-spacing:0.5px;color:${cat.color};background:${cat.color}15;border:1px solid ${cat.color}30;padding:2px 8px;border-radius:4px">${cat.label.toUpperCase()}</span>${ins.source?`<span style="font-size:9px;color:#475569">${esc(ins.source)}</span>`:''}${sIcon}</div><div style="font-size:12px;color:#e2e8f0;line-height:1.5">${esc(ins.text||'')}</div></div>`;
-    });
-    h+=`<div style="margin-top:8px"><button onclick="reanalyzePostmortem('${dealId}','${pm.id||''}')" style="background:none;border:none;color:#475569;font-size:10px;font-weight:600;cursor:pointer;padding:4px 0;text-decoration:underline">Re-analyze</button></div>`;
-  }
-  h+=`</div>`;
-  h+=`</div></details>`;
 
-  // ── SECTION 4: ACTIONS ──
-  h+=`<div style="display:flex;gap:8px">`;
-  h+=`<button onclick="exportCPAPostmortem('${dealId}')" style="flex:1;padding:12px;font-size:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;font-weight:700;border-radius:10px;cursor:pointer">📊 Export CPA Report</button>`;
-  if(pms!=='complete'){
-    h+=`<button onclick="markPostmortemComplete('${dealId}','${pm.id||''}')" style="flex:1;padding:12px;font-size:12px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#10b981;font-weight:700;border-radius:10px;cursor:pointer">✓ Mark Complete</button>`;
-  }else{
-    h+=`<div style="flex:1;padding:12px;font-size:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);color:#10b981;font-weight:700;border-radius:10px;text-align:center">✓ Postmortem Complete</div>`;
+  // ── SECTION 4: ACTIONS (insights_captured and complete only) ──
+  if(pms==='insights_captured'||isComplete){
+    h+=`<div style="display:flex;gap:8px">`;
+    h+=`<button onclick="exportCPAPostmortem('${dealId}')" style="flex:1;padding:12px;font-size:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;font-weight:700;border-radius:10px;cursor:pointer">📊 Export CPA Report</button>`;
+    if(!isComplete){
+      h+=`<button onclick="markPostmortemComplete('${dealId}','${pm.id||''}')" style="flex:1;padding:12px;font-size:12px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#10b981;font-weight:700;border-radius:10px;cursor:pointer">✓ Mark Complete</button>`;
+    }else{
+      h+=`<div style="flex:1;padding:12px;font-size:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);color:#10b981;font-weight:700;border-radius:10px;text-align:center">✓ Postmortem Complete</div>`;
+    }
+    h+=`</div>`;
   }
-  h+=`</div>`;
 
   el.innerHTML=h;
 }
 
-function expandSaleEdit(){const el=document.getElementById('pmSaleEdit');if(el)el.style.display=el.style.display==='none'?'block':'none';}
+function expandSaleEdit(){const el=document.getElementById('pmSaleEdit');const btn=document.getElementById('pmEditToggle');if(!el)return;const show=el.style.display==='none';el.style.display=show?'block':'none';if(btn)btn.textContent=show?'Done':'Edit';}
 
 function pmAutoDOM(){const ld=document.getElementById('pm_listing_date')?.value;const sd=document.getElementById('pm_sale_date')?.value;const de=document.getElementById('pm_dom');if(ld&&sd&&de){de.value=Math.round((new Date(sd+'T00:00:00')-new Date(ld+'T00:00:00'))/(24*60*60*1000));}}
 
@@ -1437,7 +1448,8 @@ async function saveSaleData(dealId,outcomeId){
     if(outcomeId){await fetch(SB+'/rest/v1/deal_outcomes?id=eq.'+outcomeId,{method:'PATCH',headers:HD,body:JSON.stringify(payload)});}
     else{payload.postmortem_status='pending';const resp=await fetch(SB+'/rest/v1/deal_outcomes',{method:'POST',headers:{...HD,Prefer:'return=representation'},body:JSON.stringify(payload)});const arr=await resp.json();outcomeId=Array.isArray(arr)?arr[0]?.id:arr?.id;}
     await populatePostmortem(dealId);
-    await loadDealOutcomes(dealId);
+    const pmEl=document.getElementById('dealOutcomesArea');
+    if(pmEl)await loadPostmortemUI(dealId,pmEl);
     renderSmartCard(dealId);
     const t=document.createElement('div');t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:10px;background:#d4af37;color:#0a0a0a;font-size:12px;font-weight:800;z-index:9999';t.textContent='Postmortem calculated';document.body.appendChild(t);setTimeout(()=>t.remove(),2500);
   }catch(e){console.error('Save sale data failed:',e);alert('Failed to save.');}
@@ -1456,7 +1468,8 @@ async function markPostmortemComplete(dealId,outcomeId){
   if(!outcomeId||!confirm('Mark this postmortem as complete?'))return;
   try{
     await fetch(SB+'/rest/v1/deal_outcomes?id=eq.'+outcomeId,{method:'PATCH',headers:HD,body:JSON.stringify({postmortem_status:'complete'})});
-    await loadDealOutcomes(dealId);
+    const pmEl=document.getElementById('dealOutcomesArea');
+    if(pmEl)await loadPostmortemUI(dealId,pmEl);
     renderSmartCard(dealId);
   }catch(e){console.error('Mark complete failed:',e);}
 }
@@ -1594,7 +1607,8 @@ async function confirmSaveInsights(){
       postmortem_status:'insights_captured'
     })});
     _pmDraftInsights=[];
-    await loadDealOutcomes(_pmDraftDealId);
+    const pmEl=document.getElementById('dealOutcomesArea');
+    if(pmEl)await loadPostmortemUI(_pmDraftDealId,pmEl);
     renderSmartCard(_pmDraftDealId);
     const t=document.createElement('div');t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:10px;background:#22c55e;color:#0a0a0a;font-size:12px;font-weight:800;z-index:9999';t.textContent='Insights saved';document.body.appendChild(t);setTimeout(()=>t.remove(),2500);
   }catch(e){console.error('Save insights failed:',e);alert('Failed to save insights.');}
@@ -1603,7 +1617,8 @@ async function confirmSaveInsights(){
 async function reanalyzePostmortem(dealId,outcomeId){
   try{
     await fetch(SB+'/rest/v1/deal_outcomes?id=eq.'+outcomeId,{method:'PATCH',headers:HD,body:JSON.stringify({insights:null,postmortem_status:'actuals_entered'})});
-    await loadDealOutcomes(dealId);
+    const pmEl=document.getElementById('dealOutcomesArea');
+    if(pmEl)await loadPostmortemUI(dealId,pmEl);
     renderSmartCard(dealId);
   }catch(e){console.error('Re-analyze failed:',e);}
 }
