@@ -643,6 +643,8 @@ For text messages: the sender name or number is at the top of the conversation.
 
 For Google/web results: look for the business knowledge panel, phone numbers, addresses, and hours.
 
+IMPORTANT: On phone contact screens, the large text below the contact photo circle is the person's NAME, not a city. The smaller text above the name is usually the company. For example if you see 'ARTISTIC IRON WORKS' in small caps above 'Dallas' in large text, then first_name is 'Dallas' and company is 'Artistic Iron Works'. Do not put the person's name in the city field.
+
 Return ONLY a JSON object with no markdown, no explanation, no backticks:
 
 {"first_name":"First name or null","last_name":"Last name or null","company":"Company name or null","contact_type":"best guess from: contractor, subcontractor, supplier, lender, agent, inspector, insurance, title_escrow, designer, attorney, other","phone":"Primary phone formatted as (XXX) XXX-XXXX or null","phone2":"Secondary phone or null","email":"Email address or null","address":"Street address or null","city":"City or null","state":"State abbreviation or null","zip":"ZIP code or null","website":"Website or null","license_number":"License number or null","specialty_tags":["best guess tags"],"notes":"Job title, hours, or any other useful info found"}
