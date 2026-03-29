@@ -30,13 +30,13 @@ async function openCalcForDeal(dealId){
        hoa_monthly:null,garage_spaces:null,subdivision_name:d.community,sovereign_score:null};
   }
   calcProp=p;
-  const ch=await sb(`calc_history?mls_number=eq.${p.mls_number}&order=created_at.desc`);
-  calcHistory=Array.isArray(ch)?ch:[];
-  renderCalc(calcHistory.length>0?calcHistory[0]:null);
-  // Close deal modal and open calc in the same frame — no flash
+  // Swap modals immediately — before the await — to prevent flicker
   document.getElementById("dealModal").style.display="none";
   document.getElementById("calcModal").style.display="block";
   document.body.style.overflow="hidden";
+  const ch=await sb(`calc_history?mls_number=eq.${p.mls_number}&order=created_at.desc`);
+  calcHistory=Array.isArray(ch)?ch:[];
+  renderCalc(calcHistory.length>0?calcHistory[0]:null);
 }
 
 function closeCalc(){document.getElementById("calcModal").style.display="none";if(editingDealId){const did=editingDealId;editingDealId=null;openDeal(did);return;}editingDealId=null;if(document.getElementById("detailModal").style.display==="block"){document.body.style.overflow="hidden";}else{document.body.style.overflow="";}}
