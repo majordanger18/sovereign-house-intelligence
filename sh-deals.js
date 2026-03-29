@@ -1126,3 +1126,194 @@ async function saveDealOutcome(dealId,existingId){
     setTimeout(()=>toast.remove(),2000);
   }catch(e){console.error("Save outcome failed:",e);alert("Failed to save outcomes.");}
 }
+
+// ═══════════════════════════════════════════
+// ═══ POSTMORTEM COMPARISON ENGINE ═══
+// ═══════════════════════════════════════════
+
+async function populatePostmortem(dealId){
+  console.log("[Postmortem] Starting for deal:",dealId);
+
+  // 1. Check/create deal_outcomes row
+  let outcome=null;
+  try{
+    const res=await sb("deal_outcomes?deal_id=eq."+dealId);
+    if(Array.isArray(res)&&res.length)outcome=res[0];
+  }catch(e){console.error("[Postmortem] Fetch outcome failed:",e);}
+
+  if(!outcome){
+    try{
+      const resp=await fetch(SB+"/rest/v1/deal_outcomes",{method:"POST",headers:{...HD,Prefer:"return=representation"},body:JSON.stringify({deal_id:dealId,postmortem_status:"pending"})});
+      const arr=await resp.json();
+      outcome=Array.isArray(arr)?arr[0]:arr;
+      console.log("[Postmortem] Created deal_outcomes row:",outcome?.id);
+    }catch(e){console.error("[Postmortem] Create outcome failed:",e);return null;}
+  }
+  if(!outcome||!outcome.id){console.error("[Postmortem] No outcome row");return null;}
+
+  // 2. Get deal from memory or fetch
+  const deal=deals.find(d=>d.id===dealId);
+  if(!deal){console.error("[Postmortem] Deal not found in local state");return null;}
+
+  // 3. Fetch all data sources in parallel
+  const[calcArr,finArr,expArr]=await Promise.all([
+    deal.property_id
+      ?fetch(SB+"/rest/v1/calc_history?property_id=eq."+deal.property_id+"&order=created_at.desc&limit=1",{headers:HD}).then(r=>r.json()).catch(()=>[])
+      :Promise.resolve([]),
+    fetch(SB+"/rest/v1/deal_financing?deal_id=eq."+dealId,{headers:HD}).then(r=>r.json()).catch(()=>[]),
+    fetch(SB+"/rest/v1/renovation_expenses?deal_id=eq."+dealId+"&select=amount",{headers:HD}).then(r=>r.json()).catch(()=>[])
+  ]);
+
+  const calc=Array.isArray(calcArr)&&calcArr.length?calcArr[0]:null;
+  const fin=Array.isArray(finArr)&&finArr.length?finArr[0]:null;
+  const expenses=Array.isArray(expArr)?expArr:[];
+
+  console.log("[Postmortem] Data loaded — calc:",!!calc,"fin:",!!fin,"expenses:",expenses.length);
+
+  // 4. Build projected snapshot from calc_history
+  const patch={};
+  if(calc){
+    patch.projected_purchase_price=calc.purchase_price||null;
+    patch.projected_reno_budget=calc.rehab_budget||null;
+    patch.projected_arv=calc.arv||null;
+    patch.projected_hold_months=calc.hold_months||null;
+    patch.projected_holding_costs=calc.hold_cost||null;
+    patch.projected_total_cost=calc.total_cost||null;
+    patch.projected_profit=calc.net_profit||null;
+    patch.projected_roi=calc.roi||null;
+    patch.projected_max_offer=calc.max_offer||null;
+    patch.projected_interest_rate=calc.interest_rate||null;
+    patch.projected_lisa_commission_pct=calc.lisa_commission_pct||null;
+    patch.calc_history_id=calc.id||null;
+  }
+
+  // 5. Compute actuals
+  const purchasePrice=deal.accepted_price||deal.purchase_price||deal.offer_price||0;
+  const actualRenoCost=expenses.reduce((s,e)=>s+(e.amount||0),0);
+  const salePrice=outcome.actual_sale_price||null;
+  const saleDate=outcome.actual_sale_date||null;
+
+  // Financing values
+  const fundedDate=fin?.funded_date||null;
+  const loanPrincipal=fin?.funded_principal||fin?.loan_principal||0;
+  const interestRate=fin?.interest_rate||calc?.interest_rate||0;
+  let monthlyInterest=fin?.monthly_payment||0;
+  if(!monthlyInterest&&loanPrincipal&&interestRate){
+    monthlyInterest=Math.round(loanPrincipal*(interestRate/100)/12);
+  }
+  const hoaMonthly=calc?.hoa_monthly||0;
+  const taxAnnual=calc?.tax_annual||0;
+  const utilitiesMonthly=650;
+
+  // Actual hold months: funded_date → actual_sale_date
+  let actualHoldMonths=null;
+  if(fundedDate&&saleDate){
+    const fd=new Date(fundedDate+"T00:00:00");
+    const sd=new Date(saleDate+"T00:00:00");
+    actualHoldMonths=Math.round((sd-fd)/(30.44*24*60*60*1000)*10)/10;
+  }
+
+  // Actual holding costs (only if we can compute hold period)
+  let actualHoldingCosts=null;
+  const holdMo=actualHoldMonths||(salePrice?null:null);
+  if(holdMo!=null){
+    const insuranceCost=(purchasePrice+actualRenoCost)*0.0035*(holdMo/12);
+    actualHoldingCosts=Math.round(
+      holdMo*monthlyInterest+
+      holdMo*hoaMonthly+
+      holdMo*(taxAnnual/12)+
+      holdMo*utilitiesMonthly+
+      insuranceCost
+    );
+  }
+
+  // Full actuals (only computable if sale price exists)
+  let actualTotalCost=null;
+  let actualProfit=null;
+  let actualRoi=null;
+
+  if(salePrice){
+    // Protocol fixed costs
+    const origination=fin?.origination_fee||Math.round(loanPrincipal*0.015);
+    const buySideClosing=5000;
+    const lenderServiceFee=1499;
+    const sellSideClosing=3500;
+    const ownersTitle=3000;
+    const staging=5000;
+    const hoaTransfer=500;
+    const miscBuffer=1500;
+
+    // Variable costs
+    const buyerAgentComm=Math.round(salePrice*0.025);
+    const rptt=Math.ceil(salePrice/500)*2.55;
+
+    // Lisa buy-side credit (reduces cost)
+    const lisaPct=deal.accepted_commission_pct||deal.lisa_buy_commission_pct||calc?.lisa_commission_pct||2.5;
+    const lisaCommission=Math.round(purchasePrice*(lisaPct/100));
+
+    // Insurance (use actual hold if available, else projected)
+    const insHoldMo=actualHoldMonths||calc?.hold_months||8;
+    const insuranceCost=(purchasePrice+actualRenoCost)*0.0035*(insHoldMo/12);
+
+    // Use actual holding costs if computed, else estimate from available hold period
+    let holdCostForTotal=actualHoldingCosts;
+    if(holdCostForTotal==null&&calc?.hold_cost){
+      holdCostForTotal=calc.hold_cost;
+    }
+
+    actualTotalCost=Math.round(
+      purchasePrice+
+      actualRenoCost+
+      origination+
+      buySideClosing+
+      lenderServiceFee+
+      (holdCostForTotal||0)+
+      sellSideClosing+
+      ownersTitle+
+      staging+
+      hoaTransfer+
+      miscBuffer+
+      buyerAgentComm+
+      rptt+
+      insuranceCost-
+      lisaCommission
+    );
+
+    actualProfit=Math.round(salePrice-actualTotalCost);
+    actualRoi=actualTotalCost>0?parseFloat(((actualProfit/actualTotalCost)*100).toFixed(1)):0;
+  }
+
+  // 6. Write actuals to patch
+  patch.actual_purchase_price=purchasePrice||null;
+  patch.actual_reno_cost=actualRenoCost||null;
+  patch.actual_hold_months=actualHoldMonths;
+  patch.actual_holding_costs=actualHoldingCosts;
+  patch.actual_total_cost=actualTotalCost;
+  patch.actual_sale_price=salePrice;
+  patch.actual_sale_date=saleDate;
+  patch.actual_listing_date=outcome.actual_listing_date||null;
+  patch.actual_profit=actualProfit;
+  patch.actual_roi=actualRoi;
+
+  // 7. Compute deltas (actual minus projected)
+  if(calc){
+    patch.delta_reno=(actualRenoCost&&calc.rehab_budget!=null)?actualRenoCost-calc.rehab_budget:null;
+    patch.delta_hold_months=(actualHoldMonths!=null&&calc.hold_months!=null)?parseFloat((actualHoldMonths-calc.hold_months).toFixed(1)):null;
+    patch.delta_holding_costs=(actualHoldingCosts!=null&&calc.hold_cost!=null)?actualHoldingCosts-calc.hold_cost:null;
+    patch.delta_total_cost=(actualTotalCost!=null&&calc.total_cost!=null)?actualTotalCost-calc.total_cost:null;
+    patch.delta_profit=(actualProfit!=null&&calc.net_profit!=null)?actualProfit-calc.net_profit:null;
+    patch.delta_roi=(actualRoi!=null&&calc.roi!=null)?parseFloat((actualRoi-calc.roi).toFixed(1)):null;
+  }
+
+  // 8. Set postmortem status
+  patch.postmortem_status=salePrice?"actuals_entered":"pending";
+
+  // 9. PATCH deal_outcomes
+  try{
+    await fetch(SB+"/rest/v1/deal_outcomes?id=eq."+outcome.id,{method:"PATCH",headers:HD,body:JSON.stringify(patch)});
+    console.log("[Postmortem] Updated deal_outcomes:",Object.keys(patch).length,"fields");
+    console.log("[Postmortem] Projected profit:",patch.projected_profit,"Actual profit:",patch.actual_profit,"Delta:",patch.delta_profit);
+  }catch(e){console.error("[Postmortem] PATCH failed:",e);return null;}
+
+  return{...outcome,...patch};
+}
