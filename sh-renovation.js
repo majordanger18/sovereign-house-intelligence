@@ -19,6 +19,7 @@ const DRAW_PIPE=[
 let renoDealId=null,renoSub="project",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null,renoTasks=[],renoChangeOrders=[],renoMilestones=[];
 let renoExpF={sow:"all",type:"all",from:"",to:""};
 let renoDocs=[],renoDocFilter="all",renoDocRoom="all",renoDocPhase="all",renoCompareMode=false,renoCompareRoom="kitchen";
+let docsPageSize=12,docsPage=0;
 let renoTaskFilter={cat:"all",assignee:"all"};
 let renoEditingTask=null,renoShowDone=false,renoExpandedMs=null;
 const TASK_CAT_COLORS={financing:"#22c55e",contractor:"#f97316",materials:"#3b82f6",design:"#ec4899",permits:"#6366f1",administrative:"#64748b",listing_prep:"#a855f7"};
@@ -2557,11 +2558,11 @@ function renderDocsV(el){
   // Room/Phase filters (photos only)
   if(renoDocFilter==='photos'||renoDocFilter==='all'){
     h+=`<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-      <select onchange="renoDocRoom=this.value;renderRenoSub()" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:12px;font-weight:700;min-height:36px">
+      <select onchange="renoDocRoom=this.value;docsPage=0;renderRenoSub()" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:12px;font-weight:700;min-height:36px">
         <option value="all">All Rooms</option>
         ${DOC_ROOMS.map(r=>`<option value="${r}"${renoDocRoom===r?' selected':''}>${roomLabel(r)}</option>`).join('')}
       </select>
-      <select onchange="renoDocPhase=this.value;renderRenoSub()" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:12px;font-weight:700;min-height:36px">
+      <select onchange="renoDocPhase=this.value;docsPage=0;renderRenoSub()" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:12px;font-weight:700;min-height:36px">
         <option value="all">All Phases</option>
         ${DOC_PHASES.map(p=>`<option value="${p}"${renoDocPhase===p?' selected':''}>${roomLabel(p)}</option>`).join('')}
       </select>
@@ -2575,10 +2576,14 @@ function renderDocsV(el){
     el.innerHTML=h;return;
   }
 
-  // Photo grid
+  // Photo grid (paginated)
   if(filteredPhotos.length>0){
+    const endIdx=(docsPage+1)*docsPageSize;
+    const visiblePhotos=filteredPhotos.slice(0,endIdx);
+    const hasMore=filteredPhotos.length>endIdx;
+    h+=`<div style="font-size:11px;color:#64748b;font-weight:600;margin-bottom:6px">Showing ${visiblePhotos.length} of ${filteredPhotos.length} photos</div>`;
     h+=`<div class="docs-grid">`;
-    filteredPhotos.forEach((p,i)=>{
+    visiblePhotos.forEach((p,i)=>{
       const pc=DOC_PHASE_COLORS[p.phase]||'#64748b';
       h+=`<div class="docs-thumb" onclick="openDocLightbox(${i},'photo')">
         <img src="${esc(p.file_url)}${p.file_url&&p.file_url.includes('/storage/v1/')?'?width=300&height=300':''}" alt="${esc(p.caption||p.ai_description||'')}" loading="lazy" width="200" height="200" style="object-fit:cover;width:100%;aspect-ratio:1;border-radius:8px;"/>
@@ -2590,6 +2595,9 @@ function renderDocsV(el){
       </div>`;
     });
     h+=`</div>`;
+    if(hasMore){
+      h+=`<div style="text-align:center;padding:16px 0"><button onclick="docsPage++;renderRenoSub()" class="btn" style="padding:10px 32px;font-size:13px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.2);color:#d4af37;font-weight:700">Load More (${filteredPhotos.length-endIdx} remaining)</button></div>`;
+    }
   }
 
   // Document list
@@ -2624,7 +2632,7 @@ function renderDocsV(el){
   el.innerHTML=h;
 }
 
-function setDocFilter(f){renoDocFilter=f;renderRenoSub();}
+function setDocFilter(f){renoDocFilter=f;docsPage=0;renderRenoSub();}
 
 // ═══ ROOM COMPARE VIEW ═══
 function renderRoomCompare(photos){
