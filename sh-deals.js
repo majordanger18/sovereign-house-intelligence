@@ -1393,15 +1393,22 @@ async function loadPostmortemUI(dealId,el){
   // ── SECTION 3: LESSONS LEARNED ──
   h+=`<details open style="margin-bottom:12px;border:1px solid rgba(168,85,247,0.12);border-radius:14px;background:rgba(168,85,247,0.03)"><summary style="padding:14px 16px;cursor:pointer;font-size:10px;font-weight:700;letter-spacing:2px;color:#a855f7;list-style:none;display:flex;justify-content:space-between;align-items:center"><span>LESSONS LEARNED</span><span style="font-size:11px;color:#475569;letter-spacing:0">▾</span></summary><div style="padding:0 16px 16px">`;
   h+=`<div class="fld"><textarea id="pm_notes" rows="3" class="cinput" style="font-size:13px;min-height:60px" placeholder="What went right? What went wrong? Type or paste your thoughts...">${esc(pm.notes||'')}</textarea></div>`;
-  h+=`<div style="display:flex;gap:8px;margin-top:8px"><button onclick="savePostmortemNotes('${dealId}','${pm.id||''}')" class="btn" style="flex:1;padding:10px;font-size:12px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);color:#a855f7;font-weight:700">Save Notes</button><button disabled style="flex:1;padding:10px;font-size:12px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.15);color:rgba(212,175,55,0.4);font-weight:700;border-radius:10px;cursor:not-allowed">🤖 Analyze with AI</button></div>`;
+  h+=`<div style="display:flex;gap:8px;margin-top:8px"><button onclick="savePostmortemNotes('${dealId}','${pm.id||''}')" class="btn" style="flex:1;padding:10px;font-size:12px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);color:#a855f7;font-weight:700">Save Notes</button><button id="pmAiBtn" onclick="analyzePostmortemAI('${dealId}','${pm.id||''}')" style="flex:1;padding:10px;font-size:12px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:700;border-radius:10px;cursor:pointer">🤖 Analyze with AI</button></div>`;
+  if(!insights.length){
+    h+=`<div style="margin-top:8px"><button onclick="addLisaNotes('${dealId}','${pm.id||''}')" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:600;cursor:pointer;padding:4px 0">+ Add Lisa's Notes</button></div>`;
+    h+=`<div id="pmLisaArea" style="display:none;margin-top:8px"><div class="fld"><textarea id="pm_lisa_notes" rows="2" class="cinput" style="font-size:13px;min-height:50px" placeholder="Lisa's thoughts on this deal..."></textarea></div></div>`;
+  }
+  h+=`<div id="pmDraftArea"></div>`;
+  h+=`<div id="pmInsightsArea">`;
   if(insights.length){
-    h+=`<div style="margin-top:12px">`;
     insights.forEach(ins=>{
       const cat=INSIGHT_CATS[ins.category]||INSIGHT_CATS.other;
-      h+=`<div style="padding:10px 12px;margin-top:8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:9px;font-weight:800;letter-spacing:0.5px;color:${cat.color};background:${cat.color}15;border:1px solid ${cat.color}30;padding:2px 8px;border-radius:4px">${cat.label.toUpperCase()}</span>${ins.source?`<span style="font-size:9px;color:#475569">${esc(ins.source)}</span>`:''}</div><div style="font-size:12px;color:#e2e8f0;line-height:1.5">${esc(ins.text||'')}</div></div>`;
+      const sIcon=ins.sentiment==='positive'?'<span style="color:#22c55e">✓</span>':ins.sentiment==='negative'?'<span style="color:#ef4444">✗</span>':'<span style="color:#64748b">—</span>';
+      h+=`<div style="padding:10px 12px;margin-top:8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:9px;font-weight:800;letter-spacing:0.5px;color:${cat.color};background:${cat.color}15;border:1px solid ${cat.color}30;padding:2px 8px;border-radius:4px">${cat.label.toUpperCase()}</span>${ins.source?`<span style="font-size:9px;color:#475569">${esc(ins.source)}</span>`:''}${sIcon}</div><div style="font-size:12px;color:#e2e8f0;line-height:1.5">${esc(ins.text||'')}</div></div>`;
     });
-    h+=`</div>`;
+    h+=`<div style="margin-top:8px"><button onclick="reanalyzePostmortem('${dealId}','${pm.id||''}')" style="background:none;border:none;color:#475569;font-size:10px;font-weight:600;cursor:pointer;padding:4px 0;text-decoration:underline">Re-analyze</button></div>`;
   }
+  h+=`</div>`;
   h+=`</div></details>`;
 
   // ── SECTION 4: ACTIONS ──
@@ -1456,4 +1463,151 @@ async function markPostmortemComplete(dealId,outcomeId){
     await loadDealOutcomes(dealId);
     renderSmartCard(dealId);
   }catch(e){console.error('Mark complete failed:',e);}
+}
+
+// ═══════════════════════════════════════════
+// ═══ AI INSIGHT CAPTURE ═══
+// ═══════════════════════════════════════════
+
+const PM_SYSTEM_PROMPT=`You are analyzing a real estate flip deal postmortem for Sovereign House LLC. The user will share their unstructured thoughts about what happened during the deal. Your job is to categorize each distinct insight into one of these categories:
+
+scope_creep: Budget overruns due to added or expanded work
+timeline_drift: Project took longer than planned
+material_delay: Materials arrived late or were backordered
+contractor_issue: Problems with contractor performance, communication, or quality
+market_shift: Market conditions changed during the hold period
+pricing_strategy: Listing price, negotiation, or buyer incentive decisions
+design_win: Design or material choices that buyers loved
+staging_impact: Staging decisions that affected sale outcome
+financing_cost: Interest, LOC, or other financing surprises
+buyer_feedback: What buyers said during showings or through agents
+process_improvement: Things to do differently next time operationally
+other: Anything that doesn't fit above
+
+Respond ONLY with a JSON array. No preamble, no markdown backticks. Each object:
+{"category": "string", "text": "string", "sentiment": "positive|negative|neutral"}
+Extract every distinct insight. One thought = one object. Keep the text concise but preserve the user's meaning.`;
+
+let _pmDraftInsights=[];
+let _pmDraftDealId=null;
+let _pmDraftOutcomeId=null;
+
+function addLisaNotes(){
+  const el=document.getElementById('pmLisaArea');
+  if(el)el.style.display=el.style.display==='none'?'block':'none';
+}
+
+async function analyzePostmortemAI(dealId,outcomeId){
+  const notes=(document.getElementById('pm_notes')?.value||'').trim();
+  const lisaNotes=(document.getElementById('pm_lisa_notes')?.value||'').trim();
+  if(!notes&&!lisaNotes){
+    const t=document.createElement('div');t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:10px;background:#f59e0b;color:#0a0a0a;font-size:12px;font-weight:800;z-index:9999';t.textContent='Enter your thoughts first';document.body.appendChild(t);setTimeout(()=>t.remove(),2500);
+    return;
+  }
+
+  const apiKey=localStorage.getItem('sh_claude_key');
+  if(!apiKey){
+    const k=prompt('Enter your Claude API key:');
+    if(!k)return;
+    localStorage.setItem('sh_claude_key',k);
+    return analyzePostmortemAI(dealId,outcomeId);
+  }
+
+  const btn=document.getElementById('pmAiBtn');
+  if(btn){btn.textContent='🤖 Analyzing...';btn.style.opacity='0.6';btn.disabled=true;}
+
+  // Build user message with source tags
+  let userMsg='';
+  if(notes)userMsg+=`[King J's notes]\n${notes}\n\n`;
+  if(lisaNotes)userMsg+=`[Lisa's notes]\n${lisaNotes}\n\n`;
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system:PM_SYSTEM_PROMPT,messages:[{role:'user',content:userMsg}]})
+    });
+
+    if(!res.ok){
+      if(res.status===401)localStorage.removeItem('sh_claude_key');
+      throw new Error('API error '+res.status);
+    }
+
+    const data=await res.json();
+    let text=data.content?.[0]?.text||'';
+    text=text.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+    const parsed=JSON.parse(text);
+
+    if(!Array.isArray(parsed)||!parsed.length)throw new Error('No insights returned');
+
+    // Tag source based on which section the insight likely came from
+    _pmDraftInsights=parsed.map(ins=>({
+      category:ins.category||'other',
+      text:ins.text||'',
+      sentiment:ins.sentiment||'neutral',
+      source:lisaNotes&&ins.text&&userMsg.indexOf(ins.text)>userMsg.indexOf("[Lisa's notes]")?'Lisa':'King J'
+    }));
+    _pmDraftDealId=dealId;
+    _pmDraftOutcomeId=outcomeId;
+
+    renderDraftInsights();
+  }catch(e){
+    console.error('AI analysis failed:',e);
+    const t=document.createElement('div');t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:10px;background:#ef4444;color:#fff;font-size:12px;font-weight:800;z-index:9999';t.textContent='Analysis failed: '+e.message;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);
+  }finally{
+    if(btn){btn.textContent='🤖 Analyze with AI';btn.style.opacity='1';btn.disabled=false;}
+  }
+}
+
+function renderDraftInsights(){
+  const area=document.getElementById('pmDraftArea');
+  if(!area)return;
+  let h=`<div style="margin-top:12px;padding:12px;border-radius:12px;border:2px dashed rgba(212,175,55,0.3);background:rgba(212,175,55,0.03)">`;
+  h+=`<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:8px">DRAFT INSIGHTS — Review before saving</div>`;
+
+  _pmDraftInsights.forEach((ins,i)=>{
+    const cat=INSIGHT_CATS[ins.category]||INSIGHT_CATS.other;
+    const sIcon=ins.sentiment==='positive'?'<span style="color:#22c55e">✓</span>':ins.sentiment==='negative'?'<span style="color:#ef4444">✗</span>':'<span style="color:#64748b">—</span>';
+    h+=`<div style="padding:10px 12px;margin-top:6px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);position:relative">`;
+    h+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:9px;font-weight:800;letter-spacing:0.5px;color:${cat.color};background:${cat.color}15;border:1px solid ${cat.color}30;padding:2px 8px;border-radius:4px">${cat.label.toUpperCase()}</span>`;
+    h+=`<select onchange="_pmDraftInsights[${i}].source=this.value" style="font-size:9px;padding:1px 4px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#94a3b8"><option value="King J"${ins.source==='King J'?' selected':''}>King J</option><option value="Lisa"${ins.source==='Lisa'?' selected':''}>Lisa</option></select>`;
+    h+=`${sIcon}</div>`;
+    h+=`<div contenteditable="true" oninput="_pmDraftInsights[${i}].text=this.textContent" style="font-size:12px;color:#e2e8f0;line-height:1.5;outline:none;min-height:18px">${esc(ins.text)}</div>`;
+    h+=`<button onclick="_pmDraftInsights.splice(${i},1);renderDraftInsights()" style="position:absolute;top:8px;right:8px;width:20px;height:20px;border-radius:4px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.05);color:#ef4444;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;padding:0">✕</button>`;
+    h+=`</div>`;
+  });
+
+  h+=`<div style="display:flex;gap:8px;margin-top:10px">`;
+  h+=`<button onclick="confirmSaveInsights()" style="flex:1;padding:10px;font-size:12px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;border-radius:10px;font-weight:700;cursor:pointer">Confirm & Save (${_pmDraftInsights.length})</button>`;
+  h+=`<button onclick="_pmDraftInsights=[];document.getElementById('pmDraftArea').innerHTML=''" style="padding:10px 16px;font-size:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:10px;font-weight:600;cursor:pointer">Discard</button>`;
+  h+=`</div></div>`;
+
+  area.innerHTML=h;
+}
+
+async function confirmSaveInsights(){
+  if(!_pmDraftOutcomeId||!_pmDraftInsights.length)return;
+  const notes=(document.getElementById('pm_notes')?.value||'').trim();
+  const insights=_pmDraftInsights.map(ins=>({category:ins.category,text:ins.text,source:ins.source,sentiment:ins.sentiment}));
+
+  try{
+    await fetch(SB+'/rest/v1/deal_outcomes?id=eq.'+_pmDraftOutcomeId,{method:'PATCH',headers:HD,body:JSON.stringify({
+      insights:insights,
+      raw_notes:notes,
+      notes:notes,
+      postmortem_status:'insights_captured'
+    })});
+    _pmDraftInsights=[];
+    await loadDealOutcomes(_pmDraftDealId);
+    renderSmartCard(_pmDraftDealId);
+    const t=document.createElement('div');t.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:10px;background:#22c55e;color:#0a0a0a;font-size:12px;font-weight:800;z-index:9999';t.textContent='Insights saved';document.body.appendChild(t);setTimeout(()=>t.remove(),2500);
+  }catch(e){console.error('Save insights failed:',e);alert('Failed to save insights.');}
+}
+
+async function reanalyzePostmortem(dealId,outcomeId){
+  try{
+    await fetch(SB+'/rest/v1/deal_outcomes?id=eq.'+outcomeId,{method:'PATCH',headers:HD,body:JSON.stringify({insights:null,postmortem_status:'actuals_entered'})});
+    await loadDealOutcomes(dealId);
+    renderSmartCard(dealId);
+  }catch(e){console.error('Re-analyze failed:',e);}
 }
