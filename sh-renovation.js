@@ -262,59 +262,54 @@ async function saveMilestone(id){
   const blockingReason=(document.getElementById('msBlock_'+id)?.value||'').trim()||null;
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
   const patch = {status: newStatus, notes: notes, blocking_reason: blockingReason};
-
-  // Auto-fill actual_start when moving to in_progress
-  patch.actual_start = actualStart || (newStatus === 'in_progress' && !m.actual_start ? today : m.actual_start || null);
-  // Auto-fill actual_end when moving to complete
-  patch.actual_end = actualEnd || (newStatus === 'complete' && !m.actual_end ? today : m.actual_end || null);
-
-  // Smart status: if user didn't change dropdown but entered dates, infer status
-  if (newStatus === m.status) {
-    // User didn't touch the dropdown — infer from dates
-    if (patch.actual_start && patch.actual_end && newStatus !== 'complete' && newStatus !== 'skipped') {
-      patch.status = 'complete';
-    } else if (patch.actual_start && !patch.actual_end && newStatus === 'not_started') {
-      patch.status = 'in_progress';
-    }
-  }
-
-  // Override: clear everything when skipped
-  if (newStatus === 'skipped') {
-    patch.drift_days = null;
-    patch.actual_start = null;
-    patch.actual_end = null;
-    patch.actual_duration_days = null;
-    patch.blocking_reason = null;
-  }
-
-  // Calculate actual_duration_days (only if not skipped)
-  if (newStatus !== 'skipped' && patch.actual_start && patch.actual_end) {
-    patch.actual_duration_days = Math.ceil((new Date(patch.actual_end + 'T00:00:00') - new Date(patch.actual_start + 'T00:00:00')) / 864e5);
-  }
-  // Calculate drift_days (only if not skipped)
-  if (newStatus !== 'skipped' && patch.actual_end && m.planned_end) {
-    patch.drift_days = Math.ceil((new Date(patch.actual_end + 'T00:00:00') - new Date(m.planned_end + 'T00:00:00')) / 864e5);
-  }
-  // Only auto-infer status if user didn't change the dropdown from its current saved value
   const userChangedStatus = (newStatus !== m.status);
-  if (!userChangedStatus) {
-    if(patch.status==='not_started'&&patch.actual_start){patch.status='in_progress';}
-    if(patch.status==='not_started'&&patch.actual_start&&patch.actual_end){patch.status='complete';}
-  }
-  // If user explicitly changed status, also clear dates when going backward
+
+  // If user explicitly went backward, clear appropriate dates
   if (userChangedStatus) {
     if (newStatus === 'not_started') {
       patch.actual_start = null;
       patch.actual_end = null;
       patch.actual_duration_days = null;
       patch.drift_days = null;
-    }
-    if (newStatus === 'in_progress' && m.status === 'complete') {
+    } else if (newStatus === 'in_progress' && m.status === 'complete') {
+      patch.actual_start = actualStart || m.actual_start || null;
       patch.actual_end = null;
       patch.actual_duration_days = null;
       patch.drift_days = null;
+    } else if (newStatus === 'in_progress') {
+      patch.actual_start = actualStart || m.actual_start || today;
+      patch.actual_end = null;
+    } else if (newStatus === 'complete') {
+      patch.actual_start = actualStart || m.actual_start || today;
+      patch.actual_end = actualEnd || m.actual_end || today;
+    } else if (newStatus === 'skipped') {
+      patch.actual_start = null;
+      patch.actual_end = null;
+      patch.actual_duration_days = null;
+      patch.drift_days = null;
+      patch.blocking_reason = null;
+    }
+  } else {
+    // User didn't change dropdown — just save whatever dates they entered
+    patch.actual_start = actualStart || m.actual_start || null;
+    patch.actual_end = actualEnd || m.actual_end || null;
+    // Auto-infer status ONLY if user entered new dates and didn't touch dropdown
+    if (newStatus === 'not_started' && actualStart && !m.actual_start) {
+      patch.status = 'in_progress';
+    }
+    if (newStatus === 'not_started' && actualStart && actualEnd && !m.actual_start && !m.actual_end) {
+      patch.status = 'complete';
     }
   }
+
+  // Calculate duration and drift only when both dates exist and status isn't skipped/not_started
+  if (patch.actual_start && patch.actual_end && patch.status !== 'skipped' && patch.status !== 'not_started') {
+    patch.actual_duration_days = Math.ceil((new Date(patch.actual_end + 'T00:00:00') - new Date(patch.actual_start + 'T00:00:00')) / 864e5);
+  }
+  if (patch.actual_end && m.planned_end && patch.status === 'complete') {
+    patch.drift_days = Math.ceil((new Date(patch.actual_end + 'T00:00:00') - new Date(m.planned_end + 'T00:00:00')) / 864e5);
+  }
+
   console.log('[SH MILESTONE] Saving patch:', JSON.stringify(patch));
   try{
     const res=await fetch(SB+'/rest/v1/renovation_milestones?id=eq.'+id,{method:'PATCH',headers:RENO_WH,body:JSON.stringify(patch)});
