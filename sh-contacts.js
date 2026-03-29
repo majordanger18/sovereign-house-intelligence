@@ -243,9 +243,10 @@ function renderStars(n){
 }
 
 // ═══ ADD / EDIT CONTACT FORM ═══
-function openCtForm(editId){
+function openCtForm(editId,prefill){
   const c=editId?ctList.find(x=>x.id===editId):null;
   const isEdit=!!c;
+  const pf=prefill||{};
   const m=document.getElementById("contactsModal");
 
   let h=`<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="closeCtModal()">✕</button>`;
@@ -253,29 +254,29 @@ function openCtForm(editId){
   h+=`<div style="font-size:18px;font-weight:800;margin-bottom:16px">${isEdit?esc(c.display_name):"Add Contact"}</div>`;
 
   // Required fields
-  h+=`<div class="row2"><div class="fld"><label>FIRST NAME</label><input id="cfFirst" type="text" class="cinput" value="${isEdit?esc(c.first_name||""):""}"/></div>`;
-  h+=`<div class="fld"><label>LAST NAME</label><input id="cfLast" type="text" class="cinput" value="${isEdit?esc(c.last_name||""):""}"/></div></div>`;
-  h+=`<div class="row2"><div class="fld"><label>COMPANY</label><input id="cfCo" type="text" class="cinput" value="${isEdit?esc(c.company||""):""}"/></div>`;
+  h+=`<div class="row2"><div class="fld"><label>FIRST NAME</label><input id="cfFirst" type="text" class="cinput" value="${isEdit?esc(c.first_name||""):esc(pf.first_name||"")}"/></div>`;
+  h+=`<div class="fld"><label>LAST NAME</label><input id="cfLast" type="text" class="cinput" value="${isEdit?esc(c.last_name||""):esc(pf.last_name||"")}"/></div></div>`;
+  h+=`<div class="row2"><div class="fld"><label>COMPANY</label><input id="cfCo" type="text" class="cinput" value="${isEdit?esc(c.company||""):esc(pf.company||"")}"/></div>`;
   h+=`<div class="fld"><label>TYPE</label><select id="cfType" class="cinput">`;
-  CT_TYPES.forEach(t=>{h+=`<option value="${t}"${(isEdit?c.contact_type:"")=== t?" selected":""}>${CT_LABELS[t]}</option>`;});
+  CT_TYPES.forEach(t=>{h+=`<option value="${t}"${((isEdit?c.contact_type:pf.contact_type)||"")=== t?" selected":""}>${CT_LABELS[t]}</option>`;});
   h+=`</select></div></div>`;
 
   // Contact fields
-  h+=`<div class="row2"><div class="fld"><label>PHONE</label><input id="cfPhone" type="tel" class="cinput" value="${isEdit?esc(c.phone||""):""}"/></div>`;
-  h+=`<div class="fld"><label>EMAIL</label><input id="cfEmail" type="email" class="cinput" value="${isEdit?esc(c.email||""):""}"/></div></div>`;
-  h+=`<div class="fld"><label>ADDRESS</label><input id="cfAddr" type="text" class="cinput" value="${isEdit?esc(c.address||""):""}"/></div>`;
-  h+=`<div class="row3"><div class="fld"><label>CITY</label><input id="cfCity" type="text" class="cinput" value="${isEdit?esc(c.city||""):"Las Vegas"}"/></div>`;
-  h+=`<div class="fld"><label>STATE</label><input id="cfState" type="text" class="cinput" value="${isEdit?esc(c.state||""):"NV"}"/></div>`;
-  h+=`<div class="fld"><label>ZIP</label><input id="cfZip" type="text" class="cinput" value="${isEdit?esc(c.zip||""):""}"/></div></div>`;
-  h+=`<div class="row2"><div class="fld"><label>WEBSITE</label><input id="cfWeb" type="url" class="cinput" value="${isEdit?esc(c.website||""):""}"/></div>`;
-  h+=`<div class="fld"><label>LICENSE #</label><input id="cfLic" type="text" class="cinput" value="${isEdit?esc(c.license_number||""):""}"/></div></div>`;
+  h+=`<div class="row2"><div class="fld"><label>PHONE</label><input id="cfPhone" type="tel" class="cinput" value="${isEdit?esc(c.phone||""):esc(pf.phone||"")}"/></div>`;
+  h+=`<div class="fld"><label>EMAIL</label><input id="cfEmail" type="email" class="cinput" value="${isEdit?esc(c.email||""):esc(pf.email||"")}"/></div></div>`;
+  h+=`<div class="fld"><label>ADDRESS</label><input id="cfAddr" type="text" class="cinput" value="${isEdit?esc(c.address||""):esc(pf.address||"")}"/></div>`;
+  h+=`<div class="row3"><div class="fld"><label>CITY</label><input id="cfCity" type="text" class="cinput" value="${isEdit?esc(c.city||""):esc(pf.city||"Las Vegas")}"/></div>`;
+  h+=`<div class="fld"><label>STATE</label><input id="cfState" type="text" class="cinput" value="${isEdit?esc(c.state||""):esc(pf.state||"NV")}"/></div>`;
+  h+=`<div class="fld"><label>ZIP</label><input id="cfZip" type="text" class="cinput" value="${isEdit?esc(c.zip||""):esc(pf.zip||"")}"/></div></div>`;
+  h+=`<div class="row2"><div class="fld"><label>WEBSITE</label><input id="cfWeb" type="url" class="cinput" value="${isEdit?esc(c.website||""):esc(pf.website||"")}"/></div>`;
+  h+=`<div class="fld"><label>LICENSE #</label><input id="cfLic" type="text" class="cinput" value="${isEdit?esc(c.license_number||""):esc(pf.license_number||"")}"/></div></div>`;
   h+=`<div class="fld"><label>REFERRED BY</label><input id="cfRef" type="text" class="cinput" value="${isEdit?esc(c.referred_by||""):""}"/></div>`;
 
   // Tags
-  const existingTags=isEdit&&Array.isArray(c.specialty_tags)?c.specialty_tags.join(", "):"";
+  const existingTags=isEdit&&Array.isArray(c.specialty_tags)?c.specialty_tags.join(", "):pf.specialty_tags&&pf.specialty_tags.length?pf.specialty_tags.join(", "):"";
   h+=`<div class="fld"><label>SPECIALTY TAGS <span style="font-weight:400;color:#475569">(comma-separated)</span></label><input id="cfTags" type="text" class="cinput" placeholder="electrical, plumbing, hvac..." value="${esc(existingTags)}" list="tagSugs"/><datalist id="tagSugs">${SPEC_SUGGESTIONS.map(s=>`<option value="${s}">`).join("")}</datalist></div>`;
 
-  h+=`<div class="fld"><label>NOTES</label><textarea id="cfNotes" rows="3" class="cinput" style="min-height:60px;font-size:13px">${isEdit?esc(c.relationship_notes||""):""}</textarea></div>`;
+  h+=`<div class="fld"><label>NOTES</label><textarea id="cfNotes" rows="3" class="cinput" style="min-height:60px;font-size:13px">${isEdit?esc(c.relationship_notes||""):esc(pf.notes||"")}</textarea></div>`;
 
   // Status
   h+=`<div class="row2"><div class="fld"><label>STATUS</label><select id="cfStatus" class="cinput"><option value="active"${(!isEdit||c.status==="active")?" selected":""}>Active</option><option value="inactive"${isEdit&&c.status==="inactive"?" selected":""}>Inactive</option><option value="do_not_use"${isEdit&&c.status==="do_not_use"?" selected":""}>Do Not Use</option></select></div>`;
@@ -712,20 +713,8 @@ async function parseContact(file){
 }
 
 function prefillContactForm(parsed){
-  openCtForm();
-  // Use retry loop for iOS WKWebView where DOM renders slower
-  function tryFill(attempts){
-    const testEl=document.getElementById('cfFirst');
-    if(!testEl&&attempts<10){setTimeout(()=>tryFill(attempts+1),200);return;}
-    const fields={cfFirst:parsed.first_name,cfLast:parsed.last_name,cfCo:parsed.company,cfType:parsed.contact_type,cfPhone:parsed.phone,cfEmail:parsed.email,cfAddr:parsed.address,cfCity:parsed.city,cfState:parsed.state,cfZip:parsed.zip,cfWeb:parsed.website,cfLic:parsed.license_number,cfRef:null,cfNotes:parsed.notes};
-    for(const[id,val]of Object.entries(fields)){
-      if(val!=null){const el=document.getElementById(id);if(el)el.value=val;}
-    }
-    if(parsed.specialty_tags&&parsed.specialty_tags.length){
-      const el=document.getElementById("cfTags");if(el)el.value=parsed.specialty_tags.join(", ");
-    }
-  }
-  tryFill(0);
+  openCtForm(null,parsed);
+  showCtToast("Contact parsed — review and save");
 }
 
 // ═══ BID UPLOAD + AI PARSER ═══
