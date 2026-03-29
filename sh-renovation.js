@@ -657,6 +657,16 @@ function renderSOWV(el){
       h+=`<tr class="reno-r${exp?" expanded":""}" onclick="toggleLineExp('${l.sow_line_id}')"><td style="color:#64748b">${l.line_number}</td><td><span class="reno-chip" style="color:${cc};background:${cc}15;border:1px solid ${cc}30">${esc((l.category||"").replace(/_/g," "))}</span></td><td style="font-weight:600;color:#e2e8f0">${esc(l.description||"")}</td><td class="reno-hm" style="text-align:right">${$r(la2)}</td><td style="text-align:right">${$r(pb)}${oopDot}</td><td style="text-align:right;color:${acColor}">${acText}${acDeltaText}</td><td style="text-align:right;font-weight:700">${$r(sp)}</td><td class="reno-hm" style="text-align:right">${$r(l.total_drawn)}</td><td style="text-align:right;color:${rmc};font-weight:700">${$r(rb3)}</td><td><span class="reno-chip" style="color:${stc};background:${stc}15;border:1px solid ${stc}30">${(l.status||"not_started").replace(/_/g," ")}</span></td></tr>`;
       if(exp)h+=`<tr class="reno-xrow"><td colspan="10" id="renoLX_${l.sow_line_id}"><div style="padding:8px 0;color:#64748b;font-size:11px">Loading...</div></td></tr>`;
     });
+    // Total row
+    const totApproved=fl.reduce((s,l)=>s+(Number(l.lender_approved)||0),0);
+    const totPlanned=fl.reduce((s,l)=>s+(Number(l.planned_budget)||0),0);
+    const totActual=fl.filter(l=>l.actual_cost!=null).reduce((s,l)=>s+(Number(l.actual_cost)||0),0);
+    const hasActual=fl.some(l=>l.actual_cost!=null);
+    const totSpent=fl.reduce((s,l)=>s+(Number(l.total_spent)||0),0);
+    const totDrawn=fl.reduce((s,l)=>s+(Number(l.total_drawn)||0),0);
+    const totRemaining=totPlanned-totSpent;
+    const totRemColor=totRemaining<0?'#ef4444':'#22c55e';
+    h+=`<tr style="border-top:2px solid rgba(212,175,55,0.3)"><td></td><td></td><td style="font-weight:800;color:#d4af37">TOTAL</td><td class="reno-hm" style="text-align:right;font-weight:800;color:#d4af37">${$r(totApproved)}</td><td style="text-align:right;font-weight:800;color:#d4af37">${$r(totPlanned)}</td><td style="text-align:right;font-weight:800;color:#d4af37">${hasActual?$r(totActual):'—'}</td><td style="text-align:right;font-weight:800;color:#d4af37">${$r(totSpent)}</td><td class="reno-hm" style="text-align:right;font-weight:800;color:#d4af37">${$r(totDrawn)}</td><td style="text-align:right;font-weight:800;color:${totRemColor}">${$r(totRemaining)}</td><td></td></tr>`;
     h+=`</tbody></table></div>`;
     // Actual vs Planned summary
     const _sowTotalPlanned=fl.reduce((a,l)=>a+(l.planned_budget||0),0);
