@@ -644,7 +644,7 @@ async function parseContact(file){
     b64=btoa(binary);
   }catch(e){
     console.error("[Contact Scanner] Base64 conversion failed:",e);
-    showCtToast("Failed to read file");
+    showCtToast("ERROR: "+e.message);
     openCtForm();
     if(scanBtn){scanBtn.textContent='📷 Scan Contact';scanBtn.disabled=false;scanBtn.style.opacity='1';}
     return;
@@ -655,6 +655,7 @@ async function parseContact(file){
   if(mediaType==='image/heic'||mediaType==='image/heif')mediaType='image/jpeg';
   if(!mediaType.startsWith('image/')&&mediaType!=='application/pdf')mediaType='image/png';
   const docType=mediaType.startsWith('image/')?'image':'document';
+  showCtToast("File ready: "+b64.length+" chars, type: "+mediaType);
 
   // 4. Build Claude API request
   const content=[
@@ -664,7 +665,7 @@ async function parseContact(file){
 
   // 5. Call Claude API — this is the critical parse step
   try{
-    showCtToast("Analyzing with AI...");
+    showCtToast("Calling Claude API...");
     const res=await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
@@ -680,9 +681,11 @@ async function parseContact(file){
 
     const data=await res.json();
     console.log("[Contact Scanner] Raw response:",JSON.stringify(data).substring(0,500));
+    showCtToast("Got response: "+(data?.content?.[0]?.text||"empty").substring(0,80));
 
     const parsed=await robustParseJSON(data,apiKey);
     console.log("[Contact Scanner] Parsed:",JSON.stringify(parsed));
+    showCtToast("Parsed: "+(parsed?.first_name||"no name")+" "+(parsed?.phone||"no phone"));
 
     if(!parsed||(parsed.first_name===null&&parsed.last_name===null&&parsed.company===null&&parsed.phone===null)){
       showCtToast("Couldn't read contact info — try a clearer image");
@@ -695,7 +698,7 @@ async function parseContact(file){
 
   }catch(e){
     console.error("[Contact Scanner] Parse failed:",e);
-    showCtToast("Scan failed: "+(e.message||"Unknown error"));
+    showCtToast("ERROR: "+e.message);
     openCtForm();
     return;
   }finally{
