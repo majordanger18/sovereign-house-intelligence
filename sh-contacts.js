@@ -597,9 +597,23 @@ async function saveBid(editId){
 
 // ═══ CONTACT SCANNER ═══
 function openContactUpload(){
-  const input=document.createElement('input');
-  input.type='file';input.accept='image/*,.pdf';
-  input.onchange=async function(){const file=input.files[0];if(!file)return;await parseContact(file);};
+  // Use a persistent input element — iOS Safari drops file refs on dynamic inputs
+  let input=document.getElementById('_contactFileInput');
+  if(!input){
+    input=document.createElement('input');
+    input.id='_contactFileInput';
+    input.type='file';
+    input.accept='image/*,.pdf';
+    input.style.display='none';
+    document.body.appendChild(input);
+  }
+  input.value='';
+  input.onchange=function(){
+    const file=input.files[0];
+    if(!file)return;
+    window._pendingContactFile=file;
+    setTimeout(()=>{parseContact(window._pendingContactFile);},100);
+  };
   input.click();
 }
 
@@ -619,7 +633,11 @@ async function parseContact(file){
   // 2. Convert file to base64 IMMEDIATELY — no storage upload yet
   let b64;
   try{
-    const buf=await file.arrayBuffer();
+    // Fallback for iOS Safari that may not support file.arrayBuffer()
+    let buf;
+    try{buf=await file.arrayBuffer();}catch(e){
+      buf=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('FileReader failed'));reader.readAsArrayBuffer(file);});
+    }
     const bytes=new Uint8Array(buf);
     let binary="";const chunk=8192;
     for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
