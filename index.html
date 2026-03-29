@@ -113,11 +113,9 @@ html,body,#loading,#main,.overlay,.sheet{background:#0a0a0f;color:#fff;margin:0;
 <script src="sh-offer.js"></script>
 <script src="sh-rpa-init.js"></script>
 <script>
-// Tap backdrop (outside sheet) to close modals
-[["detailModal","closeDetail"],["alertModal","closeAlerts"],["offerModal","closeOffer"],["dealModal","closeDeal"],["renoModal","closeRenoModal"],["contactsModal","closeCtModal"]].forEach(([id,fn])=>{
-  document.getElementById(id).addEventListener("click",function(e){
-    if(e.target===this&&typeof window[fn]==="function")window[fn]();
-  });
+// Backdrop close only for alertModal (no forms, no data loss risk)
+document.getElementById("alertModal").addEventListener("click",function(e){
+  if(e.target===this&&typeof window["closeAlerts"]==="function")window["closeAlerts"]();
 });
 </script>
 </body>
