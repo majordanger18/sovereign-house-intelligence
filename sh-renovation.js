@@ -258,6 +258,8 @@ async function saveMilestone(id){
   const newStatus=document.getElementById('msStatus_'+id)?.value||m.status;
   const actualStart=document.getElementById('msStart_'+id)?.value||null;
   const actualEnd=document.getElementById('msEnd_'+id)?.value||null;
+  const plannedStart=document.getElementById('msPlannedStart_'+id)?.value||null;
+  const plannedEnd=document.getElementById('msPlannedEnd_'+id)?.value||null;
   const notes=(document.getElementById('msNotes_'+id)?.value||'').trim()||null;
   const blockingReason=(document.getElementById('msBlock_'+id)?.value||'').trim()||null;
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
@@ -308,6 +310,13 @@ async function saveMilestone(id){
   }
   if (patch.actual_end && m.planned_end && patch.status === 'complete') {
     patch.drift_days = Math.ceil((new Date(patch.actual_end + 'T00:00:00') - new Date(m.planned_end + 'T00:00:00')) / 864e5);
+  }
+
+  // Include planned dates if user edited them
+  if (plannedStart) patch.planned_start = plannedStart;
+  if (plannedEnd) patch.planned_end = plannedEnd;
+  if (patch.planned_start && patch.planned_end) {
+    patch.planned_duration_days = Math.ceil((new Date(patch.planned_end + 'T00:00:00') - new Date(patch.planned_start + 'T00:00:00')) / 864e5);
   }
 
   console.log('[SH MILESTONE] Saving patch:', JSON.stringify(patch));
@@ -469,6 +478,8 @@ function renderProjectV(el){
         h+=`<div onclick="event.stopPropagation()" style="border-left:3px solid #d4af37;background:rgba(255,255,255,0.02);padding:14px;margin:8px 0 4px;border-radius:0 12px 12px 0">`;
         h+=`<div class="reno-eg">`;
         h+=`<div class="fld"><label>STATUS</label><select id="msStatus_${m.id}" class="cinput"><option value="not_started"${st==='not_started'?' selected':''}>Not Started</option><option value="in_progress"${st==='in_progress'?' selected':''}>In Progress</option><option value="complete"${st==='complete'?' selected':''}>Complete</option><option value="blocked"${st==='blocked'?' selected':''}>Blocked</option><option value="skipped"${st==='skipped'?' selected':''}>Skipped</option></select></div>`;
+        h+=`<div class="fld"><label style="color:#64748b">PLANNED START</label><input id="msPlannedStart_${m.id}" type="date" class="cinput" style="color:#64748b" value="${m.planned_start||''}"/></div>`;
+        h+=`<div class="fld"><label style="color:#64748b">PLANNED END</label><input id="msPlannedEnd_${m.id}" type="date" class="cinput" style="color:#64748b" value="${m.planned_end||''}"/></div>`;
         h+=`<div class="fld"><label>ACTUAL START</label><input id="msStart_${m.id}" type="date" class="cinput" value="${m.actual_start||''}"/></div>`;
         h+=`<div class="fld"><label>ACTUAL END</label><input id="msEnd_${m.id}" type="date" class="cinput" value="${m.actual_end||''}"/></div>`;
         if(st==='blocked')h+=`<div class="fld"><label>BLOCKING REASON</label><input id="msBlock_${m.id}" type="text" class="cinput" value="${esc(m.blocking_reason||'')}" placeholder="What is blocking this phase?"/></div>`;
