@@ -645,7 +645,9 @@ async function parseContact(file){
     let binary="";const chunk=8192;
     for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
     b64=btoa(binary);
+    alert("Base64 done: "+b64.length+" chars");
   }catch(e){
+    alert("CATCH ERROR: "+e.message);
     console.error("[Contact Scanner] Base64 conversion failed:",e);
     showCtToast("ERROR: "+e.message);
     openCtForm();
@@ -668,12 +670,13 @@ async function parseContact(file){
 
   // 5. Call Claude API — this is the critical parse step
   try{
-    showCtToast("Calling Claude API...");
+    alert("About to call Claude API, mediaType: "+mediaType);
     const res=await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
       body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:content}]})
     });
+    alert("API responded: "+res.status);
 
     if(!res.ok){
       if(res.status===401)localStorage.removeItem("sh_claude_key");
@@ -683,12 +686,12 @@ async function parseContact(file){
     }
 
     const data=await res.json();
+    alert("JSON parsed, content: "+(data?.content?.[0]?.text||"EMPTY").substring(0,100));
     console.log("[Contact Scanner] Raw response:",JSON.stringify(data).substring(0,500));
-    showCtToast("Got response: "+(data?.content?.[0]?.text||"empty").substring(0,80));
 
     const parsed=await robustParseJSON(data,apiKey);
+    alert("robustParseJSON result: "+JSON.stringify(parsed).substring(0,100));
     console.log("[Contact Scanner] Parsed:",JSON.stringify(parsed));
-    showCtToast("Parsed: "+(parsed?.first_name||"no name")+" "+(parsed?.phone||"no phone"));
 
     if(!parsed||(parsed.first_name===null&&parsed.last_name===null&&parsed.company===null&&parsed.phone===null)){
       showCtToast("Couldn't read contact info — try a clearer image");
@@ -700,8 +703,8 @@ async function parseContact(file){
     showCtToast("Contact parsed — review and save");
 
   }catch(e){
+    alert("CATCH ERROR: "+e.message);
     console.error("[Contact Scanner] Parse failed:",e);
-    showCtToast("ERROR: "+e.message);
     openCtForm();
     return;
   }finally{
