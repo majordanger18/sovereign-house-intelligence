@@ -597,7 +597,6 @@ async function saveBid(editId){
 
 // ═══ CONTACT SCANNER ═══
 function openContactUpload(){
-  alert("openContactUpload fired");
   // Use a persistent input element — iOS Safari drops file refs on dynamic inputs
   let input=document.getElementById('_contactFileInput');
   if(!input){
@@ -610,7 +609,6 @@ function openContactUpload(){
   }
   input.value='';
   input.onchange=function(){
-    alert("onchange fired, file: "+(input.files[0]?input.files[0].name:"NO FILE"));
     const file=input.files[0];
     if(!file)return;
     window._pendingContactFile=file;
@@ -620,7 +618,6 @@ function openContactUpload(){
 }
 
 async function parseContact(file){
-  alert("parseContact called with file: "+file.name+" type: "+file.type+" size: "+file.size);
   const scanBtn=document.getElementById('ctScanBtn');
   if(scanBtn){scanBtn.textContent='Scanning...';scanBtn.disabled=true;scanBtn.style.opacity='0.6';}
   showCtToast("Scanning contact...");
@@ -645,11 +642,9 @@ async function parseContact(file){
     let binary="";const chunk=8192;
     for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
     b64=btoa(binary);
-    alert("Base64 done: "+b64.length+" chars");
   }catch(e){
-    alert("CATCH ERROR: "+e.message);
     console.error("[Contact Scanner] Base64 conversion failed:",e);
-    showCtToast("ERROR: "+e.message);
+    showCtToast("Failed to read file: "+e.message);
     openCtForm();
     if(scanBtn){scanBtn.textContent='📷 Scan Contact';scanBtn.disabled=false;scanBtn.style.opacity='1';}
     return;
@@ -660,7 +655,6 @@ async function parseContact(file){
   if(mediaType==='image/heic'||mediaType==='image/heif')mediaType='image/jpeg';
   if(!mediaType.startsWith('image/')&&mediaType!=='application/pdf')mediaType='image/png';
   const docType=mediaType.startsWith('image/')?'image':'document';
-  showCtToast("File ready: "+b64.length+" chars, type: "+mediaType);
 
   // 4. Build Claude API request
   const content=[
@@ -670,13 +664,12 @@ async function parseContact(file){
 
   // 5. Call Claude API — this is the critical parse step
   try{
-    alert("About to call Claude API, mediaType: "+mediaType);
+    showCtToast("Analyzing with AI...");
     const res=await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
       body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:content}]})
     });
-    alert("API responded: "+res.status);
 
     if(!res.ok){
       if(res.status===401)localStorage.removeItem("sh_claude_key");
@@ -686,11 +679,9 @@ async function parseContact(file){
     }
 
     const data=await res.json();
-    alert("JSON parsed, content: "+(data?.content?.[0]?.text||"EMPTY").substring(0,100));
     console.log("[Contact Scanner] Raw response:",JSON.stringify(data).substring(0,500));
 
     const parsed=await robustParseJSON(data,apiKey);
-    alert("robustParseJSON result: "+JSON.stringify(parsed).substring(0,100));
     console.log("[Contact Scanner] Parsed:",JSON.stringify(parsed));
 
     if(!parsed||(parsed.first_name===null&&parsed.last_name===null&&parsed.company===null&&parsed.phone===null)){
@@ -703,8 +694,8 @@ async function parseContact(file){
     showCtToast("Contact parsed — review and save");
 
   }catch(e){
-    alert("CATCH ERROR: "+e.message);
     console.error("[Contact Scanner] Parse failed:",e);
+    showCtToast("Scan failed: "+(e.message||"Unknown error"));
     openCtForm();
     return;
   }finally{
@@ -722,7 +713,10 @@ async function parseContact(file){
 
 function prefillContactForm(parsed){
   openCtForm();
-  setTimeout(()=>{
+  // Use retry loop for iOS WKWebView where DOM renders slower
+  function tryFill(attempts){
+    const testEl=document.getElementById('cfFirst');
+    if(!testEl&&attempts<10){setTimeout(()=>tryFill(attempts+1),200);return;}
     const fields={cfFirst:parsed.first_name,cfLast:parsed.last_name,cfCo:parsed.company,cfType:parsed.contact_type,cfPhone:parsed.phone,cfEmail:parsed.email,cfAddr:parsed.address,cfCity:parsed.city,cfState:parsed.state,cfZip:parsed.zip,cfWeb:parsed.website,cfLic:parsed.license_number,cfRef:null,cfNotes:parsed.notes};
     for(const[id,val]of Object.entries(fields)){
       if(val!=null){const el=document.getElementById(id);if(el)el.value=val;}
@@ -730,8 +724,8 @@ function prefillContactForm(parsed){
     if(parsed.specialty_tags&&parsed.specialty_tags.length){
       const el=document.getElementById("cfTags");if(el)el.value=parsed.specialty_tags.join(", ");
     }
-    showCtToast("Contact info parsed — review and save");
-  },200);
+  }
+  tryFill(0);
 }
 
 // ═══ BID UPLOAD + AI PARSER ═══
