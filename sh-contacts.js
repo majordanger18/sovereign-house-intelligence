@@ -597,6 +597,7 @@ async function saveBid(editId){
 
 // ═══ CONTACT SCANNER ═══
 function openContactUpload(){
+  alert("openContactUpload fired");
   // Use a persistent input element — iOS Safari drops file refs on dynamic inputs
   let input=document.getElementById('_contactFileInput');
   if(!input){
@@ -609,6 +610,7 @@ function openContactUpload(){
   }
   input.value='';
   input.onchange=function(){
+    alert("onchange fired, file: "+(input.files[0]?input.files[0].name:"NO FILE"));
     const file=input.files[0];
     if(!file)return;
     window._pendingContactFile=file;
@@ -618,6 +620,7 @@ function openContactUpload(){
 }
 
 async function parseContact(file){
+  alert("parseContact called with file: "+file.name+" type: "+file.type+" size: "+file.size);
   const scanBtn=document.getElementById('ctScanBtn');
   if(scanBtn){scanBtn.textContent='Scanning...';scanBtn.disabled=true;scanBtn.style.opacity='0.6';}
   showCtToast("Scanning contact...");
