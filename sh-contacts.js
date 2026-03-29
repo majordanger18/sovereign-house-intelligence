@@ -1128,18 +1128,35 @@ async function compareDealBids(dealId){
   });
   h+=`</tr></tbody></table></div>`;
 
-  // Generate Analysis button
+  // Generate Analysis button — check for cached analysis
   const bidIds=dealBids.map(b=>b.id);
   const addr=esc(dealBids[0].deals?.address||"");
-  h+=`<div style="margin-top:16px"><button id="genAnalysisBtn" onclick="generateBidAnalysis('${dealId}')" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;border-radius:10px;cursor:pointer">🤖 Generate Analysis</button></div>`;
+  const hasCached=dealBids.some(b=>b.bid_analysis);
+  if(hasCached){
+    h+=`<div style="margin-top:16px"><button id="genAnalysisBtn" onclick="generateBidAnalysis('${dealId}')" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;border-radius:10px;cursor:pointer">📊 View Analysis</button><div style="text-align:center;margin-top:6px"><a onclick="generateBidAnalysis('${dealId}',true)" style="font-size:11px;color:rgba(255,255,255,0.3);cursor:pointer;text-decoration:none">Regenerate</a></div></div>`;
+  }else{
+    h+=`<div style="margin-top:16px"><button id="genAnalysisBtn" onclick="generateBidAnalysis('${dealId}')" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;border-radius:10px;cursor:pointer">🤖 Generate Analysis</button></div>`;
+  }
   h+=`</div>`;
 
   m.innerHTML=h;m.style.display="block";document.body.style.overflow="hidden";
 }
 
-async function generateBidAnalysis(dealId){
+async function generateBidAnalysis(dealId,forceRegen){
   const btn=document.getElementById("genAnalysisBtn");
   if(btn){btn.disabled=true;btn.textContent="Analyzing…";btn.style.opacity="0.5";}
+
+  // Check for cached analysis first
+  if(!forceRegen){
+    try {
+      const cached = await sb("contractor_bids?deal_id=eq." + dealId + "&select=id,bid_analysis,bid_analysis_date&bid_analysis=not.is.null&limit=1");
+      if (Array.isArray(cached) && cached.length && cached[0].bid_analysis) {
+        renderBidAnalysis(dealId, cached[0].bid_analysis);
+        if(btn){btn.disabled=false;btn.textContent="📊 View Analysis";btn.style.opacity="1";}
+        return;
+      }
+    } catch(e) { console.log('No cached analysis'); }
+  }
 
   let apiKey=localStorage.getItem("sh_claude_key");
   if(!apiKey){
@@ -1205,41 +1222,61 @@ Be specific. Use actual dollar amounts from the bids. This will be printed and u
     const data=await res.json();
     const text=(data.content||[]).map(c=>c.text||"").join("");
 
-    // Render printable modal
-    function mdToHtml(md){
-      return md
-        .replace(/^## (.+)$/gm,'<h2 style="font-size:15px;font-weight:800;color:#111;margin:20px 0 8px;padding-bottom:4px;border-bottom:2px solid #e2e8f0;text-transform:uppercase;letter-spacing:0.5px">$1</h2>')
-        .replace(/^### (.+)$/gm,'<h3 style="font-size:13px;font-weight:800;color:#333;margin:14px 0 4px">$1</h3>')
-        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-        .replace(/^---$/gm,'<hr style="border:none;border-top:1px solid #e2e8f0;margin:12px 0"/>')
-        .replace(/^- (.+)$/gm,'<div style="padding:2px 0 2px 16px;font-size:13px;color:#333;line-height:1.6">• $1</div>')
-        .replace(/^\d+\. (.+)$/gm,'<div style="padding:2px 0 2px 16px;font-size:13px;color:#333;line-height:1.6">$1</div>')
-        .replace(/\n\n/g,'<div style="height:6px"></div>')
-        .replace(/\n/g,'<br>');
-    }
-    const formatted=mdToHtml(text);
-    const bidHeaders=bids.map(b=>`<div style="flex:1;text-align:center;padding:8px;border:1px solid #ddd;border-radius:8px"><div style="font-weight:700">${esc(b.contacts?.display_name||"?")}</div><div style="font-size:14px;color:#666">$${(b.initial_bid||0).toLocaleString()}</div></div>`).join("");
+    // Save analysis to database
+    try {
+      const firstBid = bids[0];
+      await fetch(SB + '/rest/v1/contractor_bids?id=eq.' + firstBid.id, {
+        method: 'PATCH',
+        headers: HD,
+        body: JSON.stringify({
+          bid_analysis: text,
+          bid_analysis_date: new Date().toISOString()
+        })
+      });
+    } catch(e) { console.error('Failed to save analysis:', e); }
 
-    const pm=document.getElementById("contactsModal");
-    pm.innerHTML=`<div class="sheet" style="position:relative;max-height:95vh;overflow-y:auto;background:#fff;color:#111;border-radius:16px">
-      <div class="handle" style="background:#ccc"></div>
-      <button class="close-x" onclick="closeCtModal()" style="color:#666">✕</button>
-      <div id="bidAnalysisPrint">
-        <div style="text-align:center;margin-bottom:16px">
-          <div style="font-size:10px;color:#999;font-weight:700;letter-spacing:3px">BID ANALYSIS</div>
-          <div style="font-size:20px;font-weight:800;margin-top:4px">${esc(address)}</div>
-          <div style="font-size:11px;color:#999;margin-top:2px">${new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric",timeZone:"America/Los_Angeles"})}</div>
-        </div>
-        <div style="display:flex;gap:12px;margin-bottom:20px">${bidHeaders}</div>
-        <div style="font-size:13px;line-height:1.7;color:#222">${formatted}</div>
-        <div style="margin-top:20px;text-align:center"><button onclick="(function(){var el=document.getElementById('bidAnalysisPrint');var w=window.open('','_blank');w.document.write('<html><head><title>Bid Analysis</title><style>body{font-family:-apple-system,system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#111;font-size:13px;line-height:1.7}</style></head><body>'+el.innerHTML+'</body></html>');w.document.close();w.print();})()" style="padding:12px 32px;font-size:14px;font-weight:700;background:#111;color:#fff;border:none;border-radius:8px;cursor:pointer">🖨 Print Report</button></div>
-      </div>
-    </div>`;
+    renderBidAnalysis(dealId, text);
   }catch(e){
     console.error("Bid analysis error:",e);
     showCtToast("Analysis failed: "+e.message);
     if(btn){btn.disabled=false;btn.textContent="🤖 Generate Analysis";btn.style.opacity="1";}
   }
+}
+
+async function renderBidAnalysis(dealId, text){
+  // Fetch bids for header info
+  let bids=[];
+  try{bids=await sb("contractor_bids?deal_id=eq."+dealId+"&select=id,initial_bid,contacts(display_name),deals(address)");}catch(e){}
+  if(!Array.isArray(bids))bids=[];
+  const address=bids[0]?.deals?.address||"Property";
+  function mdToHtml(md){
+    return md
+      .replace(/^## (.+)$/gm,'<h2 style="font-size:15px;font-weight:800;color:#111;margin:20px 0 8px;padding-bottom:4px;border-bottom:2px solid #e2e8f0;text-transform:uppercase;letter-spacing:0.5px">$1</h2>')
+      .replace(/^### (.+)$/gm,'<h3 style="font-size:13px;font-weight:800;color:#333;margin:14px 0 4px">$1</h3>')
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/^---$/gm,'<hr style="border:none;border-top:1px solid #e2e8f0;margin:12px 0"/>')
+      .replace(/^- (.+)$/gm,'<div style="padding:2px 0 2px 16px;font-size:13px;color:#333;line-height:1.6">• $1</div>')
+      .replace(/^\d+\. (.+)$/gm,'<div style="padding:2px 0 2px 16px;font-size:13px;color:#333;line-height:1.6">$1</div>')
+      .replace(/\n\n/g,'<div style="height:6px"></div>')
+      .replace(/\n/g,'<br>');
+  }
+  const formatted=mdToHtml(text);
+  const bidHeaders=bids.filter(b=>b.initial_bid).map(b=>`<div style="flex:1;text-align:center;padding:8px;border:1px solid #ddd;border-radius:8px"><div style="font-weight:700">${esc(b.contacts?.display_name||"?")}</div><div style="font-size:14px;color:#666">$${(b.initial_bid||0).toLocaleString()}</div></div>`).join("");
+  const pm=document.getElementById("contactsModal");
+  pm.innerHTML=`<div class="sheet" style="position:relative;max-height:95vh;overflow-y:auto;background:#fff;color:#111;border-radius:16px">
+    <div class="handle" style="background:#ccc"></div>
+    <button class="close-x" onclick="closeCtModal()" style="color:#666">✕</button>
+    <div id="bidAnalysisPrint">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:10px;color:#999;font-weight:700;letter-spacing:3px">BID ANALYSIS</div>
+        <div style="font-size:20px;font-weight:800;margin-top:4px">${esc(address)}</div>
+        <div style="font-size:11px;color:#999;margin-top:2px">${new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric",timeZone:"America/Los_Angeles"})}</div>
+      </div>
+      ${bidHeaders?`<div style="display:flex;gap:12px;margin-bottom:20px">${bidHeaders}</div>`:''}
+      <div style="font-size:13px;line-height:1.7;color:#222">${formatted}</div>
+      <div style="margin-top:20px;text-align:center"><button onclick="(function(){var el=document.getElementById('bidAnalysisPrint');var w=window.open('','_blank');w.document.write('<html><head><title>Bid Analysis</title><style>body{font-family:-apple-system,system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#111;font-size:13px;line-height:1.7}</style></head><body>'+el.innerHTML+'</body></html>');w.document.close();w.print();})()" style="padding:12px 32px;font-size:14px;font-weight:700;background:#111;color:#fff;border:none;border-radius:8px;cursor:pointer">🖨 Print Report</button></div>
+    </div>
+  </div>`;
 }
 
 // ═══ DELETE BID ═══
