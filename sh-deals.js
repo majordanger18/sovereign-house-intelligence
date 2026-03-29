@@ -1413,7 +1413,7 @@ async function loadPostmortemUI(dealId,el){
 
   // ── SECTION 4: ACTIONS ──
   h+=`<div style="display:flex;gap:8px">`;
-  h+=`<button disabled style="flex:1;padding:12px;font-size:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.3);font-weight:700;border-radius:10px;cursor:not-allowed">📊 Export CPA Report</button>`;
+  h+=`<button onclick="exportCPAPostmortem('${dealId}')" style="flex:1;padding:12px;font-size:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;font-weight:700;border-radius:10px;cursor:pointer">📊 Export CPA Report</button>`;
   if(pms!=='complete'){
     h+=`<button onclick="markPostmortemComplete('${dealId}','${pm.id||''}')" style="flex:1;padding:12px;font-size:12px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#10b981;font-weight:700;border-radius:10px;cursor:pointer">✓ Mark Complete</button>`;
   }else{
@@ -1610,4 +1610,229 @@ async function reanalyzePostmortem(dealId,outcomeId){
     await loadDealOutcomes(dealId);
     renderSmartCard(dealId);
   }catch(e){console.error('Re-analyze failed:',e);}
+}
+
+// ═══════════════════════════════════════════
+// ═══ CPA REPORT EXPORT ═══
+// ═══════════════════════════════════════════
+
+async function exportCPAPostmortem(dealId){
+  const deal=deals.find(d=>d.id===dealId);
+  if(!deal){alert('Deal not found.');return;}
+
+  // Fetch all data in parallel
+  const[ocArr,finArr,expArr,calcArr]=await Promise.all([
+    fetch(SB+'/rest/v1/deal_outcomes?deal_id=eq.'+dealId,{headers:HD}).then(r=>r.json()).catch(()=>[]),
+    fetch(SB+'/rest/v1/deal_financing?deal_id=eq.'+dealId,{headers:HD}).then(r=>r.json()).catch(()=>[]),
+    fetch(SB+'/rest/v1/renovation_expenses?deal_id=eq.'+dealId+'&order=category,date',{headers:HD}).then(r=>r.json()).catch(()=>[]),
+    deal.property_id?fetch(SB+'/rest/v1/calc_history?property_id=eq.'+deal.property_id+'&order=created_at.desc&limit=1',{headers:HD}).then(r=>r.json()).catch(()=>[]):Promise.resolve([])
+  ]);
+
+  const oc=Array.isArray(ocArr)&&ocArr.length?ocArr[0]:{};
+  const fin=Array.isArray(finArr)&&finArr.length?finArr[0]:null;
+  const expenses=Array.isArray(expArr)?expArr:[];
+  const calc=Array.isArray(calcArr)&&calcArr.length?calcArr[0]:null;
+
+  // Computed values
+  const purchasePrice=deal.accepted_price||deal.purchase_price||deal.offer_price||0;
+  const salePrice=oc.actual_sale_price||0;
+  const holdMonths=oc.actual_hold_months||calc?.hold_months||0;
+  const loanPrincipal=fin?.funded_principal||fin?.loan_principal||0;
+  const interestRate=fin?.interest_rate||calc?.interest_rate||0;
+  const lisaPct=deal.accepted_commission_pct||deal.lisa_buy_commission_pct||calc?.lisa_commission_pct||2.5;
+  const buyerAgentPct=oc.actual_buyer_agent_pct||2.5;
+  const actualReno=expenses.reduce((s,e)=>s+(e.amount||0),0);
+  const projectedReno=calc?.rehab_budget||0;
+
+  // Acquisition costs
+  const downPayment=Math.round(purchasePrice*0.10);
+  const origination=fin?.origination_fee||Math.round(loanPrincipal*0.015);
+  const lenderServiceFee=1499;
+  const buySideClosing=5000;
+  const proRatedInt=Math.round(loanPrincipal*(interestRate/100)/12*(21/30));
+  const lisaCredit=Math.round(purchasePrice*(lisaPct/100));
+  const totalAcquisition=downPayment+origination+lenderServiceFee+buySideClosing+proRatedInt-lisaCredit;
+
+  // Holding costs
+  const hoaMonthly=calc?.hoa_monthly||0;
+  const taxAnnual=calc?.tax_annual||0;
+  const utilitiesMonthly=650;
+  const insuranceCost=Math.round((purchasePrice+actualReno)*0.0035*(holdMonths/12));
+  let monthlyInterest=fin?.monthly_payment||0;
+  if(!monthlyInterest&&loanPrincipal&&interestRate)monthlyInterest=Math.round(loanPrincipal*(interestRate/100)/12);
+  const totalInterest=Math.round(monthlyInterest*holdMonths);
+  const totalTax=Math.round((taxAnnual/12)*holdMonths);
+  const totalHOA=Math.round(hoaMonthly*holdMonths);
+  const totalUtilities=Math.round(utilitiesMonthly*holdMonths);
+  const totalHolding=totalInterest+totalTax+totalHOA+insuranceCost+totalUtilities;
+
+  // Disposition costs
+  const buyerAgentComm=Math.round(salePrice*(buyerAgentPct/100));
+  const sellSideClosing=3500;
+  const ownersTitle=3000;
+  const rptt=Math.round(Math.ceil(salePrice/500)*2.55);
+  const staging=5000;
+  const hoaTransfer=500;
+  const miscBuffer=1500;
+  const totalDisposition=buyerAgentComm+sellSideClosing+ownersTitle+rptt+staging+hoaTransfer+miscBuffer;
+
+  // P&L
+  const totalCosts=totalAcquisition+actualReno+totalHolding+totalDisposition+purchasePrice-downPayment;
+  const netProfit=salePrice-totalCosts;
+  const roi=totalCosts>0?((netProfit/totalCosts)*100).toFixed(1):'0.0';
+
+  // Expense breakdown by category
+  const expByCat={};
+  expenses.forEach(e=>{const c=e.category||'other';if(!expByCat[c])expByCat[c]=0;expByCat[c]+=e.amount||0;});
+
+  // Insights
+  const insights=Array.isArray(oc.insights)?oc.insights:[];
+  const positiveIns=insights.filter(i=>i.sentiment==='positive');
+  const negativeIns=insights.filter(i=>i.sentiment==='negative');
+  const neutralIns=insights.filter(i=>i.sentiment==='neutral');
+
+  const f=n=>n!=null?'$'+Math.round(Number(n)).toLocaleString():'—';
+  const fDate=d=>d?new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric',timeZone:'America/Los_Angeles'}):'—';
+  const addr=deal.address||'Unknown Property';
+
+  function tRow(label,val,cls){return`<tr${cls?' class="'+cls+'"':''}><td>${label}</td><td class="amt">${val}</td></tr>`;}
+  function tRow2(label,proj,actual){
+    const d=actual!=null&&proj!=null?actual-proj:null;
+    const dc=d!=null?(d<=0?'#16a34a':'#dc2626'):'#666';
+    const ds=d!=null?(d>=0?'+$':'-$')+Math.abs(Math.round(d)).toLocaleString():'—';
+    return`<tr><td>${label}</td><td class="amt">${f(proj)}</td><td class="amt">${f(actual)}</td><td class="amt" style="color:${dc}">${ds}</td></tr>`;
+  }
+
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>CPA Report — ${addr}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a2e;background:#fff;padding:40px;max-width:800px;margin:0 auto;font-size:13px;line-height:1.6}
+h1{font-size:20px;color:#1a1a2e;margin-bottom:2px}
+h2{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#d4af37;margin:28px 0 10px;padding-bottom:6px;border-bottom:2px solid #d4af37}
+.sub{font-size:12px;color:#666;margin-bottom:4px}
+.header{text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #e5e5e5}
+.header .co{font-size:14px;letter-spacing:3px;text-transform:uppercase;color:#d4af37;font-weight:700;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin-bottom:16px}
+th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #eee;font-size:12px}
+th{background:#f8f8f8;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#666}
+tr:nth-child(even){background:#fafafa}
+tr.total{background:#f0ead6;font-weight:700}
+tr.total td{border-top:2px solid #d4af37;padding-top:8px}
+.amt{text-align:right;font-variant-numeric:tabular-nums}
+.profit-box{display:flex;gap:20px;justify-content:center;margin:20px 0;padding:20px;background:#f8f6ef;border:1px solid #e8e0c8;border-radius:8px}
+.profit-box div{text-align:center}
+.profit-box .label{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#888}
+.profit-box .val{font-size:24px;font-weight:800;margin-top:4px}
+.insight{padding:6px 0;border-bottom:1px solid #eee}
+.insight .cat{display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.5px;padding:2px 6px;border-radius:3px;margin-right:6px}
+.pos{color:#16a34a}.neg{color:#dc2626}
+@media print{body{padding:20px}h2{break-after:avoid}table{break-inside:avoid}}
+</style></head><body>
+<div class="header">
+  <div class="co">Sovereign House LLC</div>
+  <h1>Deal Postmortem — Financial Report</h1>
+  <div class="sub">${addr}</div>
+  <div class="sub">${deal.community?deal.community+' · ':''}${deal.zip_code||''}</div>
+  <div class="sub">Generated ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>
+</div>
+
+<h2>Deal Summary</h2>
+<table>
+  <thead><tr><th>Metric</th><th class="amt">Value</th></tr></thead>
+  <tbody>
+    ${tRow('Purchase Price',f(purchasePrice))}
+    ${tRow('Purchase Date (COE)',fDate(deal.coe_date))}
+    ${tRow('Sale Price',f(salePrice))}
+    ${tRow('Sale Date',fDate(oc.actual_sale_date))}
+    ${tRow('Hold Period',holdMonths?holdMonths.toFixed(1)+' months':'—')}
+    ${tRow('Days on Market',oc.days_on_market||'—')}
+    <tr class="total"><td>Net Profit</td><td class="amt" style="color:${netProfit>=0?'#16a34a':'#dc2626'}">${f(netProfit)}</td></tr>
+    <tr class="total"><td>ROI</td><td class="amt">${roi}%</td></tr>
+  </tbody>
+</table>
+
+<h2>Acquisition Costs</h2>
+<table>
+  <thead><tr><th>Item</th><th class="amt">Amount</th></tr></thead>
+  <tbody>
+    ${tRow('Down Payment (10%)',f(downPayment))}
+    ${tRow('Origination Fee',f(origination))}
+    ${tRow('Lender Service Fee',f(lenderServiceFee))}
+    ${tRow('Buy-Side Closing',f(buySideClosing))}
+    ${tRow('Pro-Rated Interest (21 days)',f(proRatedInt))}
+    ${tRow('Lisa Buy-Side Commission ('+lisaPct+'%)','('+f(lisaCredit)+')')}
+    <tr class="total"><td>Total Acquisition</td><td class="amt">${f(totalAcquisition)}</td></tr>
+  </tbody>
+</table>
+
+<h2>Renovation Costs</h2>
+<table>
+  <thead><tr><th>Item</th><th class="amt">Amount</th></tr></thead>
+  <tbody>
+    ${tRow('Budgeted (Projected)',f(projectedReno))}
+    ${tRow('Actual Total',f(actualReno))}
+    ${tRow('Variance',(actualReno&&projectedReno?((actualReno>projectedReno?'+':'')+f(actualReno-projectedReno)):'—'))}
+    ${Object.keys(expByCat).length?'<tr><td colspan="2" style="padding-top:12px;font-size:10px;letter-spacing:1px;color:#888;font-weight:700">BREAKDOWN BY CATEGORY</td></tr>'+Object.entries(expByCat).sort((a,b)=>b[1]-a[1]).map(([c,a])=>tRow('  '+c.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase()),f(a))).join(''):''}
+  </tbody>
+</table>
+
+<h2>Holding Costs</h2>
+<table>
+  <thead><tr><th>Item</th><th class="amt">Amount</th></tr></thead>
+  <tbody>
+    ${tRow('Kiavi Interest ('+interestRate+'% · '+holdMonths.toFixed(1)+' mo)',f(totalInterest))}
+    ${tRow('Property Tax',f(totalTax))}
+    ${tRow('HOA',f(totalHOA))}
+    ${tRow('Insurance',f(insuranceCost))}
+    ${tRow('Utilities / Pool / Landscape',f(totalUtilities))}
+    <tr class="total"><td>Total Holding</td><td class="amt">${f(totalHolding)}</td></tr>
+  </tbody>
+</table>
+
+<h2>Disposition Costs</h2>
+<table>
+  <thead><tr><th>Item</th><th class="amt">Amount</th></tr></thead>
+  <tbody>
+    ${tRow('Buyer Agent Commission ('+buyerAgentPct+'%)',f(buyerAgentComm))}
+    ${tRow('Sell-Side Closing',f(sellSideClosing))}
+    ${tRow("Owner's Title Insurance",f(ownersTitle))}
+    ${tRow('Clark County RPTT',f(rptt))}
+    ${tRow('Staging',f(staging))}
+    ${tRow('HOA Transfer Fee',f(hoaTransfer))}
+    ${tRow('Misc Buffer',f(miscBuffer))}
+    <tr class="total"><td>Total Disposition</td><td class="amt">${f(totalDisposition)}</td></tr>
+  </tbody>
+</table>
+
+<h2>Profit & Loss Summary</h2>
+<div class="profit-box">
+  <div><div class="label">Sale Price</div><div class="val">${f(salePrice)}</div></div>
+  <div><div class="label">Total Costs</div><div class="val">${f(totalCosts)}</div></div>
+  <div><div class="label">Net Profit</div><div class="val" style="color:${netProfit>=0?'#16a34a':'#dc2626'}">${f(netProfit)}</div></div>
+  <div><div class="label">ROI</div><div class="val">${roi}%</div></div>
+</div>
+${calc?`<table>
+  <thead><tr><th>Metric</th><th class="amt">Projected</th><th class="amt">Actual</th><th class="amt">Delta</th></tr></thead>
+  <tbody>
+    ${tRow2('Renovation Cost',projectedReno,actualReno)}
+    ${tRow2('Hold Period (mo)',calc.hold_months,oc.actual_hold_months)}
+    ${tRow2('Total Project Cost',calc.total_cost,totalCosts)}
+    ${tRow2('Net Profit',calc.net_profit,netProfit)}
+  </tbody>
+</table>`:''}
+
+${insights.length?`<h2>Lessons Learned</h2>
+${positiveIns.length?'<h3 style="font-size:12px;color:#16a34a;margin:12px 0 6px">What Went Well</h3>'+positiveIns.map(i=>'<div class="insight"><span class="cat" style="background:#dcfce7;color:#16a34a">'+((INSIGHT_CATS[i.category]||{}).label||i.category).toUpperCase()+'</span>'+((i.text||''))+'</div>').join(''):''}
+${negativeIns.length?'<h3 style="font-size:12px;color:#dc2626;margin:12px 0 6px">What Went Wrong</h3>'+negativeIns.map(i=>'<div class="insight"><span class="cat" style="background:#fef2f2;color:#dc2626">'+((INSIGHT_CATS[i.category]||{}).label||i.category).toUpperCase()+'</span>'+((i.text||''))+'</div>').join(''):''}
+${neutralIns.length?'<h3 style="font-size:12px;color:#666;margin:12px 0 6px">Other Notes</h3>'+neutralIns.map(i=>'<div class="insight"><span class="cat" style="background:#f3f4f6;color:#666">'+((INSIGHT_CATS[i.category]||{}).label||i.category).toUpperCase()+'</span>'+((i.text||''))+'</div>').join(''):''}
+`:''}
+
+<div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e5e5;text-align:center;font-size:10px;color:#999">
+  Sovereign House Intelligence · Generated ${new Date().toISOString().split('T')[0]}
+</div>
+</body></html>`;
+
+  const w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
 }
