@@ -606,8 +606,9 @@ function openContactUpload(){
 async function parseContact(file){
   const scanBtn=document.getElementById('ctScanBtn');
   if(scanBtn){scanBtn.textContent='Scanning...';scanBtn.disabled=true;scanBtn.style.opacity='0.6';}
-  showCtToast("Scanning...");
+  showCtToast("Scanning contact...");
 
+  // 1. Get API key first — fail fast if missing
   let apiKey=localStorage.getItem("sh_claude_key");
   if(!apiKey){
     apiKey=prompt("Enter your Claude API key:");
@@ -615,70 +616,80 @@ async function parseContact(file){
     localStorage.setItem("sh_claude_key",apiKey);
   }
 
-  const buf=await file.arrayBuffer();
-  const bytes=new Uint8Array(buf);
-  let binary="";const chunk=8192;
-  for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
-  const b64=btoa(binary);
+  // 2. Convert file to base64 IMMEDIATELY — no storage upload yet
+  let b64;
+  try{
+    const buf=await file.arrayBuffer();
+    const bytes=new Uint8Array(buf);
+    let binary="";const chunk=8192;
+    for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+    b64=btoa(binary);
+  }catch(e){
+    console.error("[Contact Scanner] Base64 conversion failed:",e);
+    showCtToast("Failed to read file");
+    openCtForm();
+    if(scanBtn){scanBtn.textContent='📷 Scan Contact';scanBtn.disabled=false;scanBtn.style.opacity='1';}
+    return;
+  }
 
-  const mediaType=file.type.startsWith('image/')?file.type:'application/pdf';
-  const docType=file.type.startsWith('image/')?'image':'document';
+  // 3. Determine media type — handle HEIC from iPhone
+  let mediaType=file.type||'image/jpeg';
+  if(mediaType==='image/heic'||mediaType==='image/heif')mediaType='image/jpeg';
+  if(!mediaType.startsWith('image/')&&mediaType!=='application/pdf')mediaType='image/png';
+  const docType=mediaType.startsWith('image/')?'image':'document';
 
-  const promptText=`Extract contact information from this image. This could be a business card, a phone screenshot, a contact detail screen, a text message, an email signature, a website, a social media profile, a Google search result, or any other source that contains a person's or company's contact details.
-
-Look for ANY of these details anywhere in the image:
-- Person's name (first and last)
-- Company or business name
-- Phone number(s)
-- Email address(es)
-- Physical address
-- Website or social media URLs
-- Job title or role
-- License numbers
-- Any contextual clues about what type of contact this is (contractor, agent, vendor, etc.)
-
-For phone screenshots: the contact name is usually large text at the top. Phone numbers and emails may be in labeled rows below. Look for the iOS/Android contact detail layout.
-
-For text messages: the sender name or number is at the top of the conversation.
-
-For Google/web results: look for the business knowledge panel, phone numbers, addresses, and hours.
-
-IMPORTANT: On phone contact screens, the large text below the contact photo circle is the person's NAME, not a city. The smaller text above the name is usually the company. For example if you see 'ARTISTIC IRON WORKS' in small caps above 'Dallas' in large text, then first_name is 'Dallas' and company is 'Artistic Iron Works'. Do not put the person's name in the city field.
-
-Return ONLY a JSON object with no markdown, no explanation, no backticks:
-
-{"first_name":"First name or null","last_name":"Last name or null","company":"Company name or null","contact_type":"best guess from: contractor, subcontractor, supplier, lender, agent, inspector, insurance, title_escrow, designer, attorney, other","phone":"Primary phone formatted as (XXX) XXX-XXXX or null","phone2":"Secondary phone or null","email":"Email address or null","address":"Street address or null","city":"City or null","state":"State abbreviation or null","zip":"ZIP code or null","website":"Website or null","license_number":"License number or null","specialty_tags":["best guess tags"],"notes":"Job title, hours, or any other useful info found"}
-
-Extract everything visible. Use null for fields not found. Make your best guess on contact_type from context.`;
-
+  // 4. Build Claude API request
   const content=[
     {type:docType,source:{type:"base64",media_type:mediaType,data:b64}},
-    {type:"text",text:promptText}
+    {type:"text",text:"Extract contact information from this image. This could be a business card, a phone screenshot, a contact detail screen, a text message, an email signature, a website, a social media profile, a Google search result, or any other source that contains a person's or company's contact details.\n\nIMPORTANT: On phone contact screens, the large text below the contact photo circle is the person's NAME, not a city or location. The smaller text above the name is usually the company. For example if you see 'ARTISTIC IRON WORKS' in small caps above 'Dallas' in large text, then first_name is 'Dallas' and company is 'Artistic Iron Works'. Do not put the person's name in the city field.\n\nLook for ANY of these details anywhere in the image: person's name (first and last), company or business name, phone number(s), email address(es), physical address, website or social media URLs, job title or role, license numbers, any contextual clues about what type of contact this is.\n\nReturn ONLY a JSON object with no markdown, no explanation, no backticks:\n\n{\"first_name\":\"First name or null\",\"last_name\":\"Last name or null\",\"company\":\"Company name or null\",\"contact_type\":\"best guess from: contractor, subcontractor, supplier, lender, agent, inspector, insurance, title_escrow, designer, attorney, other\",\"phone\":\"Primary phone formatted as (XXX) XXX-XXXX or null\",\"phone2\":\"Secondary phone or null\",\"email\":\"Email address or null\",\"address\":\"Street address or null\",\"city\":\"City or null\",\"state\":\"State abbreviation or null\",\"zip\":\"ZIP code or null\",\"website\":\"Website or null\",\"license_number\":\"License number or null\",\"specialty_tags\":[\"best guess tags\"],\"notes\":\"Job title, hours, or any other useful info found\"}\n\nExtract everything visible. Use null for fields not found. Make your best guess on contact_type from context."}
   ];
 
+  // 5. Call Claude API — this is the critical parse step
   try{
+    showCtToast("Analyzing with AI...");
     const res=await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
       body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:content}]})
     });
-    if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
-    const data=await res.json();
-    console.log("[Contact Scanner] Raw API response:",JSON.stringify(data));
-    const parsed=await robustParseJSON(data,apiKey);
-    console.log("[Contact Scanner] Parsed result:",JSON.stringify(parsed));
-    prefillContactForm(parsed);
 
-    // Upload to storage in background (non-blocking)
-    const contactPath=storagePath(null,"contacts",file);
-    uploadToStorage(file,"sovereign-docs",contactPath).catch(e=>console.warn("Contact storage upload failed:",e));
+    if(!res.ok){
+      if(res.status===401)localStorage.removeItem("sh_claude_key");
+      const errText=await res.text().catch(()=>"");
+      console.error("[Contact Scanner] API error:",res.status,errText);
+      throw new Error("API error "+res.status);
+    }
+
+    const data=await res.json();
+    console.log("[Contact Scanner] Raw response:",JSON.stringify(data).substring(0,500));
+
+    const parsed=await robustParseJSON(data,apiKey);
+    console.log("[Contact Scanner] Parsed:",JSON.stringify(parsed));
+
+    if(!parsed||(parsed.first_name===null&&parsed.last_name===null&&parsed.company===null&&parsed.phone===null)){
+      showCtToast("Couldn't read contact info — try a clearer image");
+      openCtForm();
+      return;
+    }
+
+    prefillContactForm(parsed);
+    showCtToast("Contact parsed — review and save");
+
   }catch(e){
-    console.error("Contact parse error:",e);
-    console.log("[Contact Scanner] Error:",e.message,e.stack);
-    showCtToast("Failed to parse contact: "+e.message);
+    console.error("[Contact Scanner] Parse failed:",e);
+    showCtToast("Scan failed: "+(e.message||"Unknown error"));
     openCtForm();
+    return;
   }finally{
     if(scanBtn){scanBtn.textContent='📷 Scan Contact';scanBtn.disabled=false;scanBtn.style.opacity='1';}
+  }
+
+  // 6. Upload to storage in background AFTER parse succeeds — non-blocking
+  try{
+    const contactPath=storagePath(null,"contacts",file);
+    uploadToStorage(file,"sovereign-docs",contactPath).catch(e=>console.warn("[Contact Scanner] Background storage upload failed:",e));
+  }catch(e){
+    console.warn("[Contact Scanner] Storage path error:",e);
   }
 }
 
