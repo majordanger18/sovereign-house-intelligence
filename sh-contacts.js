@@ -1938,7 +1938,8 @@ function renderQuoteGroups(groups,keys){
 
     // Collapsed summary row
     h+='<div onclick="toggleQuoteGroup(\''+gid+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);margin-bottom:4px;cursor:pointer;transition:background .1s">';
-    h+='<div style="display:flex;align-items:center;gap:8px"><span id="'+gid+'_arrow" style="font-size:10px;color:#64748b;transition:transform .15s">&#9654;</span><span style="font-size:12px;font-weight:700;color:#e2e8f0">'+dtLabel+'</span><span style="font-size:10px;color:#64748b">'+items.length+' item'+(items.length!==1?'s':'')+'</span></div>';
+    const qIds=items.map(function(q){return q.id;}).join(',');
+    h+='<div style="display:flex;align-items:center;gap:8px"><span id="'+gid+'_arrow" style="font-size:10px;color:#64748b;transition:transform .15s">&#9654;</span><span id="'+gid+'_date" style="font-size:12px;font-weight:700;color:#e2e8f0">'+dtLabel+'</span><span onclick="event.stopPropagation();editQuoteDate(\''+gid+'\',\''+date+'\',\''+esc(qIds)+'\',\''+items[0].contact_id+'\')" style="font-size:9px;color:#475569;cursor:pointer;padding:2px 4px">&#9998;</span><span style="font-size:10px;color:#64748b">'+items.length+' item'+(items.length!==1?'s':'')+'</span></div>';
     h+='<div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;font-weight:800;color:#f1f5f9">'+$r(total)+'</span>';
     if(docUrl)h+='<a href="'+esc(docUrl)+'" target="_blank" onclick="event.stopPropagation()" style="font-size:9px;color:#60a5fa;text-decoration:none;font-weight:700">View Doc</a>';
     h+='</div></div>';
@@ -1974,6 +1975,28 @@ function toggleQuoteGroup(gid){
   }else{
     el.style.display='none';
     if(arrow)arrow.style.transform='rotate(0deg)';
+  }
+}
+
+function editQuoteDate(gid,oldDate,idsStr,cid){
+  const el=document.getElementById(gid+'_date');if(!el)return;
+  const val=oldDate==='undated'?'':oldDate;
+  el.innerHTML='<input type="date" class="cinput" style="min-height:28px;font-size:11px;padding:2px 6px;width:130px;background:#111114;border:1px solid #d4af37" value="'+val+'" onclick="event.stopPropagation()" onchange="saveQuoteDate(this.value,\''+idsStr+'\',\''+cid+'\')">';
+  el.querySelector('input').focus();
+}
+
+async function saveQuoteDate(newDate,idsStr,cid){
+  const ids=idsStr.split(',');
+  const d=newDate||null;
+  try{
+    for(let i=0;i<ids.length;i++){
+      await fetch(SB+"/rest/v1/supplier_quotes?id=eq."+ids[i],{method:"PATCH",headers:HD,body:JSON.stringify({quote_date:d})});
+    }
+    showCtToast("Date updated");
+    loadCtQuotes(cid);
+  }catch(e){
+    console.error("[Quote] Date update failed:",e);
+    showCtToast("Failed to update date");
   }
 }
 
