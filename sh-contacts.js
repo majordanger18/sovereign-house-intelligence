@@ -82,18 +82,23 @@ function renderCtSub(){
 
 // ═══ DIRECTORY VIEW ═══
 function renderDirectory(el){
-  let h='';
-  // Search + filters
-  h+=`<div class="ct-filters"><div style="flex:1;min-width:200px"><input id="ctSrch" type="text" placeholder="Search name, company, phone, email..." value="${esc(ctSearch)}" oninput="ctSearch=this.value;renderCtSub()" style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:14px;outline:none"/></div>`;
-  h+=`<select id="ctTF" class="cinput ct-fsel" onchange="ctTypeF=this.value;renderCtSub()"><option value="all">All Types</option>`;
-  CT_TYPES.forEach(t=>{h+=`<option value="${t}"${ctTypeF===t?" selected":""}>${CT_LABELS[t]}</option>`;});
-  h+=`</select>`;
-  h+=`<select id="ctSF" class="cinput ct-fsel" onchange="ctStatusF=this.value;renderCtSub()"><option value="active"${ctStatusF==="active"?" selected":""}>Active</option><option value="inactive"${ctStatusF==="inactive"?" selected":""}>Inactive</option><option value="do_not_use"${ctStatusF==="do_not_use"?" selected":""}>Do Not Use</option><option value="all"${ctStatusF==="all"?" selected":""}>All</option></select></div>`;
+  // Only build the static shell (search, filters, buttons) if it doesn't exist yet
+  if(!document.getElementById("ctListArea")){
+    let h='';
+    h+=`<div class="ct-filters"><div style="flex:1;min-width:200px"><input id="ctSrch" type="text" placeholder="Search name, company, phone, email..." value="${esc(ctSearch)}" oninput="ctSearch=this.value;renderCtList()" style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:14px;outline:none"/></div>`;
+    h+=`<select id="ctTF" class="cinput ct-fsel" onchange="ctTypeF=this.value;renderCtList()"><option value="all">All Types</option>`;
+    CT_TYPES.forEach(t=>{h+=`<option value="${t}"${ctTypeF===t?" selected":""}>${CT_LABELS[t]}</option>`;});
+    h+=`</select>`;
+    h+=`<select id="ctSF" class="cinput ct-fsel" onchange="ctStatusF=this.value;renderCtList()"><option value="active"${ctStatusF==="active"?" selected":""}>Active</option><option value="inactive"${ctStatusF==="inactive"?" selected":""}>Inactive</option><option value="do_not_use"${ctStatusF==="do_not_use"?" selected":""}>Do Not Use</option><option value="all"${ctStatusF==="all"?" selected":""}>All</option></select></div>`;
+    h+=`<div style="margin:12px 0;display:flex;gap:8px"><button onclick="openCtForm()" class="btn" style="flex:1;padding:8px 16px;font-size:12px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;border-radius:10px;min-height:auto">+ Add Contact</button><button id="ctScanBtn" onclick="openContactUpload()" class="btn" style="padding:8px 16px;font-size:12px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;border-radius:10px;min-height:auto">📷 Scan Contact</button></div>`;
+    h+=`<div id="ctListArea"></div>`;
+    el.innerHTML=h;
+  }
+  renderCtList();
+}
 
-  // + Add Contact button
-  h+=`<div style="margin:12px 0;display:flex;gap:8px"><button onclick="openCtForm()" class="btn" style="flex:1;padding:8px 16px;font-size:12px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;border-radius:10px;min-height:auto">+ Add Contact</button><button id="ctScanBtn" onclick="openContactUpload()" class="btn" style="padding:8px 16px;font-size:12px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;border-radius:10px;min-height:auto">📷 Scan Contact</button></div>`;
-
-  // Filter contacts
+function renderCtList(){
+  const el=document.getElementById("ctListArea");if(!el)return;
   let list=[...ctList];
   if(ctStatusF!=="all")list=list.filter(c=>c.status===ctStatusF);
   if(ctTypeF!=="all")list=list.filter(c=>c.contact_type===ctTypeF);
@@ -102,6 +107,7 @@ function renderDirectory(el){
     list=list.filter(c=>(c.display_name||"").toLowerCase().includes(q)||(c.company||"").toLowerCase().includes(q)||(c.phone||"").toLowerCase().includes(q)||(c.email||"").toLowerCase().includes(q));
   }
 
+  let h='';
   if(!list.length){
     h+=`<div style="text-align:center;padding:40px 20px;color:#475569"><div style="font-size:32px;margin-bottom:8px">👤</div><div style="font-size:14px;font-weight:600;color:#94a3b8">${ctList.length?"No contacts match your filters.":"No contacts yet."}</div><div style="font-size:12px;color:#64748b;margin-top:6px">Add your first contractor, supplier, or vendor.</div></div>`;
     el.innerHTML=h;return;
@@ -120,12 +126,10 @@ function renderDirectory(el){
     h+=`</div>`;
     h+=`<span class="reno-chip" style="color:${tc};background:${tc}15;border:1px solid ${tc}30;flex-shrink:0">${CT_LABELS[c.contact_type]||c.contact_type||"Other"}</span>`;
     h+=`</div>`;
-    // Contact info row
     h+=`<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">`;
     if(c.phone)h+=`<a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" style="font-size:11px;color:#60a5fa;text-decoration:none;font-weight:600">${esc(c.phone)}</a>`;
     if(c.email)h+=`<a href="mailto:${esc(c.email)}" onclick="event.stopPropagation()" style="font-size:11px;color:#60a5fa;text-decoration:none;font-weight:600">${esc(c.email)}</a>`;
     h+=`</div>`;
-    // Tags
     if(tags.length){
       h+=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">`;
       tags.forEach(t=>{h+=`<span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#94a3b8">${esc(t.replace(/_/g," "))}</span>`;});
