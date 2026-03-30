@@ -682,7 +682,18 @@ async function parseContact(file){
     const data=await res.json();
     console.log("[Contact Scanner] Raw response:",JSON.stringify(data).substring(0,500));
 
-    const parsed=await robustParseJSON(data,apiKey);
+    // Extract JSON directly from Claude response — don't rely on robustParseJSON
+    let parsed=null;
+    try{
+      const rawText=data?.content?.[0]?.text||"";
+      const cleaned=rawText.replace(/```json\s*/g,"").replace(/```\s*/g,"").trim();
+      parsed=JSON.parse(cleaned);
+    }catch(parseErr){
+      console.error("[Contact Scanner] Direct JSON parse failed:",parseErr,"Raw:",data?.content?.[0]?.text);
+      if(typeof robustParseJSON==='function'){
+        try{parsed=await robustParseJSON(data,apiKey);}catch(e2){console.error("[Contact Scanner] robustParseJSON also failed:",e2);}
+      }
+    }
     console.log("[Contact Scanner] Parsed:",JSON.stringify(parsed));
 
     if(!parsed||(parsed.first_name===null&&parsed.last_name===null&&parsed.company===null&&parsed.phone===null)){
