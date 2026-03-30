@@ -724,6 +724,7 @@ async function parseContact(file){
 }
 
 function prefillContactForm(parsed){
+  alert("PREFILL DATA: "+JSON.stringify(parsed).substring(0,200));
   openCtForm(null,parsed);
   showCtToast("Contact parsed — review and save");
 }
