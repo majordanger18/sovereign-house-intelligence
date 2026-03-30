@@ -706,6 +706,7 @@ async function parseContact(file){
     showCtToast("Contact parsed — review and save");
 
   }catch(e){
+    alert("SCAN FAILED: "+e.message+" | "+e.stack);
     console.error("[Contact Scanner] Parse failed:",e);
     showCtToast("Scan failed: "+(e.message||"Unknown error"));
     openCtForm();
