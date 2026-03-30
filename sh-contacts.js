@@ -631,18 +631,19 @@ async function parseContact(file){
     localStorage.setItem("sh_claude_key",apiKey);
   }
 
-  // 2. Convert file to base64 IMMEDIATELY — no storage upload yet
+  // 2. Convert file to base64 using FileReader.readAsDataURL (most reliable cross-platform)
   let b64;
+  let mediaType=file.type||'image/jpeg';
   try{
-    // Fallback for iOS Safari that may not support file.arrayBuffer()
-    let buf;
-    try{buf=await file.arrayBuffer();}catch(e){
-      buf=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('FileReader failed'));reader.readAsArrayBuffer(file);});
-    }
-    const bytes=new Uint8Array(buf);
-    let binary="";const chunk=8192;
-    for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
-    b64=btoa(binary);
+    const dataUrl=await new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(reader.result);
+      reader.onerror=()=>reject(new Error('FileReader failed'));
+      reader.readAsDataURL(file);
+    });
+    b64=dataUrl.split(',')[1];
+    const match=dataUrl.match(/^data:([^;]+);/);
+    if(match)mediaType=match[1];
   }catch(e){
     console.error("[Contact Scanner] Base64 conversion failed:",e);
     showCtToast("Failed to read file: "+e.message);
@@ -651,8 +652,7 @@ async function parseContact(file){
     return;
   }
 
-  // 3. Determine media type — handle HEIC from iPhone
-  let mediaType=file.type||'image/jpeg';
+  // 3. Normalize media type
   if(mediaType==='image/heic'||mediaType==='image/heif')mediaType='image/jpeg';
   if(!mediaType.startsWith('image/')&&mediaType!=='application/pdf')mediaType='image/png';
   const docType=mediaType.startsWith('image/')?'image':'document';
@@ -706,7 +706,6 @@ async function parseContact(file){
     showCtToast("Contact parsed — review and save");
 
   }catch(e){
-    alert("SCAN FAILED: "+e.message+" | "+e.stack);
     console.error("[Contact Scanner] Parse failed:",e);
     showCtToast("Scan failed: "+(e.message||"Unknown error"));
     openCtForm();
@@ -725,7 +724,6 @@ async function parseContact(file){
 }
 
 function prefillContactForm(parsed){
-  alert("PREFILL DATA: "+JSON.stringify(parsed).substring(0,200));
   openCtForm(null,parsed);
   showCtToast("Contact parsed — review and save");
 }
