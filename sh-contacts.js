@@ -15,6 +15,14 @@ let ctList=[],ctPerf=[],ctBids=[],ctSub="directory",ctSearch="",ctTypeF="all",ct
 let _pendingBidUrl=null,_pendingBidName=null;
 let ctRatingOpen=null;
 
+function formatPhone(input){
+  let val=input.value.replace(/\D/g,'');
+  if(val.length>10)val=val.substring(0,10);
+  if(val.length>=7)input.value='('+val.substring(0,3)+') '+val.substring(3,6)+'-'+val.substring(6);
+  else if(val.length>=4)input.value='('+val.substring(0,3)+') '+val.substring(3);
+  else if(val.length>0)input.value='('+val;
+}
+
 // ═══ TAB INJECTION ═══
 // Wrap the already-wrapped renderDashboard from sh-renovation.js
 const _ctOrigRD=renderDashboard;
@@ -262,7 +270,7 @@ function openCtForm(editId,prefill){
   h+=`</select></div></div>`;
 
   // Contact fields
-  h+=`<div class="row2"><div class="fld"><label>PHONE</label><input id="cfPhone" type="tel" class="cinput" value="${isEdit?esc(c.phone||""):esc(pf.phone||"")}"/></div>`;
+  h+=`<div class="row2"><div class="fld"><label>PHONE</label><input id="cfPhone" type="tel" class="cinput" value="${isEdit?esc(c.phone||""):esc(pf.phone||"")}" oninput="formatPhone(this)"/></div>`;
   h+=`<div class="fld"><label>EMAIL</label><input id="cfEmail" type="email" class="cinput" value="${isEdit?esc(c.email||""):esc(pf.email||"")}"/></div></div>`;
   h+=`<div class="fld"><label>ADDRESS</label><input id="cfAddr" type="text" class="cinput" value="${isEdit?esc(c.address||""):esc(pf.address||"")}"/></div>`;
   h+=`<div class="row3"><div class="fld"><label>CITY</label><input id="cfCity" type="text" class="cinput" value="${isEdit?esc(c.city||""):esc(pf.city||"Las Vegas")}"/></div>`;
@@ -296,8 +304,8 @@ function openCtForm(editId,prefill){
 
 async function saveContact(editId){
   const gv=id=>(document.getElementById(id)?.value||"").trim();
-  const first=gv("cfFirst"),last=gv("cfLast");
-  if(!first&&!last){alert("Enter a first or last name.");return;}
+  const first=gv("cfFirst"),last=gv("cfLast"),company=gv("cfCo");
+  if(!first&&!last&&!company){alert("Enter a name or company.");return;}
 
   const tagsRaw=gv("cfTags");
   const tags=tagsRaw?tagsRaw.split(",").map(s=>s.trim().toLowerCase().replace(/\s+/g,"_")).filter(Boolean):[];
