@@ -14,6 +14,10 @@ const SPEC_SUGGESTIONS=["general_contractor","kitchen","tile","electrical","plum
 let ctList=[],ctPerf=[],ctBids=[],ctSub="directory",ctSearch="",ctTypeF="all",ctStatusF="active",ctDetailId=null;
 let _pendingBidUrl=null,_pendingBidName=null;
 let ctRatingOpen=null;
+let ctQuotes=[],_sqrItems=[],_sqrMeta={},_sqrFile=null,_sqrContactId=null;
+const SQ_CATS={flooring:"#f97316",tile:"#d97706",countertops:"#6366f1",cabinets:"#a855f7",appliances:"#3b82f6",plumbing_fixtures:"#14b8a6",lighting:"#eab308",hardware:"#64748b",paint:"#ec4899",doors_windows:"#22c55e",iron_work:"#ef4444",landscaping:"#4ade80",pool:"#06b6d4",other:"#94a3b8"};
+const SQ_UNITS=["each","per_sf","per_lf","per_slab","per_unit","lot","per_box"];
+const SQ_CAT_LABELS={flooring:"Flooring",tile:"Tile",countertops:"Countertops",cabinets:"Cabinets",appliances:"Appliances",plumbing_fixtures:"Plumbing",lighting:"Lighting",hardware:"Hardware",paint:"Paint",doors_windows:"Doors/Win",iron_work:"Iron Work",landscaping:"Landscape",pool:"Pool",other:"Other"};
 
 function formatPhone(input){
   let val=input.value.replace(/\D/g,'');
@@ -188,6 +192,10 @@ async function openCtDetail(cid){
   // Bid history (if contractor type)
   if(isCtr)h+=`<div id="ctDetailBids"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:8px;margin-top:16px">BID HISTORY</div><div style="padding:8px;color:#64748b;font-size:11px">Loading...</div></div>`;
 
+  // Supplier quotes
+  const isSupplier=c.contact_type==="supplier";
+  if(isSupplier)h+=`<div id="ctDetailQuotes" style="margin-top:16px"><div style="padding:8px;color:#64748b;font-size:11px">Loading quotes...</div></div>`;
+
   // Action buttons
   h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px">`;
   h+=`<button onclick="openCtForm('${c.id}')" class="btn" style="padding:12px;font-size:13px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);color:#60a5fa;font-weight:700">Edit Contact</button>`;
@@ -200,6 +208,7 @@ async function openCtDetail(cid){
 
   // Load deal history async
   loadCtDealHistory(cid,isCtr);
+  if(isSupplier)loadCtQuotes(cid);
 }
 
 async function loadCtDealHistory(cid,isCtr){
@@ -1871,4 +1880,267 @@ function closeContactPicker(){
   const el=document.getElementById("cpOverlay");
   if(el)el.remove();
   _cpHighlight=-1;
+}
+
+// ═══ SUPPLIER QUOTES ═══
+
+async function loadCtQuotes(cid){
+  const el=document.getElementById("ctDetailQuotes");if(!el)return;
+  try{
+    const q=await sb("supplier_quotes?contact_id=eq."+cid+"&order=quote_date.desc.nullslast,created_at.desc");
+    ctQuotes=Array.isArray(q)?q:[];
+  }catch(e){console.error("Load quotes failed:",e);ctQuotes=[];}
+
+  let h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">QUOTES ('+ctQuotes.length+')</div><button onclick="openQuoteUpload(\''+cid+'\')" class="btn" style="padding:6px 12px;font-size:11px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.25);color:#d4af37;font-weight:700;min-height:auto;border-radius:8px">📷 Upload Quote</button></div>';
+
+  if(!ctQuotes.length){
+    h+='<div style="padding:16px;text-align:center;color:#475569;font-size:11px">No quotes yet. Upload a quote to start tracking pricing.</div>';
+    el.innerHTML=h;return;
+  }
+
+  // Group by quote_date
+  const groups={};
+  ctQuotes.forEach(function(q){
+    const key=q.quote_date||"undated";
+    if(!groups[key])groups[key]=[];
+    groups[key].push(q);
+  });
+
+  Object.keys(groups).forEach(function(date){
+    const items=groups[date];
+    const total=items.reduce(function(s,i){return s+(i.total_price||0);},0);
+    const docUrl=items[0].quote_document_url;
+    h+='<div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);margin-bottom:8px">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:12px;font-weight:700;color:#e2e8f0">'+(date==="undated"?"No date":new Date(date+"T00:00:00").toLocaleDateString("en-US",{timeZone:"America/Los_Angeles"}))+'</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;font-weight:800;color:#f1f5f9">'+$r(total)+'</span>'+(docUrl?'<a href="'+esc(docUrl)+'" target="_blank" onclick="event.stopPropagation()" style="font-size:9px;color:#60a5fa;text-decoration:none;font-weight:700">View Doc</a>':'')+'</div></div>';
+    items.forEach(function(q){
+      const cc=SQ_CATS[q.category]||"#64748b";
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid rgba(255,255,255,0.04)">';
+      h+='<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(q.item_description||"")+'</div>';
+      if(q.actual_price_paid!=null){
+        const delta=q.total_price-q.actual_price_paid;
+        const dc=delta>=0?"#22c55e":"#ef4444";
+        h+='<div style="font-size:10px;color:#64748b;margin-top:2px">Quoted: '+$r(q.total_price)+' → Paid: <span style="color:'+dc+';font-weight:700">'+$r(q.actual_price_paid)+'</span>'+(delta!==0?' <span style="color:'+dc+'">('+( delta>0?'saved ':'over ')+$r(Math.abs(delta))+')</span>':'')+'</div>';
+      }else{
+        h+='<div style="font-size:10px;color:#64748b;margin-top:2px">'+$r(q.unit_price||0)+' × '+(q.quantity||1)+' '+(q.unit||"each").replace(/_/g," ")+'</div>';
+      }
+      h+='</div>';
+      h+='<div style="display:flex;align-items:center;gap:6px"><span class="reno-chip" style="color:'+cc+';background:'+cc+'15;border:1px solid '+cc+'30;font-size:8px">'+(SQ_CAT_LABELS[q.category]||"Other")+'</span><span style="font-size:12px;font-weight:700;color:#f1f5f9;white-space:nowrap">'+$r(q.total_price||0)+'</span></div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  });
+
+  // Scorecard — only if 3+ items have actual_price_paid
+  const linked=ctQuotes.filter(function(q){return q.actual_price_paid!=null;});
+  if(linked.length>=3){
+    const totalSpend=linked.reduce(function(s,q){return s+(q.actual_price_paid||0);},0);
+    const totalQuoted=linked.reduce(function(s,q){return s+(q.total_price||0);},0);
+    const accuracy=totalQuoted?Math.round((totalSpend/totalQuoted)*100):0;
+    const label=accuracy>=95&&accuracy<=105?"Reliable pricing":accuracy<95?"Quotes high":"Quotes low";
+    const lc=accuracy>=95&&accuracy<=105?"#22c55e":accuracy<95?"#eab308":"#ef4444";
+    h+='<div style="padding:12px;border-radius:12px;background:rgba(212,175,55,0.02);border:1px solid rgba(212,175,55,0.1);margin-top:8px">';
+    h+='<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:8px">SUPPLIER SCORECARD</div>';
+    h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">';
+    h+='<div><div style="font-size:8px;color:#64748b;font-weight:700">ITEMS QUOTED</div><div style="font-size:14px;font-weight:800;color:#f1f5f9">'+ctQuotes.length+'</div></div>';
+    h+='<div><div style="font-size:8px;color:#64748b;font-weight:700">ACCURACY</div><div style="font-size:14px;font-weight:800;color:'+lc+'">'+accuracy+'%</div></div>';
+    h+='<div><div style="font-size:8px;color:#64748b;font-weight:700">TOTAL SPEND</div><div style="font-size:14px;font-weight:800;color:#f1f5f9">'+$k(totalSpend)+'</div></div>';
+    h+='</div>';
+    h+='<div style="text-align:center;margin-top:6px;font-size:10px;font-weight:700;color:'+lc+'">'+label+'</div>';
+    h+='</div>';
+  }
+
+  el.innerHTML=h;
+}
+
+function openQuoteUpload(contactId){
+  _sqrContactId=contactId;
+  let input=document.getElementById('_quoteFileInput');
+  if(!input){
+    input=document.createElement('input');
+    input.id='_quoteFileInput';
+    input.type='file';
+    input.accept='image/*,.pdf';
+    input.style.display='none';
+    document.body.appendChild(input);
+  }
+  input.value='';
+  input.onchange=function(){
+    const file=input.files[0];
+    if(!file)return;
+    window._pendingQuoteFile=file;
+    setTimeout(function(){parseQuote(window._pendingQuoteFile);},100);
+  };
+  input.click();
+}
+
+async function parseQuote(file){
+  showCtToast("Reading quote...");
+  _sqrFile=file;
+
+  let apiKey=localStorage.getItem("sh_claude_key");
+  if(!apiKey){
+    apiKey=prompt("Enter your Claude API key:");
+    if(!apiKey)return;
+    localStorage.setItem("sh_claude_key",apiKey);
+  }
+
+  let b64,mediaType='image/jpeg',docType='image';
+  try{
+    if(file.type==='application/pdf'){
+      const dataUrl=await new Promise(function(resolve,reject){
+        const reader=new FileReader();
+        reader.onload=function(){resolve(reader.result);};
+        reader.onerror=function(){reject(new Error('FileReader failed'));};
+        reader.readAsDataURL(file);
+      });
+      b64=dataUrl.split(',')[1];
+      mediaType='application/pdf';
+      docType='document';
+    }else{
+      const imgDataUrl=await new Promise(function(resolve,reject){
+        const reader=new FileReader();
+        reader.onload=function(){resolve(reader.result);};
+        reader.onerror=function(){reject(new Error('FileReader failed'));};
+        reader.readAsDataURL(file);
+      });
+      const img=new Image();
+      await new Promise(function(resolve,reject){
+        img.onload=resolve;
+        img.onerror=function(){reject(new Error('Image load failed'));};
+        img.src=imgDataUrl;
+      });
+      const maxDim=1500;
+      let w=img.width,h=img.height;
+      if(w>maxDim||h>maxDim){
+        if(w>h){h=Math.round(h*(maxDim/w));w=maxDim;}
+        else{w=Math.round(w*(maxDim/h));h=maxDim;}
+      }
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const jpegDataUrl=canvas.toDataURL('image/jpeg',0.85);
+      b64=jpegDataUrl.split(',')[1];
+    }
+  }catch(e){
+    console.error("[Quote Parser] File processing failed:",e);
+    showCtToast("Failed to read file");
+    return;
+  }
+
+  const content=[
+    {type:docType,source:{type:"base64",media_type:mediaType,data:b64}},
+    {type:"text",text:"Read this supplier quote, price list, estimate, or invoice. Extract every line item with pricing.\n\nFor each item found, return:\n- item_description: What the product/material is (be specific — include brand, model, finish, size if visible)\n- category: Best guess from: flooring, tile, countertops, cabinets, appliances, plumbing_fixtures, lighting, hardware, paint, doors_windows, iron_work, landscaping, pool, other\n- unit_price: Price per unit (number only, no $)\n- unit: One of: each, per_sf, per_lf, per_slab, per_unit, lot, per_box\n- quantity: Quantity quoted (number, or 1 if not specified)\n- total_price: Total for this line (unit_price × quantity, or the total shown)\n- notes: Any additional details (lead time, minimum order, finish options, etc.)\n\nAlso extract:\n- supplier_name: The company name on the quote\n- quote_date: Date on the document if visible (YYYY-MM-DD format)\n\nReturn ONLY a JSON object with no markdown, no backticks:\n{\"supplier_name\":\"...\",\"quote_date\":\"...\",\"items\":[{\"item_description\":\"...\",\"category\":\"...\",\"unit_price\":0,\"unit\":\"each\",\"quantity\":1,\"total_price\":0,\"notes\":\"...\"}]}"}
+  ];
+
+  try{
+    showCtToast("Analyzing with AI...");
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:content}]})
+    });
+
+    if(!res.ok){
+      if(res.status===401)localStorage.removeItem("sh_claude_key");
+      if(res.status===400)showCtToast("Image too large — try a smaller photo");
+      else showCtToast("AI request failed ("+res.status+")");
+      return;
+    }
+
+    const data=await res.json();
+    let parsed=null;
+    try{
+      const rawText=data?.content?.[0]?.text||"";
+      const cleaned=rawText.replace(/```json\s*/g,"").replace(/```\s*/g,"").trim();
+      parsed=JSON.parse(cleaned);
+    }catch(parseErr){
+      console.error("[Quote Parser] JSON parse failed:",parseErr);
+      showCtToast("Couldn't read the quote — try a clearer photo");
+      return;
+    }
+
+    if(!parsed||!Array.isArray(parsed.items)||!parsed.items.length){
+      showCtToast("No line items found in this quote");
+      return;
+    }
+
+    _sqrMeta={supplier_name:parsed.supplier_name||"",quote_date:parsed.quote_date||""};
+    _sqrItems=parsed.items.map(function(it){return{item_description:it.item_description||"",category:it.category||"other",unit_price:it.unit_price||0,unit:it.unit||"each",quantity:it.quantity||1,total_price:it.total_price||0,notes:it.notes||""};});
+    showQuoteReview();
+
+  }catch(e){
+    console.error("[Quote Parser] Failed:",e);
+    showCtToast("Scan failed: "+(e.message||"Unknown error"));
+  }
+}
+
+function showQuoteReview(){
+  const m=document.getElementById("contactsModal");if(!m)return;
+  const cats=Object.keys(SQ_CATS);
+  let h='<div class="sheet" style="position:relative;max-height:90vh;overflow-y:auto"><div class="handle"></div><button class="close-x" onclick="openCtDetail(\''+_sqrContactId+'\')">✕</button>';
+  h+='<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">QUOTE FROM '+esc(_sqrMeta.supplier_name||"SUPPLIER").toUpperCase()+'</div>';
+  h+='<div style="font-size:14px;font-weight:800;margin-bottom:12px">'+_sqrItems.length+' item'+(_sqrItems.length!==1?'s':'')+' found</div>';
+
+  h+='<div class="fld"><label>QUOTE DATE</label><input id="sqr_date" type="date" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="'+esc(_sqrMeta.quote_date||'')+'"/></div>';
+
+  _sqrItems.forEach(function(it,i){
+    h+='<div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;position:relative">';
+    h+='<button onclick="_sqrItems.splice('+i+',1);showQuoteReview()" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#ef4444;font-size:14px;cursor:pointer;padding:4px" title="Remove">✕</button>';
+    h+='<div class="fld"><label>ITEM</label><input id="sqr_desc_'+i+'" type="text" class="cinput" style="min-height:36px;font-size:13px;padding:8px" value="'+esc(it.item_description)+'" onchange="_sqrItems['+i+'].item_description=this.value"/></div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+    h+='<div class="fld"><label>CATEGORY</label><select id="sqr_cat_'+i+'" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" onchange="_sqrItems['+i+'].category=this.value">';
+    cats.forEach(function(c){h+='<option value="'+c+'"'+(it.category===c?' selected':'')+'>'+(SQ_CAT_LABELS[c]||c)+'</option>';});
+    h+='</select></div>';
+    h+='<div class="fld"><label>UNIT</label><select id="sqr_unit_'+i+'" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" onchange="_sqrItems['+i+'].unit=this.value">';
+    SQ_UNITS.forEach(function(u){h+='<option value="'+u+'"'+(it.unit===u?' selected':'')+'>'+u.replace(/_/g,' ')+'</option>';});
+    h+='</select></div>';
+    h+='</div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
+    h+='<div class="fld"><label>UNIT PRICE</label><input id="sqr_price_'+i+'" type="number" step="0.01" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="'+(it.unit_price||'')+'" onchange="_sqrItems['+i+'].unit_price=Number(this.value);var t=document.getElementById(\'sqr_total_'+i+'\');if(t)t.value=(Number(this.value)*(_sqrItems['+i+'].quantity||1)).toFixed(2);_sqrItems['+i+'].total_price=Number(t?.value||0)"/></div>';
+    h+='<div class="fld"><label>QTY</label><input id="sqr_qty_'+i+'" type="number" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="'+(it.quantity||1)+'" onchange="_sqrItems['+i+'].quantity=Number(this.value);var t=document.getElementById(\'sqr_total_'+i+'\');if(t)t.value=(_sqrItems['+i+'].unit_price*Number(this.value)).toFixed(2);_sqrItems['+i+'].total_price=Number(t?.value||0)"/></div>';
+    h+='<div class="fld"><label>TOTAL</label><input id="sqr_total_'+i+'" type="number" step="0.01" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px;font-weight:800" value="'+(it.total_price||'')+'" onchange="_sqrItems['+i+'].total_price=Number(this.value)"/></div>';
+    h+='</div>';
+    h+='<div class="fld"><label>NOTES</label><input id="sqr_notes_'+i+'" type="text" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" value="'+esc(it.notes)+'" placeholder="Optional" onchange="_sqrItems['+i+'].notes=this.value"/></div>';
+    h+='</div>';
+  });
+
+  h+='<button onclick="_sqrItems.push({item_description:\'\',category:\'other\',unit_price:0,unit:\'each\',quantity:1,total_price:0,notes:\'\'});showQuoteReview()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed rgba(255,255,255,0.15);background:transparent;color:#94a3b8;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:12px">+ Add Item</button>';
+  h+='<div style="display:flex;gap:8px">';
+  h+='<button onclick="saveQuoteItems()" class="btn" style="flex:1;padding:12px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none">Save Quote</button>';
+  h+='<button onclick="openCtDetail(\''+_sqrContactId+'\')" style="padding:12px 20px;font-size:13px;background:none;border:none;color:#64748b;font-weight:700;cursor:pointer">Cancel</button>';
+  h+='</div></div>';
+
+  m.innerHTML=h;
+}
+
+async function saveQuoteItems(){
+  const items=_sqrItems.filter(function(it){return it.item_description.trim();});
+  if(!items.length){showCtToast("No items to save");return;}
+
+  const quoteDate=(document.getElementById("sqr_date")?.value)||null;
+
+  // Upload document to storage in background
+  let docUrl=null;
+  if(_sqrFile){
+    try{
+      const path=storagePath(_sqrContactId,"quotes",_sqrFile);
+      docUrl=await uploadToStorage(_sqrFile,"sovereign-docs",path);
+    }catch(e){console.warn("[Quote] Storage upload failed:",e);}
+  }
+
+  let saved=0;
+  try{
+    for(let i=0;i<items.length;i++){
+      const it=items[i];
+      const payload={contact_id:_sqrContactId,item_description:it.item_description.trim(),category:it.category||"other",unit_price:it.unit_price||0,unit:it.unit||"each",quantity:it.quantity||1,total_price:it.total_price||0,quote_date:quoteDate,quote_document_url:docUrl,notes:it.notes||null,status:"quoted",created_by:SH_USER?.email||"unknown"};
+      const res=await fetch(SB+"/rest/v1/supplier_quotes",{method:"POST",headers:HD,body:JSON.stringify(payload)});
+      if(res.ok)saved++;
+    }
+    showCtToast(saved+" item"+(saved!==1?"s":"")+" saved");
+    _sqrItems=[];_sqrMeta={};_sqrFile=null;
+    openCtDetail(_sqrContactId);
+  }catch(e){
+    console.error("[Quote] Save failed:",e);
+    showCtToast("Failed to save quote");
+  }
 }
