@@ -195,7 +195,7 @@ async function openCtDetail(cid){
 
   // Supplier quotes
   const isSupplier=c.contact_type==="supplier"||c.contact_type==="subcontractor";
-  if(isSupplier)h+=`<div id="ctDetailQuotes" style="margin-top:16px"><div style="padding:8px;color:#64748b;font-size:11px">Loading quotes...</div></div>`;
+  if(isSupplier)h+=`<div id="ctDetailQuotes" style="margin-top:16px"></div>`;
 
   // Action buttons
   h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px">`;
@@ -1902,12 +1902,9 @@ async function loadCtQuotes(cid){
   });
   const gKeys=Object.keys(groups);
 
-  let h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">QUOTES ('+gKeys.length+')</div><button onclick="openQuoteUpload(\''+cid+'\')" class="btn" style="padding:6px 12px;font-size:11px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.25);color:#d4af37;font-weight:700;min-height:auto;border-radius:8px">📷 Upload Quote</button></div>';
+  if(!ctQuotes.length){el.innerHTML='<div style="display:flex;justify-content:flex-end"><button onclick="openQuoteUpload(\''+cid+'\')" class="btn" style="padding:6px 12px;font-size:11px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.25);color:#d4af37;font-weight:700;min-height:auto;border-radius:8px">📷 Upload Quote</button></div>';return;}
 
-  if(!ctQuotes.length){
-    h+='<div style="padding:16px;text-align:center;color:#475569;font-size:11px">No quotes yet. Upload a quote to start tracking pricing.</div>';
-    el.innerHTML=h;return;
-  }
+  let h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">QUOTES ('+gKeys.length+')</div><button onclick="openQuoteUpload(\''+cid+'\')" class="btn" style="padding:6px 12px;font-size:11px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.25);color:#d4af37;font-weight:700;min-height:auto;border-radius:8px">📷 Upload Quote</button></div>';
 
   const showKeys=gKeys.slice(0,3);
   h+=renderQuoteGroups(groups,showKeys);
@@ -1915,6 +1912,16 @@ async function loadCtQuotes(cid){
   if(gKeys.length>3){
     h+='<div id="ctQuoteExtra" style="display:none">'+renderQuoteGroups(groups,gKeys.slice(3))+'</div>';
     h+='<button id="ctQuoteViewAll" onclick="document.getElementById(\'ctQuoteExtra\').style.display=\'block\';this.style.display=\'none\'" style="background:none;border:none;color:#60a5fa;font-size:11px;font-weight:700;cursor:pointer;padding:4px 0">View all '+gKeys.length+' quotes</button>';
+  }
+
+  // Scorecard — compact one-liner when 2+ items have actual_price_paid
+  const linked=ctQuotes.filter(function(q){return q.actual_price_paid!=null;});
+  if(linked.length>=2){
+    const totalSpend=linked.reduce(function(s,q){return s+(q.actual_price_paid||0);},0);
+    const totalQuoted=linked.reduce(function(s,q){return s+(q.total_price||0);},0);
+    const accuracy=totalQuoted?Math.round((totalSpend/totalQuoted)*100):0;
+    const lc=accuracy>=95&&accuracy<=105?"#22c55e":accuracy<95?"#eab308":"#ef4444";
+    h+='<div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:8px;background:rgba(212,175,55,0.03);border:1px solid rgba(212,175,55,0.08);margin-top:6px;font-size:11px"><span style="color:#64748b;font-weight:600">'+linked.length+' items paid</span><span style="color:'+lc+';font-weight:800">'+accuracy+'% accuracy</span><span style="color:#64748b">'+$k(totalSpend)+' spent</span></div>';
   }
 
   el.innerHTML=h;
