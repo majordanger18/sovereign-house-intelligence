@@ -194,7 +194,7 @@ async function openCtDetail(cid){
   if(isCtr)h+=`<div id="ctDetailBids"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:8px;margin-top:16px">BID HISTORY</div><div style="padding:8px;color:#64748b;font-size:11px">Loading...</div></div>`;
 
   // Supplier quotes
-  const isSupplier=c.contact_type==="supplier";
+  const isSupplier=c.contact_type==="supplier"||c.contact_type==="subcontractor";
   if(isSupplier)h+=`<div id="ctDetailQuotes" style="margin-top:16px"><div style="padding:8px;color:#64748b;font-size:11px">Loading quotes...</div></div>`;
 
   // Action buttons
