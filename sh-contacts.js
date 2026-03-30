@@ -286,7 +286,7 @@ function openCtForm(editId,prefill){
 
   // Tags
   const existingTags=isEdit&&Array.isArray(c.specialty_tags)?c.specialty_tags.join(", "):pf.specialty_tags&&pf.specialty_tags.length?pf.specialty_tags.join(", "):"";
-  h+=`<div class="fld"><label>SPECIALTY TAGS <span style="font-weight:400;color:#475569">(comma-separated)</span></label><input id="cfTags" type="text" class="cinput" placeholder="electrical, plumbing, hvac..." value="${esc(existingTags)}" list="tagSugs"/><datalist id="tagSugs">${SPEC_SUGGESTIONS.map(s=>`<option value="${s}">`).join("")}</datalist></div>`;
+  h+=`<div class="fld"><label>SPECIALTY TAGS <span style="font-weight:400;color:#475569">(comma-separated)</span></label><input id="cfTags" type="text" class="cinput" placeholder="electrical, plumbing, hvac..." value="${esc(existingTags)}"/></div>`;
 
   h+=`<div class="fld"><label>NOTES</label><textarea id="cfNotes" rows="3" class="cinput" style="min-height:60px;font-size:13px">${isEdit?esc(c.relationship_notes||""):esc(pf.notes||"")}</textarea></div>`;
 
