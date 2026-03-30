@@ -631,31 +631,60 @@ async function parseContact(file){
     localStorage.setItem("sh_claude_key",apiKey);
   }
 
-  // 2. Convert file to base64 using FileReader.readAsDataURL (most reliable cross-platform)
+  // 2. Convert file to base64 — resize large images to avoid API 400 errors
   let b64;
-  let mediaType=file.type||'image/jpeg';
+  let mediaType='image/jpeg';
+  let docType='image';
   try{
-    const dataUrl=await new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onload=()=>resolve(reader.result);
-      reader.onerror=()=>reject(new Error('FileReader failed'));
-      reader.readAsDataURL(file);
-    });
-    b64=dataUrl.split(',')[1];
-    const match=dataUrl.match(/^data:([^;]+);/);
-    if(match)mediaType=match[1];
+    if(file.type==='application/pdf'){
+      // PDF: read directly, no resize
+      const dataUrl=await new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onload=()=>resolve(reader.result);
+        reader.onerror=()=>reject(new Error('FileReader failed'));
+        reader.readAsDataURL(file);
+      });
+      b64=dataUrl.split(',')[1];
+      mediaType='application/pdf';
+      docType='document';
+    }else{
+      // Image: load into canvas, resize if needed, export as JPEG
+      const imgDataUrl=await new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onload=()=>resolve(reader.result);
+        reader.onerror=()=>reject(new Error('FileReader failed'));
+        reader.readAsDataURL(file);
+      });
+      const img=new Image();
+      await new Promise((resolve,reject)=>{
+        img.onload=resolve;
+        img.onerror=()=>reject(new Error('Image load failed'));
+        img.src=imgDataUrl;
+      });
+      // Resize to max 1500px on longest side (keeps detail, reduces size dramatically)
+      const maxDim=1500;
+      let w=img.width,h=img.height;
+      if(w>maxDim||h>maxDim){
+        if(w>h){h=Math.round(h*(maxDim/w));w=maxDim;}
+        else{w=Math.round(w*(maxDim/h));h=maxDim;}
+      }
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(img,0,0,w,h);
+      const jpegDataUrl=canvas.toDataURL('image/jpeg',0.85);
+      b64=jpegDataUrl.split(',')[1];
+      mediaType='image/jpeg';
+      docType='image';
+      console.log("[Contact Scanner] Resized:",img.width+"x"+img.height,"→",w+"x"+h,"b64 len:",b64.length);
+    }
   }catch(e){
-    console.error("[Contact Scanner] Base64 conversion failed:",e);
+    console.error("[Contact Scanner] File processing failed:",e);
     showCtToast("Failed to read file: "+e.message);
     openCtForm();
     if(scanBtn){scanBtn.textContent='📷 Scan Contact';scanBtn.disabled=false;scanBtn.style.opacity='1';}
     return;
   }
-
-  // 3. Normalize media type
-  if(mediaType==='image/heic'||mediaType==='image/heif')mediaType='image/jpeg';
-  if(!mediaType.startsWith('image/')&&mediaType!=='application/pdf')mediaType='image/png';
-  const docType=mediaType.startsWith('image/')?'image':'document';
 
   // 4. Build Claude API request
   const content=[
