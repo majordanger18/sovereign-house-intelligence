@@ -2360,8 +2360,8 @@ function renderTasksV(el){
   const _assOpts=[["all","All Assignees"],["j@jmarshallhunt.com","My Tasks"],["lisa@lisaahunt.com","Lisa's Tasks"]];
   h+=`<div style="display:flex;gap:8px;margin-bottom:12px"><select id="taskCatFilter" class="cinput" style="flex:1;padding:8px;font-size:12px;min-height:36px" onchange="renoTaskFilter.cat=this.value;renderRenoSub()">${_catOpts.map(([v,l])=>`<option value="${v}"${renoTaskFilter.cat===v?' selected':''}>${l}</option>`).join('')}</select><select id="taskAssigneeFilter" class="cinput" style="flex:1;padding:8px;font-size:12px;min-height:36px" onchange="renoTaskFilter.assignee=this.value;renderRenoSub()">${_assOpts.map(([v,l])=>`<option value="${v}"${renoTaskFilter.assignee===v?' selected':''}>${l}</option>`).join('')}</select></div>`;
 
-  // Add task button + inline form
-  h+=`<button onclick="renoEditingTask='new';renderRenoSub()" class="btn" style="width:100%;padding:10px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800;margin-bottom:12px">+ Add Task</button>`;
+  // Add task button + upload button
+  h+=`<div style="display:flex;gap:8px;margin-bottom:12px"><button onclick="renoEditingTask='new';renderRenoSub()" class="btn" style="flex:1;padding:10px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">+ Add Task</button><button id="taskUploadBtn" onclick="openTaskListUpload()" class="btn" style="padding:10px 14px;font-size:13px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;font-weight:800;white-space:nowrap">📷 Upload List</button></div>`;
 
   if(renoEditingTask==='new')h+=renderTaskForm(null);
 
@@ -2532,6 +2532,190 @@ async function deleteTask(taskId){
     showRenoToast("Task deleted");
     await loadRenoData(renoDealId);renderRenoSub();
   }catch(e){console.error("Delete task failed:",e);showRenoToast("Failed to delete task");}
+}
+
+// ═══ TASK LIST UPLOAD + AI PARSE ═══
+let _tprTasks=[];
+
+function openTaskListUpload(){
+  let input=document.getElementById('_taskListFileInput');
+  if(!input){
+    input=document.createElement('input');
+    input.id='_taskListFileInput';
+    input.type='file';
+    input.accept='image/*,.pdf';
+    input.style.display='none';
+    document.body.appendChild(input);
+  }
+  input.value='';
+  input.onchange=function(){
+    const file=input.files[0];
+    if(!file)return;
+    window._pendingTaskFile=file;
+    setTimeout(function(){parseTaskList(window._pendingTaskFile);},100);
+  };
+  input.click();
+}
+
+async function parseTaskList(file){
+  const btn=document.getElementById('taskUploadBtn');
+  if(btn){btn.textContent='Scanning...';btn.disabled=true;btn.style.opacity='0.6';}
+  showRenoToast("Reading task list...");
+
+  let apiKey=localStorage.getItem("sh_claude_key");
+  if(!apiKey){
+    apiKey=prompt("Enter your Claude API key:");
+    if(!apiKey){if(btn){btn.textContent='📷 Upload List';btn.disabled=false;btn.style.opacity='1';}return;}
+    localStorage.setItem("sh_claude_key",apiKey);
+  }
+
+  let b64,mediaType='image/jpeg',docType='image';
+  try{
+    if(file.type==='application/pdf'){
+      const dataUrl=await new Promise(function(resolve,reject){
+        const reader=new FileReader();
+        reader.onload=function(){resolve(reader.result);};
+        reader.onerror=function(){reject(new Error('FileReader failed'));};
+        reader.readAsDataURL(file);
+      });
+      b64=dataUrl.split(',')[1];
+      mediaType='application/pdf';
+      docType='document';
+    }else{
+      const imgDataUrl=await new Promise(function(resolve,reject){
+        const reader=new FileReader();
+        reader.onload=function(){resolve(reader.result);};
+        reader.onerror=function(){reject(new Error('FileReader failed'));};
+        reader.readAsDataURL(file);
+      });
+      const img=new Image();
+      await new Promise(function(resolve,reject){
+        img.onload=resolve;
+        img.onerror=function(){reject(new Error('Image load failed'));};
+        img.src=imgDataUrl;
+      });
+      const maxDim=1500;
+      let w=img.width,h=img.height;
+      if(w>maxDim||h>maxDim){
+        if(w>h){h=Math.round(h*(maxDim/w));w=maxDim;}
+        else{w=Math.round(w*(maxDim/h));h=maxDim;}
+      }
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const jpegDataUrl=canvas.toDataURL('image/jpeg',0.85);
+      b64=jpegDataUrl.split(',')[1];
+    }
+  }catch(e){
+    console.error("[Task Parser] File processing failed:",e);
+    showRenoToast("Failed to read file");
+    if(btn){btn.textContent='📷 Upload List';btn.disabled=false;btn.style.opacity='1';}
+    return;
+  }
+
+  const content=[
+    {type:docType,source:{type:"base64",media_type:mediaType,data:b64}},
+    {type:"text",text:"Read this image and extract every task, to-do item, action item, or line item from the list. This could be a handwritten list, a screenshot from a notes app, a text message, or any format.\n\nFor each task found, return a JSON object with:\n- title: The task description (clean it up but keep the meaning)\n- category: Best guess from: financing, contractor, materials, design, permits, administrative, listing_prep\n- priority: Best guess from: urgent, high, normal, low (default to normal if unclear)\n- notes: Any additional context visible (dates mentioned, people referenced, etc.)\n\nReturn ONLY a JSON array of task objects. No preamble, no markdown, no backticks.\n\nExample: [{\"title\":\"Order 48-inch built-in refrigerator\",\"category\":\"materials\",\"priority\":\"high\",\"notes\":\"From Margaret at Appliance by Design\"},{\"title\":\"Schedule electrical walk-through\",\"category\":\"contractor\",\"priority\":\"normal\",\"notes\":\"\"}]"}
+  ];
+
+  try{
+    showRenoToast("Analyzing with AI...");
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:content}]})
+    });
+
+    if(!res.ok){
+      if(res.status===401)localStorage.removeItem("sh_claude_key");
+      const errText=await res.text().catch(function(){return"";});
+      console.error("[Task Parser] API error:",res.status,errText);
+      if(res.status===400)showRenoToast("Image too large — try a smaller photo");
+      else showRenoToast("AI request failed ("+res.status+")");
+      return;
+    }
+
+    const data=await res.json();
+    let parsed=null;
+    try{
+      const rawText=data?.content?.[0]?.text||"";
+      const cleaned=rawText.replace(/```json\s*/g,"").replace(/```\s*/g,"").trim();
+      parsed=JSON.parse(cleaned);
+    }catch(parseErr){
+      console.error("[Task Parser] JSON parse failed:",parseErr,"Raw:",data?.content?.[0]?.text);
+      showRenoToast("Couldn't read the list — try a clearer photo");
+      return;
+    }
+
+    if(!Array.isArray(parsed)||!parsed.length){
+      showRenoToast("No tasks found in this image");
+      return;
+    }
+
+    _tprTasks=parsed.map(function(t){return{title:t.title||"",category:t.category||"financing",priority:t.priority||"normal",notes:t.notes||""};});
+    showTaskReview();
+
+  }catch(e){
+    console.error("[Task Parser] Parse failed:",e);
+    showRenoToast("Scan failed: "+(e.message||"Unknown error"));
+  }finally{
+    if(btn){btn.textContent='📷 Upload List';btn.disabled=false;btn.style.opacity='1';}
+  }
+}
+
+function showTaskReview(){
+  const el=document.getElementById("renoContent");
+  if(!el)return;
+  const cats=['financing','contractor','materials','design','permits','administrative','listing_prep'];
+  const pris=['urgent','high','normal','low'];
+  let h='';
+  h+='<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px;margin-bottom:4px">PARSED TASKS ('+_tprTasks.length+' found)</div>';
+  h+='<div style="font-size:11px;color:#64748b;margin-bottom:12px">Review and edit before saving.</div>';
+
+  _tprTasks.forEach(function(t,i){
+    h+='<div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;position:relative">';
+    h+='<button onclick="_tprTasks.splice('+i+',1);showTaskReview()" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#ef4444;font-size:14px;cursor:pointer;padding:4px" title="Remove">✕</button>';
+    h+='<div class="fld"><label>TITLE</label><input id="tpr_title_'+i+'" type="text" class="cinput" style="min-height:36px;font-size:13px;padding:8px" value="'+esc(t.title)+'" onchange="_tprTasks['+i+'].title=this.value"/></div>';
+    h+='<div class="reno-eg">';
+    h+='<div class="fld"><label>CATEGORY</label><select id="tpr_cat_'+i+'" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" onchange="_tprTasks['+i+'].category=this.value">';
+    cats.forEach(function(c){h+='<option value="'+c+'"'+(t.category===c?' selected':'')+'>'+c.replace(/_/g,' ')+'</option>';});
+    h+='</select></div>';
+    h+='<div class="fld"><label>PRIORITY</label><select id="tpr_pri_'+i+'" class="cinput" style="min-height:36px;font-size:12px;padding:6px 8px" onchange="_tprTasks['+i+'].priority=this.value">';
+    pris.forEach(function(p){h+='<option value="'+p+'"'+(t.priority===p?' selected':'')+'>'+p.charAt(0).toUpperCase()+p.slice(1)+'</option>';});
+    h+='</select></div>';
+    h+='</div>';
+    h+='<div class="fld"><label>NOTES</label><input id="tpr_notes_'+i+'" type="text" class="cinput" style="min-height:36px;font-size:12px;padding:8px" value="'+esc(t.notes)+'" placeholder="Optional notes" onchange="_tprTasks['+i+'].notes=this.value"/></div>';
+    h+='</div>';
+  });
+
+  h+='<button onclick="_tprTasks.push({title:\'\',category:\'financing\',priority:\'normal\',notes:\'\'});showTaskReview()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed rgba(255,255,255,0.15);background:transparent;color:#94a3b8;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:12px">+ Add Another</button>';
+  h+='<div style="display:flex;gap:8px">';
+  h+='<button onclick="saveAllParsedTasks()" class="btn" style="flex:1;padding:12px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none">Save All Tasks</button>';
+  h+='<button onclick="renderRenoSub()" style="padding:12px 20px;font-size:13px;background:none;border:none;color:#64748b;font-weight:700;cursor:pointer">Cancel</button>';
+  h+='</div>';
+
+  el.innerHTML=h;
+}
+
+async function saveAllParsedTasks(){
+  const tasks=_tprTasks.filter(function(t){return t.title.trim();});
+  if(!tasks.length){showRenoToast("No tasks to save");return;}
+
+  let saved=0;
+  try{
+    for(let i=0;i<tasks.length;i++){
+      const t=tasks[i];
+      const payload={deal_id:renoDealId,title:t.title.trim(),category:t.category||"financing",priority:t.priority||"normal",status:"todo",notes:t.notes||null,created_by_email:SH_USER?.email||"unknown",sort_order:renoTasks.length+i};
+      const res=await fetch(SB+"/rest/v1/deal_tasks",{method:"POST",headers:RENO_WH,body:JSON.stringify(payload)});
+      if(res.ok)saved++;
+    }
+    showRenoToast(saved+" task"+(saved!==1?"s":"")+" added");
+    _tprTasks=[];
+    await loadRenoData(renoDealId);renderRenoSub();
+  }catch(e){
+    console.error("[Task Parser] Save failed:",e);
+    showRenoToast("Failed to save tasks");
+  }
 }
 
 // ═══════════════════════════════════════════
