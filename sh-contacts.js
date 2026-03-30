@@ -319,6 +319,12 @@ async function saveContact(editId){
     }
     closeCtModal();showCtToast(editId?"Contact updated":"Contact added");
     await loadCtData();renderCtSub();
+    // Contact Picker "Add New" callback
+    if(typeof window._cpPostSaveCallback==='function'&&!editId){
+      const newest=ctList.reduce((a,b)=>(a.created_at||'')>(b.created_at||'')?a:b,ctList[0]);
+      if(newest)window._cpPostSaveCallback(newest);
+      window._cpPostSaveCallback=null;
+    }
   }catch(e){console.error("Save contact failed:",e);alert("Failed to save contact.");}
 }
 
@@ -1721,3 +1727,136 @@ function closeCtModal(){document.getElementById("contactsModal").style.display="
   const cm=document.getElementById("contactsModal");
   if(cm){const cl=cm.cloneNode(true);cm.parentNode.replaceChild(cl,cm);}
 })();
+
+// ═══ CONTACT PICKER ═══
+let _cpOnSelect=null,_cpFilterType=null,_cpHighlight=-1;
+
+window.openContactPicker=async function(opts){
+  opts=opts||{};
+  const title=opts.title||"Select Contact";
+  const filterType=opts.filterType||null;
+  const onSelect=opts.onSelect||null;
+  const anchor=opts.anchor||null;
+
+  if(!ctList.length)await loadCtData();
+  _cpOnSelect=onSelect;
+  _cpFilterType=filterType;
+  _cpHighlight=-1;
+  closeContactPicker();
+
+  const overlay=document.createElement("div");
+  overlay.id="cpOverlay";
+  overlay.className="cp-overlay";
+  overlay.addEventListener("click",function(e){if(e.target===overlay)closeContactPicker();});
+
+  const panel=document.createElement("div");
+  panel.className="cp-panel";
+
+  if(anchor&&window.innerWidth>=768){
+    const rect=anchor.getBoundingClientRect();
+    panel.style.position="fixed";
+    panel.style.top=Math.min(rect.bottom+4,window.innerHeight-420)+"px";
+    panel.style.left=Math.max(8,Math.min(rect.left,window.innerWidth-360))+"px";
+  }
+
+  let h='<div class="cp-hdr"><div class="cp-title">'+esc(title)+'</div><button class="cp-close" onclick="closeContactPicker()">✕</button></div>';
+  h+='<input id="cpSearch" class="cp-search" type="text" placeholder="Search name, company, phone..." autocomplete="off"/>';
+
+  if(!filterType){
+    h+='<div class="cp-types" id="cpTypes"><button class="cp-type-pill active" data-cptype="all" onclick="cpSetType(\'all\')">All</button>';
+    CT_TYPES.forEach(function(t){h+='<button class="cp-type-pill" data-cptype="'+t+'" onclick="cpSetType(\''+t+'\')">'+CT_LABELS[t]+'</button>';});
+    h+='</div>';
+  }
+
+  h+='<div id="cpResults" class="cp-results"></div>';
+  h+='<button class="cp-add-btn" onclick="cpAddNew()">+ Add New Contact</button>';
+
+  panel.innerHTML=h;
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  cpRenderResults(filterType||"all","");
+
+  const searchEl=document.getElementById("cpSearch");
+  if(searchEl){
+    searchEl.focus();
+    searchEl.addEventListener("input",function(){
+      _cpHighlight=-1;
+      const typeEl=document.querySelector(".cp-type-pill.active");
+      const type=typeEl?typeEl.dataset.cptype:(filterType||"all");
+      cpRenderResults(type,this.value);
+    });
+    searchEl.addEventListener("keydown",cpKeyHandler);
+  }
+};
+
+function cpRenderResults(type,query){
+  const el=document.getElementById("cpResults");
+  if(!el)return;
+  let list=ctList.filter(function(c){return c.status==="active";});
+  if(type&&type!=="all")list=list.filter(function(c){return c.contact_type===type;});
+  if(query){
+    const q=query.toLowerCase();
+    list=list.filter(function(c){
+      return(c.display_name||"").toLowerCase().includes(q)||(c.company||"").toLowerCase().includes(q)||(c.phone||"").toLowerCase().includes(q)||(c.email||"").toLowerCase().includes(q);
+    });
+  }
+  if(!list.length){el.innerHTML='<div class="cp-empty">No contacts found</div>';el._cpList=[];return;}
+  let h='';
+  list.forEach(function(c,i){
+    const tc=CT_COLORS[c.contact_type]||"#64748b";
+    h+='<div class="cp-row'+(_cpHighlight===i?' cp-hl':'')+'" data-cpidx="'+i+'" onclick="cpSelect(\''+c.id+'\')" onmouseenter="_cpHighlight='+i+';cpHighlightRow()">';
+    h+='<div class="cp-row-main"><div class="cp-row-name">'+esc(c.display_name||"")+'</div>';
+    if(c.company)h+='<div class="cp-row-co">'+esc(c.company)+'</div>';
+    h+='</div><div class="cp-row-right">';
+    h+='<span class="cp-type-badge" style="color:'+tc+';background:'+tc+'15;border:1px solid '+tc+'30">'+(CT_LABELS[c.contact_type]||"Other")+'</span>';
+    if(c.phone)h+='<div class="cp-row-phone">'+esc(c.phone)+'</div>';
+    h+='</div></div>';
+  });
+  el.innerHTML=h;
+  el._cpList=list;
+}
+
+function cpSelect(contactId){
+  const c=ctList.find(function(x){return x.id===contactId;});
+  if(c&&_cpOnSelect)_cpOnSelect(c);
+  closeContactPicker();
+}
+
+function cpSetType(type){
+  document.querySelectorAll(".cp-type-pill").forEach(function(p){p.classList.toggle("active",p.dataset.cptype===type);});
+  _cpHighlight=-1;
+  cpRenderResults(type,(document.getElementById("cpSearch")?.value||""));
+}
+
+function cpKeyHandler(e){
+  const el=document.getElementById("cpResults");
+  if(!el||!el._cpList)return;
+  const len=el._cpList.length;
+  if(e.key==="ArrowDown"){e.preventDefault();_cpHighlight=Math.min(_cpHighlight+1,len-1);cpHighlightRow();}
+  else if(e.key==="ArrowUp"){e.preventDefault();_cpHighlight=Math.max(_cpHighlight-1,0);cpHighlightRow();}
+  else if(e.key==="Enter"){e.preventDefault();if(_cpHighlight>=0&&_cpHighlight<len)cpSelect(el._cpList[_cpHighlight].id);}
+  else if(e.key==="Escape"){e.preventDefault();closeContactPicker();}
+}
+
+function cpHighlightRow(){
+  document.querySelectorAll(".cp-row").forEach(function(r,i){r.classList.toggle("cp-hl",i===_cpHighlight);});
+  const hl=document.querySelector(".cp-row.cp-hl");
+  if(hl)hl.scrollIntoView({block:"nearest"});
+}
+
+function cpAddNew(){
+  const prevOnSelect=_cpOnSelect;
+  const prevFilterType=_cpFilterType;
+  closeContactPicker();
+  window._cpPostSaveCallback=prevOnSelect;
+  const prefill={};
+  if(prevFilterType)prefill.contact_type=prevFilterType;
+  openCtForm(null,prefill);
+}
+
+function closeContactPicker(){
+  const el=document.getElementById("cpOverlay");
+  if(el)el.remove();
+  _cpHighlight=-1;
+}

@@ -1607,10 +1607,18 @@ async function openFinancing(dealId){
   const s1open=isNew;
   h+=finSection('fin1','LOAN TERMS',s1sum,s1open,`
     <div class="row2">
-      <div class="fld"><label>LENDER NAME</label><input id="fin_lender_name" class="cinput" value="${esc(f?.lender_name||d.lender_name||'')}"/></div>
+      <div class="fld"><label>LENDER NAME</label><div style="display:flex;align-items:center;gap:0"><input id="fin_lender_name" class="cinput" style="flex:1" value="${esc(f?.lender_name||d.lender_name||'')}"/><button type="button" class="cp-pick-btn" onclick="window.openContactPicker({title:'Select Lender',filterType:'lender',onSelect:function(c){document.getElementById('fin_lender_name').value=c.display_name;},anchor:this})" title="Pick from contacts">&#128100;</button></div></div>
       <div class="fld"><label>LOAN NUMBER</label><input id="fin_loan_number" class="cinput" value="${esc(f?.loan_number||d.lender_loan_number||'')}"/></div>
     </div>
-    <div class="fld"><label>LOAN OFFICER</label><input id="fin_loan_officer" class="cinput" value="${esc(f?.loan_officer||'')}"/></div>
+    <div class="fld"><label>LOAN OFFICER</label><div style="display:flex;align-items:center;gap:0"><input id="fin_loan_officer" class="cinput" style="flex:1" value="${esc(f?.loan_officer||'')}"/><button type="button" class="cp-pick-btn" onclick="window.openContactPicker({title:'Select Loan Officer',filterType:'lender',onSelect:function(c){document.getElementById('fin_loan_officer').value=c.display_name;},anchor:this})" title="Pick from contacts">&#128100;</button></div></div>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04)">
+      <div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:8px">ACCOUNT MANAGER</div>
+      <div class="row2">
+        <div class="fld"><label>NAME</label><div style="display:flex;align-items:center;gap:0"><input id="fin_acct_mgr_name" class="cinput" style="flex:1" value="${esc(f?.acct_mgr_name||'')}"/><button type="button" class="cp-pick-btn" onclick="window.openContactPicker({title:'Select Account Manager',filterType:'lender',onSelect:function(c){document.getElementById('fin_acct_mgr_name').value=c.display_name;if(c.phone)document.getElementById('fin_acct_mgr_phone').value=c.phone;if(c.email)document.getElementById('fin_acct_mgr_email').value=c.email;},anchor:this})" title="Pick from contacts">&#128100;</button></div></div>
+        <div class="fld"><label>PHONE</label><input id="fin_acct_mgr_phone" type="tel" class="cinput" value="${esc(f?.acct_mgr_phone||'')}"/></div>
+      </div>
+      <div class="fld"><label>EMAIL</label><input id="fin_acct_mgr_email" type="email" class="cinput" value="${esc(f?.acct_mgr_email||'')}"/></div>
+    </div>
     <div class="row2">
       <div class="fld"><label>INTEREST RATE (%)</label><input id="fin_interest_rate" type="number" step="0.01" class="cinput" value="${f?.interest_rate||d.lender_interest_rate||''}"/></div>
       <div class="fld"><label>RATE TYPE</label><select id="fin_interest_rate_type" class="cinput"><option value="fixed"${(f?.interest_rate_type||'fixed')==='fixed'?' selected':''}>Fixed</option><option value="variable"${f?.interest_rate_type==='variable'?' selected':''}>Variable</option></select></div>
@@ -2013,6 +2021,7 @@ async function saveFinancing(dealId){
   const payload={
     deal_id:dealId,
     lender_name:gv("fin_lender_name"),loan_number:gv("fin_loan_number"),loan_officer:gv("fin_loan_officer"),
+    acct_mgr_name:gv("fin_acct_mgr_name")||null,acct_mgr_phone:gv("fin_acct_mgr_phone")||null,acct_mgr_email:gv("fin_acct_mgr_email")||null,
     interest_rate:gn("fin_interest_rate")||null,interest_rate_type:gv("fin_interest_rate_type")||"fixed",
     loan_term_months:gn("fin_loan_term_months")||null,maturity_date:gv("fin_maturity_date")||null,
     first_payment_date:gv("fin_first_payment_date")||null,payment_due_day:gn("fin_payment_due_day")||null,

@@ -506,6 +506,23 @@ async function openDeal(dealId){
       }).join(''):`<div style="font-size:11px;color:#475569;padding:12px">No events logged yet. Log a counter or update status to start the timeline.</div>`}</div>
     </div>
 
+    <!-- AGENTS -->
+    <div style="margin-bottom:16px;padding:14px;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">
+      <div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:10px">AGENTS</div>
+      <div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:1px;margin-bottom:6px">LISTING AGENT</div>
+      <div class="row2">
+        <div class="fld"><label>NAME</label><div style="display:flex;align-items:center;gap:0"><input id="deal_la_name" class="cinput" style="flex:1" value="${esc(d.listing_agent_name||'')}" onchange="saveDealField('${d.id}','listing_agent_name',this.value)"/><button type="button" class="cp-pick-btn" onclick="window.openContactPicker({title:'Select Listing Agent',filterType:'agent',onSelect:function(c){var n=document.getElementById('deal_la_name');n.value=c.display_name;saveDealField('${d.id}','listing_agent_name',c.display_name);if(c.phone){var ph=document.getElementById('deal_la_phone');ph.value=c.phone;saveDealField('${d.id}','listing_agent_phone',c.phone);}if(c.email){var em=document.getElementById('deal_la_email');em.value=c.email;saveDealField('${d.id}','listing_agent_email',c.email);}},anchor:this})" title="Pick from contacts">&#128100;</button></div></div>
+        <div class="fld"><label>PHONE</label><input id="deal_la_phone" type="tel" class="cinput" value="${esc(d.listing_agent_phone||'')}" onchange="saveDealField('${d.id}','listing_agent_phone',this.value)"/></div>
+      </div>
+      <div class="fld"><label>EMAIL</label><input id="deal_la_email" type="email" class="cinput" value="${esc(d.listing_agent_email||'')}" onchange="saveDealField('${d.id}','listing_agent_email',this.value)"/></div>
+      <div style="font-size:9px;color:#64748b;font-weight:700;letter-spacing:1px;margin:12px 0 6px">BUYER AGENT</div>
+      <div class="row2">
+        <div class="fld"><label>NAME</label><div style="display:flex;align-items:center;gap:0"><input id="deal_ba_name" class="cinput" style="flex:1" value="${esc(d.buyer_agent_name||'')}" onchange="saveDealField('${d.id}','buyer_agent_name',this.value)"/><button type="button" class="cp-pick-btn" onclick="window.openContactPicker({title:'Select Buyer Agent',filterType:'agent',onSelect:function(c){var n=document.getElementById('deal_ba_name');n.value=c.display_name;saveDealField('${d.id}','buyer_agent_name',c.display_name);if(c.phone){var ph=document.getElementById('deal_ba_phone');ph.value=c.phone;saveDealField('${d.id}','buyer_agent_phone',c.phone);}if(c.email){var em=document.getElementById('deal_ba_email');em.value=c.email;saveDealField('${d.id}','buyer_agent_email',c.email);}},anchor:this})" title="Pick from contacts">&#128100;</button></div></div>
+        <div class="fld"><label>PHONE</label><input id="deal_ba_phone" type="tel" class="cinput" value="${esc(d.buyer_agent_phone||'')}" onchange="saveDealField('${d.id}','buyer_agent_phone',this.value)"/></div>
+      </div>
+      <div class="fld"><label>EMAIL</label><input id="deal_ba_email" type="email" class="cinput" value="${esc(d.buyer_agent_email||'')}" onchange="saveDealField('${d.id}','buyer_agent_email',this.value)"/></div>
+    </div>
+
     <!-- ADD NOTE -->
     <div style="display:flex;gap:6px;margin-bottom:16px">
       <input id="deal_note" class="cinput" placeholder="Add a note to timeline..." style="flex:1;font-size:12px;min-height:40px"/>
