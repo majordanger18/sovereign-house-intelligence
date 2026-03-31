@@ -70,8 +70,9 @@ function buildBriefContext(data) {
   });
 
   ctx += '\nRECENT FLIPS (buy-resell within 18 months):\n';
+  const nd = data.nameDict || {};
   data.flips.slice(0, 5).forEach(f => {
-    ctx += f.address + ' (' + (f.subdivision_name || '') + '): ' + Math.round((f.buy_price || 0) / 1000) + 'K \u2192 ' + Math.round((f.sell_price || 0) / 1000) + 'K, margin before reno: ' + Math.round((f.margin_before_reno || 0) / 1000) + 'K, ' + (f.hold_months || '?') + ' months, grade: ' + (f.flip_grade || '?') + '\n';
+    ctx += f.address + ' (' + (nd[f.subdivision_name] || f.subdivision_name || '') + '): ' + Math.round((f.buy_price || 0) / 1000) + 'K \u2192 ' + Math.round((f.sell_price || 0) / 1000) + 'K, margin before reno: ' + Math.round((f.margin_before_reno || 0) / 1000) + 'K, ' + (f.hold_months || '?') + ' months, grade: ' + (f.flip_grade || '?') + '\n';
   });
 
   ctx += '\nSEASONAL PATTERNS (by month):\n';
@@ -385,7 +386,7 @@ function renderCommunityCard(communities) {
 
   const maxSales = Math.max(...communities.map(c => c.total_sales || 0));
 
-  let h = '<details open class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
+  let h = '<details class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
   h += '<summary>COMMUNITY LEADERBOARD <span class="intel-badge">' + communities.length + '</span></summary>';
   h += '<div style="padding:4px 16px 20px">';
 
@@ -516,7 +517,7 @@ function renderSeasonalCard(seasonal) {
 
   let bestMonth = valid[0];
 
-  let h = '<details open class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
+  let h = '<details class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
   h += '<summary>WHEN TO LIST</summary>';
   h += '<div style="padding:4px 16px 20px">';
 
