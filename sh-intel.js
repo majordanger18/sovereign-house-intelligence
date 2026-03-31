@@ -30,6 +30,12 @@ let _intelData = null;
 let _intelLoading = false;
 let _intelChat = [];
 
+const SUGGESTED_QUESTIONS = [
+  "Which community has the best flip margins?",
+  "Compare Sun Colony vs Siena for my next deal",
+  "When should I list Denaro for maximum price?"
+];
+
 function _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 async function loadIntelData(force) {
@@ -56,12 +62,12 @@ function buildBriefContext(data) {
 
   ctx += 'TOP GATED COMMUNITIES (by sales volume, $600K-$2M range):\n';
   data.communities.slice(0, 8).forEach(c => {
-    ctx += c.subdivision_name + ' (' + c.zip_code + '): ' + c.total_sales + ' sales, ' + Math.round(c.avg_ppsf || 0) + '/SF avg, ' + Math.round(c.avg_dom || 0) + ' DOM avg, ' + ((c.avg_sale_to_list || 0) * 100).toFixed(1) + '% sale-to-list\n';
+    ctx += c.subdivision_name + ' (' + c.zip_code + '): ' + (c.annualized_sales || c.total_sales) + ' sales/yr, ' + Math.round(c.avg_ppsf || 0) + '/SF avg, ' + Math.round(c.avg_dom || 0) + ' DOM avg, ' + ((c.avg_sale_to_list || 0) * 100).toFixed(1) + '% sale-to-list\n';
   });
 
   ctx += '\nRECENT FLIPS (buy-resell within 18 months):\n';
   data.flips.slice(0, 5).forEach(f => {
-    ctx += f.address + ' (' + (f.subdivision_name || '') + '): ' + Math.round((f.buy_price || 0) / 1000) + 'K \u2192 ' + Math.round((f.sell_price || 0) / 1000) + 'K, +' + Math.round(((f.sell_price || 0) - (f.buy_price || 0)) / 1000) + 'K spread, ' + (f.hold_months || '?') + ' months, grade: ' + (f.flip_grade || '?') + '\n';
+    ctx += f.address + ' (' + (f.subdivision_name || '') + '): ' + Math.round((f.buy_price || 0) / 1000) + 'K \u2192 ' + Math.round((f.sell_price || 0) / 1000) + 'K, margin before reno: ' + Math.round((f.margin_before_reno || 0) / 1000) + 'K, ' + (f.hold_months || '?') + ' months, grade: ' + (f.flip_grade || '?') + '\n';
   });
 
   ctx += '\nSEASONAL PATTERNS (by month):\n';
@@ -71,7 +77,7 @@ function buildBriefContext(data) {
 
   ctx += '\nDOM GRADE DISTRIBUTION:\n';
   data.domGrades.forEach(g => {
-    ctx += 'Grade ' + g.dom_grade + ': ' + (g.total_sales || 0) + ' comps, ' + Math.round(g.avg_ppsf || 0) + '/SF avg\n';
+    ctx += 'Grade ' + g.dom_grade + ': ' + (g.comp_count || 0) + ' comps, ' + Math.round(g.avg_ppsf || 0) + '/SF avg, ' + (g.avg_sale_to_list_pct || 0).toFixed(1) + '% sale-to-list\n';
   });
 
   ctx += '\nTODAY: ' + new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) + '\n';
@@ -84,7 +90,6 @@ function buildBriefContext(data) {
 async function renderMorningBrief(data) {
   const today = new Date().toISOString().split('T')[0];
 
-  // Check cache
   try {
     const cached = JSON.parse(localStorage.getItem('sh_intel_brief') || 'null');
     if (cached && cached.date === today && cached.text) {
@@ -92,11 +97,9 @@ async function renderMorningBrief(data) {
     }
   } catch (e) {}
 
-  // Check API key
   const apiKey = localStorage.getItem('sh_claude_key');
   if (!apiKey) return renderApiKeyPrompt();
 
-  // Generate brief
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -174,19 +177,35 @@ async function regenerateBrief() {
   renderIntelView();
 }
 
-// ═══ ASK ANYTHING CHAT ═══
+// ═══ ASK THE BRAIN — STANDOUT CHAT ═══
 function renderChatSection() {
-  let h = '<div style="margin-bottom:16px;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);overflow:hidden">';
-  h += '<div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.04)">';
-  h += '<div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">ASK THE BRAIN</div>';
+  let h = '<div style="margin-bottom:16px;border-radius:16px;overflow:hidden;position:relative;background:rgba(255,255,255,0.02);border:1px solid rgba(212,175,55,0.15)">';
+
+  // Hero header
+  h += '<div style="padding:24px 24px 16px;text-align:center">';
+  h += '<div style="font-size:32px;margin-bottom:8px">\ud83e\udde0</div>';
+  h += '<div style="font-size:16px;font-weight:700;color:#e2e8f0;margin-bottom:4px">What do you want to know?</div>';
+  h += '<div style="font-size:11px;color:#475569">Market data, community intel, timing strategy</div>';
   h += '</div>';
-  h += '<div id="intelChatArea" style="max-height:400px;overflow-y:auto;padding:12px 16px">';
-  h += '<div id="intelChatEmpty" style="text-align:center;padding:20px;color:#475569;font-size:12px"' + (_intelChat.length ? ' style="display:none"' : '') + '>Ask about communities, timing, comps, flip activity, or strategy.</div>';
+
+  // Input area
+  h += '<div style="padding:0 20px 16px;display:flex;gap:8px">';
+  h += '<input id="intelChatInput" class="cinput" placeholder="Ask about communities, timing, strategy..." style="flex:1;font-size:14px;min-height:48px;border-radius:12px" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendIntelChat()}"/>';
+  h += '<button onclick="sendIntelChat()" style="padding:0 18px;min-height:48px;border-radius:12px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#0a0a0f;border:none;font-size:16px;font-weight:800;cursor:pointer">\u2192</button>';
   h += '</div>';
-  h += '<div style="padding:12px 16px;border-top:1px solid rgba(255,255,255,0.04);display:flex;gap:8px">';
-  h += '<input id="intelChatInput" class="cinput" placeholder="What\'s happening in Queensridge?" style="flex:1;font-size:13px;min-height:40px" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendIntelChat()}"/>';
-  h += '<button onclick="sendIntelChat()" style="padding:8px 16px;border-radius:10px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">\u2192</button>';
-  h += '</div></div>';
+
+  // Suggested questions (hidden when conversation active)
+  h += '<div id="intelSuggestions" style="padding:0 20px 20px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center' + (_intelChat.length ? ';display:none' : '') + '">';
+  SUGGESTED_QUESTIONS.forEach(q => {
+    h += '<button onclick="document.getElementById(\'intelChatInput\').value=\'' + q.replace(/'/g, "\\'") + '\';sendIntelChat()" style="padding:8px 14px;border-radius:20px;border:1px solid rgba(212,175,55,0.25);background:rgba(212,175,55,0.04);color:#d4af37;font-size:11px;font-weight:600;cursor:pointer;transition:background .15s;min-height:36px" onmouseenter="this.style.background=\'rgba(212,175,55,0.1)\'" onmouseleave="this.style.background=\'rgba(212,175,55,0.04)\'">' + _esc(q) + '</button>';
+  });
+  h += '</div>';
+
+  // Conversation area
+  h += '<div id="intelChatArea" style="max-height:400px;overflow-y:auto;padding:0 20px">';
+  h += '</div>';
+
+  h += '</div>';
   return h;
 }
 
@@ -194,10 +213,11 @@ function renderChatMessages() {
   const area = document.getElementById('intelChatArea');
   if (!area) return;
 
-  let h = '';
+  // Hide suggestions when conversation exists
+  const sugg = document.getElementById('intelSuggestions');
+  if (sugg) sugg.style.display = _intelChat.length ? 'none' : 'flex';
 
-  // Empty state
-  h += '<div id="intelChatEmpty" style="text-align:center;padding:20px;color:#475569;font-size:12px;' + (_intelChat.length ? 'display:none' : '') + '">Ask about communities, timing, comps, flip activity, or strategy.</div>';
+  let h = '';
 
   _intelChat.forEach(msg => {
     if (msg.role === 'user') {
@@ -211,7 +231,7 @@ function renderChatMessages() {
   });
 
   if (_intelChat.length > 0) {
-    h += '<div style="text-align:center;margin-top:8px"><button onclick="_intelChat=[];renderChatMessages()" style="background:none;border:none;color:#475569;font-size:10px;cursor:pointer;text-decoration:underline">Clear conversation</button></div>';
+    h += '<div style="text-align:center;padding:12px 0 16px"><button onclick="_intelChat=[];renderChatMessages()" style="background:none;border:none;color:#475569;font-size:10px;cursor:pointer;text-decoration:underline">Clear conversation</button></div>';
   }
 
   area.innerHTML = h;
@@ -230,7 +250,6 @@ async function sendIntelChat() {
   input.value = '';
   renderChatMessages();
 
-  // Show typing indicator
   const area = document.getElementById('intelChatArea');
   if (area) {
     area.innerHTML += '<div id="intelTyping" style="padding:8px 12px;font-size:12px;color:#64748b;font-style:italic">Thinking...</div>';
@@ -240,7 +259,6 @@ async function sendIntelChat() {
   const data = _intelData || await loadIntelData();
   const context = buildBriefContext(data);
 
-  // Build messages with context in first user turn
   const messages = [];
   messages.push({ role: 'user', content: 'MARKET DATA:\n' + context + '\n\nQUESTION: ' + _intelChat[0].content });
   for (let i = 1; i < _intelChat.length; i++) {
@@ -294,12 +312,14 @@ async function renderIntelView() {
   // 1. Morning Brief
   h += await renderMorningBrief(data);
 
-  // 2. Ask Anything Chat
+  // 2. Ask the Brain
   h += renderChatSection();
 
-  // 3. Data Explorer (existing 5 cards)
-  h += '<details class="intel-card" style="margin-top:4px">';
-  h += '<summary><span>DATA EXPLORER</span></summary>';
+  // 3. Data Explorer
+  const totalPoints = (data.communities.length || 0) + (data.flips.length || 0) + (data.agents.length || 0);
+  const isMobile = window.innerWidth < 768;
+  h += '<details class="intel-card" style="margin-top:4px;border-top:2px solid rgba(212,175,55,0.15)"' + (isMobile ? '' : ' open') + '>';
+  h += '<summary><span>DATA EXPLORER</span><span class="intel-badge">' + totalPoints + ' data points</span></summary>';
   h += '<div style="padding:4px 12px 16px">';
   h += renderCommunityCard(data.communities);
   h += renderFlipCard(data.flips);
@@ -311,7 +331,6 @@ async function renderIntelView() {
 
   el.innerHTML = h;
 
-  // Re-render chat messages if conversation exists
   if (_intelChat.length) renderChatMessages();
 }
 
@@ -339,8 +358,10 @@ function _domColor(v) {
 }
 
 function _stlColor(v) {
-  if (v >= 0.97) return '#22c55e';
-  if (v >= 0.95) return '#d4af37';
+  // v is a ratio (0.97) or a percentage (97.1) — handle both
+  const pct = v > 1 ? v : v * 100;
+  if (pct >= 97) return '#22c55e';
+  if (pct >= 95) return '#d4af37';
   return '#ef4444';
 }
 
@@ -349,37 +370,67 @@ function _monthName(m) {
   return names[m] || m;
 }
 
+function _isNonMls(name) {
+  if (!name || !name.trim()) return true;
+  return name.trim().toLowerCase() === 'non mls';
+}
+
 // ═══ CARD 1: COMMUNITY LEADERBOARD ═══
 function renderCommunityCard(communities) {
   if (!communities || !communities.length) return '';
 
-  let h = '<details open class="intel-card"><summary>COMMUNITY LEADERBOARD <span style="font-size:11px;color:#64748b;font-weight:600;letter-spacing:0">' + communities.length + '</span></summary>';
-  h += '<div class="table-scroll" style="padding:0 12px 14px">';
-  h += '<table><thead><tr>';
-  h += '<th>Community</th><th>ZIP</th><th>Sales</th><th>Avg PPSF</th><th>Range</th><th>Avg DOM</th><th>Sale/List</th>';
-  h += '</tr></thead><tbody>';
+  const maxSales = Math.max(...communities.map(c => c.total_sales || 0));
 
-  communities.forEach(c => {
+  let h = '<details open class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
+  h += '<summary>COMMUNITY LEADERBOARD <span class="intel-badge">' + communities.length + '</span></summary>';
+  h += '<div style="padding:4px 16px 20px">';
+
+  communities.forEach((c, i) => {
     const name = _truncate(_titleCase(c.subdivision_name || ''), 30);
     const ppsf = Math.round(c.avg_ppsf || 0);
     const dom = Math.round(c.avg_dom || 0);
     const stl = c.avg_sale_to_list || 0;
     const stlPct = (stl * 100).toFixed(1);
-    const floor = Math.round(c.min_ppsf || 0);
-    const ceil = Math.round(c.max_ppsf || 0);
+    const floor = Math.round(c.floor_ppsf || 0);
+    const ceil = Math.round(c.ceiling_ppsf || 0);
+    const sales = c.annualized_sales || c.total_sales || 0;
+    const barW = maxSales > 0 ? Math.round((c.total_sales || 0) / maxSales * 100) : 0;
 
-    h += '<tr>';
-    h += '<td style="color:#f1f5f9;font-weight:600;white-space:normal;min-width:140px">' + esc(name) + '</td>';
-    h += '<td style="color:#94a3b8">' + esc(c.zip_code || '') + '</td>';
-    h += '<td style="color:#e2e8f0;font-weight:700">' + (c.total_sales || 0) + '</td>';
-    h += '<td style="color:' + _ppsfColor(ppsf) + ';font-weight:700">$' + ppsf + '</td>';
-    h += '<td style="color:#94a3b8;font-size:11px">$' + floor + ' \u2013 $' + ceil + '</td>';
-    h += '<td style="color:' + _domColor(dom) + ';font-weight:600">' + dom + '</td>';
-    h += '<td style="color:' + _stlColor(stl) + ';font-weight:600">' + stlPct + '%</td>';
-    h += '</tr>';
+    h += '<div style="padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);margin-bottom:8px">';
+
+    // Row 1: Rank + Name + ZIP
+    h += '<div style="display:flex;align-items:center;gap:10px">';
+    h += '<div style="color:#d4af37;font-size:16px;font-weight:800;min-width:28px">#' + (i + 1) + '</div>';
+    h += '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(name) + '</div></div>';
+    h += '<div style="font-size:12px;color:#64748b;font-weight:600">' + esc(c.zip_code || '') + '</div>';
+    h += '</div>';
+
+    // Row 2: Stats
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:#94a3b8">';
+    h += '<span style="color:#e2e8f0;font-weight:700">' + sales + '/yr</span>';
+    h += '<span>\u00b7</span>';
+    h += '<span style="color:' + _ppsfColor(ppsf) + ';font-weight:700">$' + ppsf + '/SF</span>';
+    h += '<span>\u00b7</span>';
+    h += '<span>$' + floor + '\u2013$' + ceil + ' range</span>';
+    h += '</div>';
+
+    // Row 3: DOM + Sale-to-list
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;font-size:11px;color:#94a3b8">';
+    h += '<span style="color:' + _domColor(dom) + ';font-weight:600">' + dom + ' DOM</span>';
+    h += '<span>\u00b7</span>';
+    h += '<span style="color:' + _stlColor(stl) + ';font-weight:600">' + stlPct + '% of asking</span>';
+    h += '</div>';
+
+    // Row 4: Volume bar
+    h += '<div style="margin-top:8px;height:4px;border-radius:2px;background:rgba(255,255,255,0.06)">';
+    h += '<div style="height:100%;width:' + barW + '%;border-radius:2px;background:linear-gradient(90deg,rgba(212,175,55,0.4),rgba(212,175,55,0.15))"></div>';
+    h += '</div>';
+    h += '<div style="font-size:9px;color:#475569;margin-top:3px">' + (c.total_sales || 0) + ' sales in 12mo</div>';
+
+    h += '</div>';
   });
 
-  h += '</tbody></table></div></details>';
+  h += '</div></details>';
   return h;
 }
 
@@ -387,32 +438,60 @@ function renderCommunityCard(communities) {
 function renderFlipCard(flips) {
   if (!flips || !flips.length) return '';
 
-  let h = '<details open class="intel-card"><summary>FLIP ACTIVITY <span style="font-size:11px;color:#64748b;font-weight:600;letter-spacing:0">' + flips.length + '</span></summary>';
-  h += '<div style="padding:0 12px 14px">';
+  const gradeColors = { strong: '#22c55e', viable: '#d4af37', tight: '#f97316', underwater: '#ef4444' };
+  const gradeBorders = { strong: '#22c55e', viable: '#d4af37', tight: '#f97316', underwater: '#ef4444' };
+
+  let h = '<details open class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
+  h += '<summary>FLIP ACTIVITY <span class="intel-badge">' + flips.length + '</span></summary>';
+  h += '<div style="padding:4px 16px 20px">';
 
   flips.forEach(f => {
     const buy = f.buy_price || 0;
     const sell = f.sell_price || 0;
-    const spread = sell - buy;
+    const margin = f.margin_before_reno || 0;
     const months = f.hold_months != null ? parseFloat(f.hold_months).toFixed(1) : '?';
     const grade = (f.flip_grade || '').toLowerCase();
+    const borderColor = gradeBorders[grade] || '#475569';
+    const badgeColor = gradeColors[grade] || '#475569';
+    const isUnderwater = grade === 'underwater';
+    const marginColor = margin >= 0 ? '#22c55e' : '#ef4444';
+    const marginSign = margin >= 0 ? '+' : '';
 
-    let badgeColor = '#64748b';
-    let badgeLabel = grade;
-    if (grade === 'winner') { badgeColor = '#22c55e'; badgeLabel = 'WINNER'; }
-    else if (grade === 'moderate') { badgeColor = '#d4af37'; badgeLabel = 'MODERATE'; }
-    else if (grade === 'marginal') { badgeColor = '#f97316'; badgeLabel = 'MARGINAL'; }
-    else if (grade === 'break_even' || grade === 'break even') { badgeColor = '#ef4444'; badgeLabel = 'BREAK EVEN'; }
+    h += '<div style="padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-left:3px solid ' + borderColor + ';margin-bottom:8px' + (isUnderwater ? ';opacity:0.6' : '') + '">';
 
-    h += '<div class="flip-card">';
+    // Line 1: Address
     h += '<div style="font-size:13px;font-weight:700;color:#f1f5f9">' + esc(f.address || '') + '</div>';
+
+    // Line 2: Community · ZIP
     h += '<div style="font-size:11px;color:#64748b;margin-top:2px">' + esc(_titleCase(f.subdivision_name || '')) + ' \u00b7 ' + esc(f.zip_code || '') + '</div>';
-    h += '<div style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap">';
-    h += '<span style="font-size:12px;color:#94a3b8">' + $k(buy) + ' \u2192 ' + $k(sell) + '</span>';
-    h += '<span style="font-size:12px;color:#22c55e;font-weight:700">+' + $k(spread) + '</span>';
-    h += '<span style="font-size:11px;color:#64748b">' + months + ' mo</span>';
-    h += '<span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:9px;font-weight:800;letter-spacing:0.5px;color:#0a0a0f;background:' + badgeColor + '">' + badgeLabel + '</span>';
-    h += '</div></div>';
+
+    // Line 3: Buy → Sell
+    h += '<div style="font-size:12px;color:#94a3b8;margin-top:8px">' + $k(buy) + ' \u2192 ' + $k(sell) + '</div>';
+
+    // Line 4: Margin + Hold
+    h += '<div style="display:flex;align-items:center;gap:10px;margin-top:4px;flex-wrap:wrap">';
+    h += '<span style="font-size:13px;color:' + marginColor + ';font-weight:700">' + marginSign + $k(margin) + ' margin</span>';
+    h += '<span style="font-size:11px;color:#64748b">' + months + ' mo hold</span>';
+    h += '</div>';
+
+    // Line 5: Costs breakdown
+    if (f.est_commissions || f.est_holding || f.known_costs) {
+      let costs = [];
+      if (f.est_commissions) costs.push('$' + Math.round(f.est_commissions / 1000) + 'K commissions');
+      if (f.est_holding) costs.push('$' + Math.round(f.est_holding / 1000) + 'K holding');
+      if (f.known_costs) costs.push('$' + Math.round(f.known_costs / 1000) + 'K closing');
+      h += '<div style="font-size:10px;color:#475569;margin-top:4px">Costs: ' + costs.join(' + ') + '</div>';
+    }
+
+    // Line 6: Grade badge + renovation tag
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">';
+    h += '<span style="display:inline-block;padding:3px 10px;border-radius:6px;font-size:9px;font-weight:800;letter-spacing:0.5px;color:#0a0a0f;background:' + badgeColor + '">' + grade.toUpperCase() + '</span>';
+    if (f.likely_renovated) {
+      h += '<span style="font-size:10px;color:#d4af37;font-weight:600">\ud83d\udd28 Likely renovated</span>';
+    }
+    h += '</div>';
+
+    h += '</div>';
   });
 
   h += '</div></details>';
@@ -426,42 +505,63 @@ function renderSeasonalCard(seasonal) {
   const valid = seasonal.filter(s => (s.total_sales || 0) >= 10);
   if (!valid.length) return '';
 
-  let h = '<details open class="intel-card"><summary>WHEN TO LIST</summary>';
-  h += '<div class="table-scroll" style="padding:0 12px 14px">';
-  h += '<table><thead><tr>';
-  h += '<th>Month</th><th>Sales</th><th>Avg DOM</th><th>Sale/List</th><th>Rating</th>';
-  h += '</tr></thead><tbody>';
+  const minDom = Math.min(...valid.map(s => Math.round(s.avg_dom || 0)));
+  const maxDom = Math.max(...valid.map(s => Math.round(s.avg_dom || 0)));
 
   let bestMonth = valid[0];
+
+  let h = '<details open class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
+  h += '<summary>WHEN TO LIST</summary>';
+  h += '<div style="padding:4px 16px 20px">';
 
   valid.forEach(s => {
     const dom = Math.round(s.avg_dom || 0);
     const stl = s.avg_sale_to_list || 0;
     const stlPct = (stl * 100).toFixed(1);
 
-    let rating, ratingColor;
-    if (dom <= 45 && stl >= 0.975) { rating = '\ud83d\udfe2 PRIME'; ratingColor = '#22c55e'; }
-    else if (dom <= 55 && stl >= 0.965) { rating = '\ud83d\udfe1 GOOD'; ratingColor = '#d4af37'; }
-    else { rating = '\ud83d\udd34 SLOW'; ratingColor = '#ef4444'; }
+    let rating, ratingColor, ratingLabel;
+    if (dom <= 45 && stl >= 0.975) { rating = '\ud83d\udfe2'; ratingColor = '#22c55e'; ratingLabel = 'PRIME'; }
+    else if (dom <= 55 && stl >= 0.965) { rating = '\ud83d\udfe1'; ratingColor = '#d4af37'; ratingLabel = 'GOOD'; }
+    else { rating = '\ud83d\udd34'; ratingColor = '#ef4444'; ratingLabel = 'SLOW'; }
+
+    // Speed bar: invert DOM so lower DOM = wider bar
+    const speedPct = maxDom > minDom ? Math.round((maxDom - dom) / (maxDom - minDom) * 100) : 50;
 
     if (dom < Math.round(bestMonth.avg_dom || 999) || (dom === Math.round(bestMonth.avg_dom || 999) && stl > (bestMonth.avg_sale_to_list || 0))) {
       bestMonth = s;
     }
 
-    h += '<tr>';
-    h += '<td style="color:#f1f5f9;font-weight:600">' + _monthName(s.sale_month) + '</td>';
-    h += '<td style="color:#e2e8f0">' + (s.total_sales || 0) + '</td>';
-    h += '<td style="color:' + _domColor(dom) + ';font-weight:600">' + dom + '</td>';
-    h += '<td style="color:' + _stlColor(stl) + ';font-weight:600">' + stlPct + '%</td>';
-    h += '<td style="color:' + ratingColor + ';font-weight:700;font-size:11px">' + rating + '</td>';
-    h += '</tr>';
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)">';
+
+    // Month
+    h += '<div style="min-width:32px;font-size:12px;font-weight:700;color:#f1f5f9">' + _monthName(s.sale_month) + '</div>';
+
+    // Speed bar + stats
+    h += '<div style="flex:1;min-width:0">';
+    h += '<div style="display:flex;align-items:center;gap:8px">';
+    h += '<div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,0.06)">';
+    h += '<div style="height:100%;width:' + Math.max(speedPct, 5) + '%;border-radius:3px;background:' + ratingColor + ';opacity:0.6"></div>';
+    h += '</div>';
+    h += '<span style="font-size:10px;color:' + ratingColor + ';font-weight:700;min-width:48px">' + rating + ' ' + ratingLabel + '</span>';
+    h += '</div>';
+    h += '<div style="display:flex;gap:8px;margin-top:4px;font-size:10px;color:#64748b">';
+    h += '<span>' + (s.total_sales || 0) + ' sales</span>';
+    h += '<span style="color:' + _domColor(dom) + '">' + dom + ' DOM</span>';
+    h += '<span style="color:' + _stlColor(stl) + '">' + stlPct + '%</span>';
+    h += '</div>';
+    h += '</div>';
+
+    h += '</div>';
   });
 
-  h += '</tbody></table></div>';
+  h += '</div>';
 
+  // Prominent insight
   const bDom = Math.round(bestMonth.avg_dom || 0);
   const bStl = ((bestMonth.avg_sale_to_list || 0) * 100).toFixed(1);
-  h += '<div class="insight-line" style="margin:0 12px 14px">Best listing window: ' + _monthName(bestMonth.sale_month) + ' \u2014 ' + bDom + ' avg DOM, ' + bStl + '% of asking</div>';
+  h += '<div style="margin:0 16px 16px;padding:12px 16px;border-radius:10px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.2);font-size:13px;color:#d4af37;font-weight:700;text-align:center">';
+  h += '\ud83c\udfc6 Best window: ' + _monthName(bestMonth.sale_month) + ' \u2014 ' + bDom + ' avg DOM, ' + bStl + '% of asking';
+  h += '</div>';
 
   h += '</details>';
   return h;
@@ -475,8 +575,12 @@ function renderDOMCard(domGrades) {
   const gradeLabels = { A: 'Hot', B: 'Strong', C: 'Normal', D: 'Slow', F: 'Stale' };
   const gradeRanges = { A: '0-14 days', B: '15-30 days', C: '31-60 days', D: '61-90 days', F: '90+ days' };
 
-  let h = '<details class="intel-card"><summary>SPEED vs PRICE</summary>';
-  h += '<div style="padding:0 12px 14px">';
+  const maxCount = Math.max(...domGrades.map(g => g.comp_count || 0));
+  const totalCount = domGrades.reduce((s, g) => s + (g.comp_count || 0), 0);
+
+  let h = '<details class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
+  h += '<summary>SPEED vs PRICE</summary>';
+  h += '<div style="padding:4px 16px 20px">';
 
   let gradeA = null, gradeD = null;
 
@@ -486,22 +590,34 @@ function renderDOMCard(domGrades) {
     const label = gradeLabels[grade] || '';
     const range = gradeRanges[grade] || '';
     const ppsf = Math.round(g.avg_ppsf || 0);
-    const stl = ((g.avg_sale_to_list || 0) * 100).toFixed(1);
-    const sales = g.total_sales || 0;
+    const stl = (g.avg_sale_to_list_pct || 0).toFixed(1);
+    const count = g.comp_count || 0;
+    const pct = totalCount > 0 ? ((count / totalCount) * 100).toFixed(1) : '0';
+    const barW = maxCount > 0 ? Math.round(count / maxCount * 100) : 0;
 
     if (grade === 'A') gradeA = g;
     if (grade === 'D') gradeD = g;
 
-    h += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)">';
+    h += '<div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)">';
+
+    // Row 1: Badge + range + label
+    h += '<div style="display:flex;align-items:center;gap:10px">';
     h += '<span class="grade-badge" style="background:' + color + ';color:#0a0a0f">' + grade + '</span>';
-    h += '<div style="flex:1;min-width:0">';
-    h += '<div style="font-size:12px;color:#f1f5f9;font-weight:600">' + range + ' <span style="color:#64748b;font-weight:400">(' + label + ')</span></div>';
+    h += '<div style="flex:1;font-size:12px;color:#f1f5f9;font-weight:600">' + range + ' <span style="color:#64748b;font-weight:400">(' + label + ')</span></div>';
+    h += '<div style="font-size:11px;color:#94a3b8;text-align:right;white-space:nowrap">';
+    h += '<span style="font-weight:700;color:' + _ppsfColor(ppsf) + '">$' + ppsf + '/SF</span> \u00b7 ' + stl + '%';
     h += '</div>';
-    h += '<div style="font-size:12px;color:#94a3b8;text-align:right;white-space:nowrap">';
-    h += '<span style="color:#e2e8f0;font-weight:600">' + sales + '</span> sales &middot; ';
-    h += '<span style="font-weight:700;color:' + _ppsfColor(ppsf) + '">$' + ppsf + '/SF</span> &middot; ';
-    h += stl + '%';
-    h += '</div></div>';
+    h += '</div>';
+
+    // Row 2: Bar chart
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-top:6px">';
+    h += '<div style="flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,0.04)">';
+    h += '<div style="height:100%;width:' + barW + '%;border-radius:4px;background:' + color + ';opacity:0.5"></div>';
+    h += '</div>';
+    h += '<div style="font-size:10px;color:#64748b;min-width:80px;text-align:right"><span style="color:#e2e8f0;font-weight:600">' + count + '</span> (' + pct + '%)</div>';
+    h += '</div>';
+
+    h += '</div>';
   });
 
   h += '</div>';
@@ -509,7 +625,7 @@ function renderDOMCard(domGrades) {
   if (gradeA && gradeD) {
     const diff = Math.round((gradeA.avg_ppsf || 0) - (gradeD.avg_ppsf || 0));
     if (diff > 0) {
-      h += '<div class="insight-line" style="margin:0 12px 14px">Grade A comps command $' + diff + '/SF more than Grade D \u2014 speed sells</div>';
+      h += '<div class="insight-line" style="margin:0 16px 16px">Grade A comps command $' + diff + '/SF more than Grade D \u2014 speed sells</div>';
     }
   }
 
@@ -521,27 +637,43 @@ function renderDOMCard(domGrades) {
 function renderAgentCard(agents) {
   if (!agents || !agents.length) return '';
 
-  const buyers = agents.filter(a => a.side === 'buyer').slice(0, 10);
-  const listers = agents.filter(a => a.side === 'listing').slice(0, 10);
+  // Filter out Non MLS noise
+  const clean = agents.filter(a => !_isNonMls(a.agent_name));
+  if (!clean.length) return '';
+
+  const buyers = clean.filter(a => a.side === 'buyer').slice(0, 10);
+  const listers = clean.filter(a => a.side === 'listing').slice(0, 10);
 
   if (!buyers.length && !listers.length) return '';
 
-  let h = '<details class="intel-card"><summary>AGENT ACTIVITY <span style="font-size:11px;color:#64748b;font-weight:600;letter-spacing:0">' + agents.length + '</span></summary>';
-  h += '<div style="padding:0 12px 14px">';
+  let h = '<details class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
+  h += '<summary>AGENT ACTIVITY <span class="intel-badge">' + clean.length + '</span></summary>';
+  h += '<div style="padding:4px 16px 20px">';
 
   function renderAgentSection(title, list) {
     if (!list.length) return '';
-    let s = '<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:2px;margin:12px 0 8px">' + title + '</div>';
-    list.forEach(a => {
+    let s = '<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:2px;margin:14px 0 8px">' + title + '</div>';
+    list.forEach((a, i) => {
       const lastDate = a.last_deal_date ? new Date(a.last_deal_date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }) : '';
-      s += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);flex-wrap:wrap">';
-      s += '<div style="flex:1;min-width:120px;font-size:12px;color:#f1f5f9;font-weight:600">' + esc(_titleCase(a.agent_name || '')) + '</div>';
-      s += '<div style="font-size:11px;color:#94a3b8;white-space:nowrap">';
-      s += '<span style="color:#e2e8f0;font-weight:700">' + (a.deal_count || 0) + '</span> deals';
-      if (a.community_count) s += ' &middot; <span style="color:#e2e8f0">' + a.community_count + '</span> communities';
-      if (a.avg_price) s += ' &middot; Avg ' + $k(Math.round(a.avg_price));
-      if (lastDate) s += ' &middot; Last: ' + lastDate;
-      s += '</div></div>';
+      s += '<div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);margin-bottom:6px">';
+
+      // Row 1: Rank + Name + Deal count
+      s += '<div style="display:flex;align-items:center;gap:8px">';
+      s += '<span style="color:#d4af37;font-size:12px;font-weight:800;min-width:22px">#' + (i + 1) + '</span>';
+      s += '<div style="flex:1;font-size:13px;color:#f1f5f9;font-weight:700">' + esc(_titleCase(a.agent_name || '')) + '</div>';
+      s += '<span style="font-size:12px;color:#e2e8f0;font-weight:700">' + (a.deal_count || 0) + ' deals</span>';
+      s += '</div>';
+
+      // Row 2: Details
+      let details = [];
+      if (a.community_count) details.push('Active in ' + a.community_count + ' communities');
+      if (a.avg_price) details.push('Avg ' + $k(Math.round(a.avg_price)));
+      if (lastDate) details.push('Last: ' + lastDate);
+      if (details.length) {
+        s += '<div style="font-size:10px;color:#64748b;margin-top:4px;margin-left:30px">' + details.join(' \u00b7 ') + '</div>';
+      }
+
+      s += '</div>';
     });
     return s;
   }
