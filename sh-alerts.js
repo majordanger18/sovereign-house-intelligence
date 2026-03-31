@@ -5,9 +5,9 @@ function dedupeAlerts(list){
   const seen=new Map();
   const sorted=[...list].sort((a,b)=>{
     // RESURRECTION alerts always sort first
-    const aRes=a.alert_type==='RESURRECTION'?1:0;
-    const bRes=b.alert_type==='RESURRECTION'?1:0;
-    if(aRes!==bRes)return bRes-aRes;
+    const aPri=a.alert_type==='RESURRECTION'?2:a.alert_type==='INTELLIGENCE'?1:0;
+    const bPri=b.alert_type==='RESURRECTION'?2:b.alert_type==='INTELLIGENCE'?1:0;
+    if(aPri!==bPri)return bPri-aPri;
     return new Date(b.created_at)-new Date(a.created_at);
   });
   return sorted.filter(a=>{
@@ -101,10 +101,17 @@ function openAlerts(){
       label="NEW LISTING";
       if(matchProp){line1=addr+' — $'+Number(matchProp.list_price).toLocaleString();line2=(matchProp.bedrooms||'?')+'bd/'+(matchProp.bathrooms||'?')+'ba · '+(matchProp.sqft?matchProp.sqft.toLocaleString()+'sf':'?');}
       else{const rawMsg=a.message||'';const priceMatch=rawMsg.match(/\$?([\d,]+(?:\.\d+)?)/);const price=priceMatch?'$'+Number(priceMatch[1].replace(/,/g,'')).toLocaleString():'';line1=addr+(price?' — '+price:'');line2=a.details||'';}
+    }else if(a.alert_type==="INTELLIGENCE"){
+      label="INTELLIGENCE";ico="\ud83e\udde0";col="#d4af37";
+      const rawMsg=a.message||'';const cleanMsg=rawMsg.replace(/^\ud83e\udde0\s*/,'');
+      line1=a.address||addr;line2=cleanMsg;
+      if(a.property_id||propId){
+        extraHtml+='<div style="display:flex;gap:6px;margin-top:6px"><button onclick="event.stopPropagation();closeAlerts();openDetail(\''+(propId||a.property_id)+'\')" style="flex:1;padding:6px 10px;font-size:11px;font-weight:700;border-radius:8px;border:1px solid rgba(212,175,55,0.3);background:rgba(212,175,55,0.08);color:#d4af37;cursor:pointer">View Property</button></div>';
+      }
     }else{
       label=a.alert_type||"ALERT";line1=a.message||'';line2=a.details||'';
     }
-    const resBorder=a.alert_type==='RESURRECTION'?'border:1px solid rgba(212,175,55,0.2);background:rgba(212,175,55,0.08);':'';
+    const resBorder=(a.alert_type==='RESURRECTION'||a.alert_type==='INTELLIGENCE')?'border:1px solid rgba(212,175,55,0.2);background:rgba(212,175,55,0.08);':'';
     return`<div class="swipe-wrap" data-aid="${a.id}"><div class="swipe-bg"><span>Delete</span></div><div class="swipe-card" onclick="${propId?`closeAlerts();openDetail('${propId}')`:''}" style="${resBorder}${propId?'cursor:pointer':''}"><span style="color:${col};flex-shrink:0;font-size:20px">${ico}</span><div style="flex:1;min-width:0"><span style="font-size:9px;font-weight:800;letter-spacing:1px;color:${col};text-transform:uppercase">${label}</span><div style="color:#e2e8f0;font-weight:600;font-size:13px;margin-top:2px">${esc(line1)}</div>${line2?`<div style="font-size:11px;color:#94a3b8;margin-top:2px">${esc(line2)}</div>`:''}${extraHtml}<div style="font-size:9px;color:#475569;margin-top:3px">${a.created_at?new Date(a.created_at).toLocaleString():""}</div></div><button onclick="event.stopPropagation();dismissOne('${a.id}')" class="alert-x">✕</button></div></div>`;
   };
   const m=document.getElementById("alertModal");

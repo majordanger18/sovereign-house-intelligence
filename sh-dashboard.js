@@ -73,11 +73,13 @@ function renderDashboard(){
   const toastArea=document.getElementById("alertToast");
   if(alertCount>0&&!toastDismissed){
     const resAlerts=dedupedVisible.filter(a=>a.alert_type==="RESURRECTION").length;
+    const intelAlerts=dedupedVisible.filter(a=>a.alert_type==="INTELLIGENCE").length;
     const priceAlerts=dedupedVisible.filter(a=>a.alert_type==="PRICE_CHANGE").length;
     const statusAlerts=dedupedVisible.filter(a=>a.alert_type==="STATUS_CHANGE").length;
     const newAlerts=dedupedVisible.filter(a=>a.alert_type==="NEW_LISTING").length;
     let summary=[];
     if(resAlerts)summary.push(`<span style="color:#d4af37;font-weight:700">${resAlerts} resurrection${resAlerts>1?"s":""}</span>`);
+    if(intelAlerts)summary.push(`<span style="color:#d4af37;font-weight:700">${intelAlerts} intel</span>`);
     if(newAlerts)summary.push(`${newAlerts} new listing${newAlerts>1?"s":""}`);
     if(priceAlerts)summary.push(`${priceAlerts} price drop${priceAlerts>1?"s":""}`);
     if(statusAlerts)summary.push(`${statusAlerts} status change${statusAlerts>1?"s":""}`);
