@@ -66,7 +66,7 @@ function buildBriefContext(data) {
 
   ctx += 'TOP GATED COMMUNITIES (by sales volume, $600K-$2M range):\n';
   data.communities.slice(0, 8).forEach(c => {
-    ctx += c.community_name + ' (' + c.zip_code + '): ' + (c.annualized_sales || c.total_sales) + ' sales/yr, ' + Math.round(c.avg_ppsf || 0) + '/SF avg, ' + Math.round(c.avg_dom || 0) + ' DOM avg, ' + ((c.avg_sale_to_list || 0) * 100).toFixed(1) + '% sale-to-list\n';
+    ctx += c.community_name + ' (' + c.zip_code + '): ' + (c.total_sales || 0) + ' sales, ' + Math.round(c.avg_ppsf || 0) + '/SF avg, ' + Math.round(c.avg_dom || 0) + ' DOM avg, ' + ((c.avg_sale_to_list || 0) * 100).toFixed(1) + '% sale-to-list\n';
   });
 
   ctx += '\nRECENT FLIPS (buy-resell within 18 months):\n';
@@ -397,7 +397,7 @@ function renderCommunityCard(communities) {
     const stlPct = (stl * 100).toFixed(1);
     const floor = Math.round(c.floor_ppsf || 0);
     const ceil = Math.round(c.ceiling_ppsf || 0);
-    const sales = c.annualized_sales || c.total_sales || 0;
+    const sales = c.total_sales || 0;
     const barW = maxSales > 0 ? Math.round((c.total_sales || 0) / maxSales * 100) : 0;
 
     h += '<div style="padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);margin-bottom:8px">';
@@ -411,7 +411,7 @@ function renderCommunityCard(communities) {
 
     // Row 2: Stats
     h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:#94a3b8">';
-    h += '<span style="color:#e2e8f0;font-weight:700">' + sales + '/yr</span>';
+    h += '<span style="color:#e2e8f0;font-weight:700">' + sales + ' sales</span>';
     h += '<span>\u00b7</span>';
     h += '<span style="color:' + _ppsfColor(ppsf) + ';font-weight:700">$' + ppsf + '/SF</span>';
     h += '<span>\u00b7</span>';
