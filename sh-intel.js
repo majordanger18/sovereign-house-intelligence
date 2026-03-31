@@ -28,6 +28,9 @@ setView = function(v) {
 // ═══ DATA CACHE ═══
 let _intelData = null;
 let _intelLoading = false;
+let _intelChat = [];
+
+function _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 async function loadIntelData(force) {
   if (_intelData && !force) return _intelData;
@@ -47,32 +50,269 @@ async function loadIntelData(force) {
   return _intelData;
 }
 
+// ═══ BRIEF CONTEXT BUILDER ═══
+function buildBriefContext(data) {
+  let ctx = '';
+
+  ctx += 'TOP GATED COMMUNITIES (by sales volume, $600K-$2M range):\n';
+  data.communities.slice(0, 8).forEach(c => {
+    ctx += c.subdivision_name + ' (' + c.zip_code + '): ' + c.total_sales + ' sales, ' + Math.round(c.avg_ppsf || 0) + '/SF avg, ' + Math.round(c.avg_dom || 0) + ' DOM avg, ' + ((c.avg_sale_to_list || 0) * 100).toFixed(1) + '% sale-to-list\n';
+  });
+
+  ctx += '\nRECENT FLIPS (buy-resell within 18 months):\n';
+  data.flips.slice(0, 5).forEach(f => {
+    ctx += f.address + ' (' + (f.subdivision_name || '') + '): ' + Math.round((f.buy_price || 0) / 1000) + 'K \u2192 ' + Math.round((f.sell_price || 0) / 1000) + 'K, +' + Math.round(((f.sell_price || 0) - (f.buy_price || 0)) / 1000) + 'K spread, ' + (f.hold_months || '?') + ' months, grade: ' + (f.flip_grade || '?') + '\n';
+  });
+
+  ctx += '\nSEASONAL PATTERNS (by month):\n';
+  data.seasonal.filter(s => (s.total_sales || 0) >= 10).forEach(s => {
+    ctx += _monthName(s.sale_month) + ': ' + s.total_sales + ' sales, ' + Math.round(s.avg_ppsf || 0) + '/SF, ' + Math.round(s.avg_dom || 0) + ' DOM, ' + ((s.avg_sale_to_list || 0) * 100).toFixed(1) + '% sale-to-list\n';
+  });
+
+  ctx += '\nDOM GRADE DISTRIBUTION:\n';
+  data.domGrades.forEach(g => {
+    ctx += 'Grade ' + g.dom_grade + ': ' + (g.total_sales || 0) + ' comps, ' + Math.round(g.avg_ppsf || 0) + '/SF avg\n';
+  });
+
+  ctx += '\nTODAY: ' + new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) + '\n';
+  ctx += 'ACTIVE DEAL: 4507 Denaro Dr, Siena (guard-gated 55+), $1,008,800 purchase, closing April 8 2026, Kiavi loan 11.99%, 12-month term.\n';
+
+  return ctx;
+}
+
+// ═══ MORNING BRIEF ═══
+async function renderMorningBrief(data) {
+  const today = new Date().toISOString().split('T')[0];
+
+  // Check cache
+  try {
+    const cached = JSON.parse(localStorage.getItem('sh_intel_brief') || 'null');
+    if (cached && cached.date === today && cached.text) {
+      return formatBriefHtml(cached.text, cached.generated_at || today, data);
+    }
+  } catch (e) {}
+
+  // Check API key
+  const apiKey = localStorage.getItem('sh_claude_key');
+  if (!apiKey) return renderApiKeyPrompt();
+
+  // Generate brief
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 500,
+        system: 'You are the Sovereign House intelligence advisor for King J and Lisa \u2014 luxury fix-and-flip operators in guard-gated Summerlin, Las Vegas.\n\nGenerate a concise daily market intelligence brief based on the data provided.\n\nStructure (use these exact headers):\n**Market Pulse** \u2014 1-2 sentences on overall market activity across target communities\n**Community Watch** \u2014 1 specific community worth noting (hot, cooling, or anomalous) with numbers\n**Deal Status** \u2014 timing check on their active deal, any recommendations\n**Signal** \u2014 one actionable insight (an opportunity, a risk, or a strategic note)\n\nRules:\n- Under 150 words total\n- Use actual numbers from the data\n- Be direct and opinionated \u2014 no hedging\n- No greetings or sign-offs\n- If data is limited, say so briefly and work with what\'s available',
+        messages: [{ role: 'user', content: buildBriefContext(data) }]
+      })
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) localStorage.removeItem('sh_claude_key');
+      throw new Error('API error ' + res.status);
+    }
+
+    const result = await res.json();
+    const briefText = result.content[0].text;
+
+    localStorage.setItem('sh_intel_brief', JSON.stringify({
+      date: today,
+      text: briefText,
+      generated_at: new Date().toISOString()
+    }));
+
+    return formatBriefHtml(briefText, new Date().toISOString(), data);
+  } catch (e) {
+    return '<div style="margin-bottom:16px;padding:16px;border-radius:14px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);font-size:12px;color:#ef4444">\u26a0\ufe0f Brief generation failed: ' + _esc(e.message) + '</div>';
+  }
+}
+
+function formatBriefHtml(text, generatedAt, data) {
+  const formatted = text.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#d4af37">$1</strong>').replace(/\n/g, '<br>');
+  const dateStr = generatedAt ? new Date(generatedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+  const totalComps = data.communities.reduce((s, c) => s + (c.total_sales || 0), 0);
+
+  let h = '<div style="margin-bottom:16px;padding:20px;border-radius:14px;background:linear-gradient(135deg,rgba(212,175,55,0.04),rgba(212,175,55,0.01));border:1px solid rgba(212,175,55,0.15)">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
+  h += '<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px">\ud83e\udde0 INTELLIGENCE BRIEF</div>';
+  h += '<div style="display:flex;align-items:center;gap:8px">';
+  if (dateStr) h += '<span style="font-size:9px;color:#475569">' + dateStr + '</span>';
+  h += '<button onclick="regenerateBrief()" style="padding:4px 10px;border-radius:6px;border:1px solid rgba(212,175,55,0.2);background:rgba(212,175,55,0.06);color:#d4af37;font-size:9px;font-weight:700;cursor:pointer">\u21bb</button>';
+  h += '</div></div>';
+  h += '<div style="font-size:13px;color:#e2e8f0;line-height:1.7">' + formatted + '</div>';
+  h += '<div style="margin-top:10px;font-size:9px;color:#475569">Based on ' + totalComps + ' sold comps across ' + (data.communities.length || 0) + ' communities</div>';
+  h += '</div>';
+  return h;
+}
+
+function renderApiKeyPrompt() {
+  let h = '<div style="margin-bottom:16px;padding:20px;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);text-align:center">';
+  h += '<div style="font-size:32px;margin-bottom:8px">\ud83d\udd11</div>';
+  h += '<div style="font-size:13px;color:#94a3b8;margin-bottom:12px">Set up your Claude API key to enable intelligence briefings</div>';
+  h += '<button onclick="promptIntelApiKey()" style="padding:10px 20px;border-radius:10px;border:1px solid rgba(212,175,55,0.3);background:rgba(212,175,55,0.1);color:#d4af37;font-size:12px;font-weight:700;cursor:pointer">Enter API Key</button>';
+  h += '</div>';
+  return h;
+}
+
+function promptIntelApiKey() {
+  const k = prompt('Enter your Claude API key:');
+  if (k) {
+    localStorage.setItem('sh_claude_key', k);
+    renderIntelView();
+  }
+}
+
+async function regenerateBrief() {
+  localStorage.removeItem('sh_intel_brief');
+  renderIntelView();
+}
+
+// ═══ ASK ANYTHING CHAT ═══
+function renderChatSection() {
+  let h = '<div style="margin-bottom:16px;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);overflow:hidden">';
+  h += '<div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.04)">';
+  h += '<div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px">ASK THE BRAIN</div>';
+  h += '</div>';
+  h += '<div id="intelChatArea" style="max-height:400px;overflow-y:auto;padding:12px 16px">';
+  h += '<div id="intelChatEmpty" style="text-align:center;padding:20px;color:#475569;font-size:12px"' + (_intelChat.length ? ' style="display:none"' : '') + '>Ask about communities, timing, comps, flip activity, or strategy.</div>';
+  h += '</div>';
+  h += '<div style="padding:12px 16px;border-top:1px solid rgba(255,255,255,0.04);display:flex;gap:8px">';
+  h += '<input id="intelChatInput" class="cinput" placeholder="What\'s happening in Queensridge?" style="flex:1;font-size:13px;min-height:40px" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendIntelChat()}"/>';
+  h += '<button onclick="sendIntelChat()" style="padding:8px 16px;border-radius:10px;background:linear-gradient(135deg,#d4af37,#b8960c);color:#000;border:none;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">\u2192</button>';
+  h += '</div></div>';
+  return h;
+}
+
+function renderChatMessages() {
+  const area = document.getElementById('intelChatArea');
+  if (!area) return;
+
+  let h = '';
+
+  // Empty state
+  h += '<div id="intelChatEmpty" style="text-align:center;padding:20px;color:#475569;font-size:12px;' + (_intelChat.length ? 'display:none' : '') + '">Ask about communities, timing, comps, flip activity, or strategy.</div>';
+
+  _intelChat.forEach(msg => {
+    if (msg.role === 'user') {
+      h += '<div style="margin-bottom:12px;text-align:right"><div style="display:inline-block;max-width:85%;padding:10px 14px;border-radius:12px 12px 2px 12px;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.2);font-size:13px;color:#e2e8f0;text-align:left">' + _esc(msg.content) + '</div></div>';
+    } else {
+      const formatted = msg.content
+        .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#d4af37">$1</strong>')
+        .replace(/\n/g, '<br>');
+      h += '<div style="margin-bottom:12px"><div style="display:inline-block;max-width:85%;padding:10px 14px;border-radius:12px 12px 12px 2px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);font-size:13px;color:#e2e8f0;line-height:1.6">' + formatted + '</div></div>';
+    }
+  });
+
+  if (_intelChat.length > 0) {
+    h += '<div style="text-align:center;margin-top:8px"><button onclick="_intelChat=[];renderChatMessages()" style="background:none;border:none;color:#475569;font-size:10px;cursor:pointer;text-decoration:underline">Clear conversation</button></div>';
+  }
+
+  area.innerHTML = h;
+  area.scrollTop = area.scrollHeight;
+}
+
+async function sendIntelChat() {
+  const input = document.getElementById('intelChatInput');
+  const q = (input?.value || '').trim();
+  if (!q) return;
+
+  const apiKey = localStorage.getItem('sh_claude_key');
+  if (!apiKey) { promptIntelApiKey(); return; }
+
+  _intelChat.push({ role: 'user', content: q });
+  input.value = '';
+  renderChatMessages();
+
+  // Show typing indicator
+  const area = document.getElementById('intelChatArea');
+  if (area) {
+    area.innerHTML += '<div id="intelTyping" style="padding:8px 12px;font-size:12px;color:#64748b;font-style:italic">Thinking...</div>';
+    area.scrollTop = area.scrollHeight;
+  }
+
+  const data = _intelData || await loadIntelData();
+  const context = buildBriefContext(data);
+
+  // Build messages with context in first user turn
+  const messages = [];
+  messages.push({ role: 'user', content: 'MARKET DATA:\n' + context + '\n\nQUESTION: ' + _intelChat[0].content });
+  for (let i = 1; i < _intelChat.length; i++) {
+    messages.push({ role: _intelChat[i].role, content: _intelChat[i].content });
+  }
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 800,
+        system: 'You are the Sovereign House intelligence advisor. You have full access to market data for guard-gated Summerlin communities in Las Vegas.\n\nAnswer questions using the provided data. Be specific with numbers. Be direct.\nIf comparing communities, use actual PPSF, DOM, and sales volume.\nIf asked about timing, reference seasonal patterns.\nIf the data doesn\'t support a conclusion, say so.\n\nKeep responses concise \u2014 under 150 words unless a detailed breakdown is requested.\nUse **bold** for key numbers and community names.\nYou\'re talking to King J and Lisa \u2014 experienced luxury flippers. No hand-holding.',
+        messages: messages
+      })
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) localStorage.removeItem('sh_claude_key');
+      throw new Error('API error ' + res.status);
+    }
+
+    const result = await res.json();
+    const answer = result.content?.[0]?.text || 'No response';
+    _intelChat.push({ role: 'assistant', content: answer });
+  } catch (e) {
+    _intelChat.push({ role: 'assistant', content: '\u26a0\ufe0f ' + e.message });
+  }
+
+  renderChatMessages();
+}
+
 // ═══ MAIN RENDER ═══
 async function renderIntelView() {
   const el = document.getElementById('intelView');
   if (!el) return;
 
-  el.innerHTML = '<div style="text-align:center;padding:40px;color:#64748b"><div style="font-size:32px;margin-bottom:8px">🧠</div><div style="font-size:13px">Loading market intelligence...</div></div>';
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:#64748b"><div style="font-size:32px;margin-bottom:8px">\ud83e\udde0</div><div style="font-size:13px">Loading market intelligence...</div></div>';
 
   const data = await loadIntelData();
   if (!data) return;
 
   let h = '';
 
-  // Header
-  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
-  h += '<div><div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px">MARKET INTELLIGENCE</div>';
-  h += '<div style="font-size:11px;color:#475569;margin-top:2px">' + (data.communities.length || 0) + ' communities \u00b7 ' + (data.flips.length || 0) + ' flips detected \u00b7 ' + (data.agents.length || 0) + ' active agents</div></div>';
-  h += '<button onclick="loadIntelData(true).then(()=>renderIntelView())" style="padding:6px 12px;border-radius:8px;border:1px solid rgba(212,175,55,0.2);background:rgba(212,175,55,0.06);color:#d4af37;font-size:10px;font-weight:700;cursor:pointer">\u21bb Refresh</button>';
-  h += '</div>';
+  // 1. Morning Brief
+  h += await renderMorningBrief(data);
 
+  // 2. Ask Anything Chat
+  h += renderChatSection();
+
+  // 3. Data Explorer (existing 5 cards)
+  h += '<details class="intel-card" style="margin-top:4px">';
+  h += '<summary><span>DATA EXPLORER</span></summary>';
+  h += '<div style="padding:4px 12px 16px">';
   h += renderCommunityCard(data.communities);
   h += renderFlipCard(data.flips);
   h += renderSeasonalCard(data.seasonal);
   h += renderDOMCard(data.domGrades);
   h += renderAgentCard(data.agents);
+  h += '</div>';
+  h += '</details>';
 
   el.innerHTML = h;
+
+  // Re-render chat messages if conversation exists
+  if (_intelChat.length) renderChatMessages();
 }
 
 // ═══ HELPERS ═══
@@ -83,7 +323,7 @@ function _titleCase(s) {
 
 function _truncate(s, n) {
   if (!s) return '';
-  return s.length > n ? s.substring(0, n) + '…' : s;
+  return s.length > n ? s.substring(0, n) + '\u2026' : s;
 }
 
 function _ppsfColor(v) {
@@ -133,7 +373,7 @@ function renderCommunityCard(communities) {
     h += '<td style="color:#94a3b8">' + esc(c.zip_code || '') + '</td>';
     h += '<td style="color:#e2e8f0;font-weight:700">' + (c.total_sales || 0) + '</td>';
     h += '<td style="color:' + _ppsfColor(ppsf) + ';font-weight:700">$' + ppsf + '</td>';
-    h += '<td style="color:#94a3b8;font-size:11px">$' + floor + ' – $' + ceil + '</td>';
+    h += '<td style="color:#94a3b8;font-size:11px">$' + floor + ' \u2013 $' + ceil + '</td>';
     h += '<td style="color:' + _domColor(dom) + ';font-weight:600">' + dom + '</td>';
     h += '<td style="color:' + _stlColor(stl) + ';font-weight:600">' + stlPct + '%</td>';
     h += '</tr>';
@@ -183,7 +423,6 @@ function renderFlipCard(flips) {
 function renderSeasonalCard(seasonal) {
   if (!seasonal || !seasonal.length) return '';
 
-  // Filter out months with < 10 sales (noise)
   const valid = seasonal.filter(s => (s.total_sales || 0) >= 10);
   if (!valid.length) return '';
 
@@ -205,8 +444,7 @@ function renderSeasonalCard(seasonal) {
     else if (dom <= 55 && stl >= 0.965) { rating = '\ud83d\udfe1 GOOD'; ratingColor = '#d4af37'; }
     else { rating = '\ud83d\udd34 SLOW'; ratingColor = '#ef4444'; }
 
-    // Track best month (lowest DOM + highest STL)
-    if (dom < (bestMonth.avg_dom || 999) || (dom === Math.round(bestMonth.avg_dom || 999) && stl > (bestMonth.avg_sale_to_list || 0))) {
+    if (dom < Math.round(bestMonth.avg_dom || 999) || (dom === Math.round(bestMonth.avg_dom || 999) && stl > (bestMonth.avg_sale_to_list || 0))) {
       bestMonth = s;
     }
 
@@ -221,7 +459,6 @@ function renderSeasonalCard(seasonal) {
 
   h += '</tbody></table></div>';
 
-  // Best listing window insight
   const bDom = Math.round(bestMonth.avg_dom || 0);
   const bStl = ((bestMonth.avg_sale_to_list || 0) * 100).toFixed(1);
   h += '<div class="insight-line" style="margin:0 12px 14px">Best listing window: ' + _monthName(bestMonth.sale_month) + ' \u2014 ' + bDom + ' avg DOM, ' + bStl + '% of asking</div>';
@@ -269,7 +506,6 @@ function renderDOMCard(domGrades) {
 
   h += '</div>';
 
-  // Insight line
   if (gradeA && gradeD) {
     const diff = Math.round((gradeA.avg_ppsf || 0) - (gradeD.avg_ppsf || 0));
     if (diff > 0) {
