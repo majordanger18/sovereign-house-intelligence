@@ -445,7 +445,7 @@ function renderFlipCard(flips) {
   const gradeColors = { strong: '#22c55e', viable: '#d4af37', tight: '#f97316', underwater: '#ef4444' };
   const gradeBorders = { strong: '#22c55e', viable: '#d4af37', tight: '#f97316', underwater: '#ef4444' };
 
-  let h = '<details open class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
+  let h = '<details class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
   h += '<summary>FLIP ACTIVITY <span class="intel-badge">' + flips.length + '</span></summary>';
   h += '<div style="padding:4px 16px 20px">';
 
