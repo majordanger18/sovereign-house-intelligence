@@ -518,7 +518,7 @@ function renderSeasonalCard(seasonal) {
   let bestMonth = valid[0];
 
   let h = '<details class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
-  h += '<summary>WHEN TO LIST</summary>';
+  h += '<summary>WHEN TO LIST <span class="intel-badge">' + valid.length + '</span></summary>';
   h += '<div style="padding:4px 16px 20px">';
 
   valid.forEach(s => {
@@ -586,7 +586,7 @@ function renderDOMCard(domGrades) {
   const totalCount = domGrades.reduce((s, g) => s + (g.comp_count || 0), 0);
 
   let h = '<details class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
-  h += '<summary>SPEED vs PRICE</summary>';
+  h += '<summary>SPEED vs PRICE <span class="intel-badge">' + domGrades.length + '</span></summary>';
   h += '<div style="padding:4px 16px 20px">';
 
   let gradeA = null, gradeD = null;
