@@ -32,7 +32,7 @@ let _intelChat = [];
 
 const SUGGESTED_QUESTIONS = [
   "Which community has the best flip margins?",
-  "Compare Sun Colony vs Siena for my next deal",
+  "Compare Siena vs Canyon Gate for my next deal",
   "When should I list Denaro for maximum price?"
 ];
 
@@ -43,15 +43,19 @@ async function loadIntelData(force) {
   if (_intelLoading) return null;
   _intelLoading = true;
 
-  const [communities, flips, seasonal, domGrades, agents] = await Promise.all([
+  const [communities, flips, seasonal, domGrades, agents, nameMap] = await Promise.all([
     fetch(SB + '/rest/v1/community_production_stats?is_gated=eq.true&avg_sale_price=gte.600000&avg_sale_price=lte.2000000&order=total_sales.desc&limit=15', { headers: HD }).then(r => r.json()).catch(() => []),
     fetch(SB + '/rest/v1/detected_flips?order=sell_date.desc', { headers: HD }).then(r => r.json()).catch(() => []),
     fetch(SB + '/rest/v1/seasonal_patterns?order=sale_month', { headers: HD }).then(r => r.json()).catch(() => []),
     fetch(SB + '/rest/v1/dom_grade_summary?order=dom_grade', { headers: HD }).then(r => r.json()).catch(() => []),
-    fetch(SB + '/rest/v1/agent_activity?order=deal_count.desc&limit=20', { headers: HD }).then(r => r.json()).catch(() => [])
+    fetch(SB + '/rest/v1/agent_activity?order=deal_count.desc&limit=20', { headers: HD }).then(r => r.json()).catch(() => []),
+    fetch(SB + '/rest/v1/community_name_map?select=subdivision_name,community_name', { headers: HD }).then(r => r.json()).catch(() => [])
   ]);
 
-  _intelData = { communities, flips, seasonal, domGrades, agents };
+  const nameDict = {};
+  nameMap.forEach(m => { nameDict[m.subdivision_name] = m.community_name; });
+
+  _intelData = { communities, flips, seasonal, domGrades, agents, nameDict };
   _intelLoading = false;
   return _intelData;
 }
@@ -385,8 +389,9 @@ function renderCommunityCard(communities) {
   h += '<summary>COMMUNITY LEADERBOARD <span class="intel-badge">' + communities.length + '</span></summary>';
   h += '<div style="padding:4px 16px 20px">';
 
+  const nd = (_intelData && _intelData.nameDict) || {};
   communities.forEach((c, i) => {
-    const name = _truncate(_titleCase(c.subdivision_name || ''), 30);
+    const name = nd[c.subdivision_name] || _truncate(_titleCase(c.subdivision_name || ''), 30);
     const ppsf = Math.round(c.avg_ppsf || 0);
     const dom = Math.round(c.avg_dom || 0);
     const stl = c.avg_sale_to_list || 0;
@@ -463,7 +468,9 @@ function renderFlipCard(flips) {
     h += '<div style="font-size:13px;font-weight:700;color:#f1f5f9">' + esc(f.address || '') + '</div>';
 
     // Line 2: Community · ZIP
-    h += '<div style="font-size:11px;color:#64748b;margin-top:2px">' + esc(_titleCase(f.subdivision_name || '')) + ' \u00b7 ' + esc(f.zip_code || '') + '</div>';
+    const nd = (_intelData && _intelData.nameDict) || {};
+    const communityName = nd[f.subdivision_name] || _titleCase(f.subdivision_name || '');
+    h += '<div style="font-size:11px;color:#64748b;margin-top:2px">' + esc(communityName) + ' \u00b7 ' + esc(f.zip_code || '') + '</div>';
 
     // Line 3: Buy → Sell
     h += '<div style="font-size:12px;color:#94a3b8;margin-top:8px">' + $k(buy) + ' \u2192 ' + $k(sell) + '</div>';
