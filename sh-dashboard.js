@@ -58,7 +58,7 @@ function renderDashboard(){
   const screened=Object.keys(analysisMap).length;
   const screenedSub=`<span style="color:#22c55e;font-weight:700">${screened}</span> screened`;
   const statsEl=document.getElementById("statsArea");
-  if(view==="renovation"||view==="deals"||view==="contacts"){statsEl.innerHTML="";statsEl.style.display="none";}
+  if(view==="renovation"||view==="deals"||view==="contacts"||view==="intel"){statsEl.innerHTML="";statsEl.style.display="none";}
   else{statsEl.style.display="";statsEl.innerHTML=[sB("LISTINGS",st.total,"#e2e8f0",screenedSub),sB("AVG SCORE",st.avgScore,sc(st.avgScore)),sB("AVG PRICE",$k(st.avgPrice),"#e2e8f0"),sB("AVG DOM",st.avgDom,"#f59e0b","days")].join("");}
 
   // Update alert badge (deduplicated)
@@ -97,7 +97,7 @@ function renderDashboard(){
   const isFeed=feedViews.includes(view);
   document.querySelectorAll(".bnav-tab").forEach(b=>{
     const t=b.dataset.tab;
-    b.classList.toggle("active",(t==="properties"&&isFeed)||(t==="deals"&&view==="deals")||(t==="reno"&&view==="renovation")||(t==="contacts"&&view==="contacts"));
+    b.classList.toggle("active",(t==="properties"&&isFeed)||(t==="deals"&&view==="deals")||(t==="reno"&&view==="renovation")||(t==="contacts"&&view==="contacts")||(t==="intel"&&view==="intel"));
   });
   // Properties tab count
   const propTab=document.querySelector('[data-tab="properties"]');

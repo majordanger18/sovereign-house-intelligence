@@ -81,6 +81,7 @@ html,body,#loading,#main,.overlay,.sheet{background:#0a0a0f;color:#fff;margin:0;
     <div style="padding:0 20px 2px"><span id="countLabel" style="font-size:11px;color:#475569;font-weight:600"></span></div>
   </div>
   <div id="listArea" class="list-area" style="padding:4px 20px 100px;gap:8px"></div>
+  <div id="intelView" style="display:none;padding:16px;padding-bottom:90px"></div>
 </div>
 
 <!-- Bottom Navigation -->
@@ -89,6 +90,7 @@ html,body,#loading,#main,.overlay,.sheet{background:#0a0a0f;color:#fff;margin:0;
   <button class="bnav-tab" onclick="setView('deals')" data-tab="deals"><span class="bnav-icon" style="position:relative">🤝<span id="dealsDot" class="bnav-badge" style="display:none"></span></span>Deals</button>
   <button class="bnav-tab" onclick="setView('renovation')" data-tab="reno"><span class="bnav-icon" style="position:relative">🔨<span id="renoDot" class="bnav-badge" style="display:none"></span></span>Reno</button>
   <button class="bnav-tab" onclick="setView('contacts')" data-tab="contacts"><span class="bnav-icon">👥</span>Contacts</button>
+  <button class="bnav-tab" onclick="setView('intel')" data-tab="intel"><span class="bnav-icon">🧠</span>Intel</button>
 </div>
 
 <div id="detailModal" class="overlay" style="display:none"></div>
@@ -109,6 +111,7 @@ html,body,#loading,#main,.overlay,.sheet{background:#0a0a0f;color:#fff;margin:0;
 <script src="sh-offer-calc.js"></script>
 <script src="sh-renovation.js"></script>
 <script src="sh-contacts.js"></script>
+<script src="sh-intel.js"></script>
 <script src="sh-alerts.js"></script>
 <script src="sh-offer.js"></script>
 <script src="sh-rpa-init.js"></script>
