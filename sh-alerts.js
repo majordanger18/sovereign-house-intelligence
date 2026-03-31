@@ -71,8 +71,8 @@ function openAlerts(){
     const matchProp=props.find(p=>p.mls_number&&a.mls_number&&p.mls_number===a.mls_number);
     const propId=matchProp?matchProp.id:null;
     const addr=matchProp?matchProp.address:(a.message||'').replace(/\s*(went|price|dropped|from|–).*/i,'').replace(/\s*\$[\d,.]+.*/,'').trim()||'Unknown';
-    const ico=a.alert_type==="RESURRECTION"?"🔄":a.alert_type==="NEW_LISTING"?"🆕":a.alert_type==="PRICE_CHANGE"?"💰":a.alert_type==="STATUS_CHANGE"?"🏠":a.alert_type?.includes("WATCHLIST")?"⭐":"📋";
-    const col=a.alert_type==="RESURRECTION"?"#d4af37":a.alert_type==="NEW_LISTING"?"#22c55e":a.alert_type==="PRICE_CHANGE"?"#f59e0b":a.alert_type==="STATUS_CHANGE"?"#a855f7":a.alert_type?.includes("WATCHLIST")?"#d4af37":"#94a3b8";
+    const ico=a.alert_type==="INTELLIGENCE"?"🧠":a.alert_type==="RESURRECTION"?"🔄":a.alert_type==="NEW_LISTING"?"🆕":a.alert_type==="PRICE_CHANGE"?"💰":a.alert_type==="STATUS_CHANGE"?"🏠":a.alert_type?.includes("WATCHLIST")?"⭐":"📋";
+    const col=a.alert_type==="INTELLIGENCE"?"#d4af37":a.alert_type==="RESURRECTION"?"#d4af37":a.alert_type==="NEW_LISTING"?"#22c55e":a.alert_type==="PRICE_CHANGE"?"#f59e0b":a.alert_type==="STATUS_CHANGE"?"#a855f7":a.alert_type?.includes("WATCHLIST")?"#d4af37":"#94a3b8";
     let label='',line1='',line2='',extraHtml='';
     if(a.alert_type==="RESURRECTION"){
       label="🔄 RESURRECTION";
@@ -102,7 +102,7 @@ function openAlerts(){
       if(matchProp){line1=addr+' — $'+Number(matchProp.list_price).toLocaleString();line2=(matchProp.bedrooms||'?')+'bd/'+(matchProp.bathrooms||'?')+'ba · '+(matchProp.sqft?matchProp.sqft.toLocaleString()+'sf':'?');}
       else{const rawMsg=a.message||'';const priceMatch=rawMsg.match(/\$?([\d,]+(?:\.\d+)?)/);const price=priceMatch?'$'+Number(priceMatch[1].replace(/,/g,'')).toLocaleString():'';line1=addr+(price?' — '+price:'');line2=a.details||'';}
     }else if(a.alert_type==="INTELLIGENCE"){
-      label="INTELLIGENCE";ico="\ud83e\udde0";col="#d4af37";
+      label="INTELLIGENCE";
       const rawMsg=a.message||'';const cleanMsg=rawMsg.replace(/^\ud83e\udde0\s*/,'');
       line1=a.address||addr;line2=cleanMsg;
       if(a.property_id||propId){
