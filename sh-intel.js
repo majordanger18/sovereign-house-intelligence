@@ -66,7 +66,7 @@ function buildBriefContext(data) {
 
   ctx += 'TOP GATED COMMUNITIES (by sales volume, $600K-$2M range):\n';
   data.communities.slice(0, 8).forEach(c => {
-    ctx += c.subdivision_name + ' (' + c.zip_code + '): ' + (c.annualized_sales || c.total_sales) + ' sales/yr, ' + Math.round(c.avg_ppsf || 0) + '/SF avg, ' + Math.round(c.avg_dom || 0) + ' DOM avg, ' + ((c.avg_sale_to_list || 0) * 100).toFixed(1) + '% sale-to-list\n';
+    ctx += c.community_name + ' (' + c.zip_code + '): ' + (c.annualized_sales || c.total_sales) + ' sales/yr, ' + Math.round(c.avg_ppsf || 0) + '/SF avg, ' + Math.round(c.avg_dom || 0) + ' DOM avg, ' + ((c.avg_sale_to_list || 0) * 100).toFixed(1) + '% sale-to-list\n';
   });
 
   ctx += '\nRECENT FLIPS (buy-resell within 18 months):\n';
@@ -389,9 +389,8 @@ function renderCommunityCard(communities) {
   h += '<summary>COMMUNITY LEADERBOARD <span class="intel-badge">' + communities.length + '</span></summary>';
   h += '<div style="padding:4px 16px 20px">';
 
-  const nd = (_intelData && _intelData.nameDict) || {};
   communities.forEach((c, i) => {
-    const name = nd[c.subdivision_name] || _truncate(_titleCase(c.subdivision_name || ''), 30);
+    const name = c.community_name || '';
     const ppsf = Math.round(c.avg_ppsf || 0);
     const dom = Math.round(c.avg_dom || 0);
     const stl = c.avg_sale_to_list || 0;
@@ -661,7 +660,7 @@ function renderAgentCard(agents) {
     if (!list.length) return '';
     let s = '<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:2px;margin:14px 0 8px">' + title + '</div>';
     list.forEach((a, i) => {
-      const lastDate = a.last_deal_date ? new Date(a.last_deal_date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }) : '';
+      const lastDate = a.most_recent ? new Date(a.most_recent).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }) : '';
       s += '<div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);margin-bottom:6px">';
 
       // Row 1: Rank + Name + Deal count
@@ -673,7 +672,7 @@ function renderAgentCard(agents) {
 
       // Row 2: Details
       let details = [];
-      if (a.community_count) details.push('Active in ' + a.community_count + ' communities');
+      if (a.communities_active) details.push('Active in ' + a.communities_active + ' communities');
       if (a.avg_price) details.push('Avg ' + $k(Math.round(a.avg_price)));
       if (lastDate) details.push('Last: ' + lastDate);
       if (details.length) {
