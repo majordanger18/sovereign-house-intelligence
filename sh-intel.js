@@ -43,19 +43,35 @@ async function loadIntelData(force) {
   if (_intelLoading) return null;
   _intelLoading = true;
 
-  const [communities, flips, seasonal, domGrades, agents, nameMap] = await Promise.all([
+  const [communities, flips, seasonal, domGrades, agents, nameMap, dealsArr, finArr, calcArr] = await Promise.all([
     fetch(SB + '/rest/v1/community_production_stats?is_gated=eq.true&avg_sale_price=gte.600000&avg_sale_price=lte.2000000&order=total_sales.desc&limit=15', { headers: HD }).then(r => r.json()).catch(() => []),
     fetch(SB + '/rest/v1/detected_flips?order=sell_date.desc', { headers: HD }).then(r => r.json()).catch(() => []),
     fetch(SB + '/rest/v1/seasonal_patterns?order=sale_month', { headers: HD }).then(r => r.json()).catch(() => []),
     fetch(SB + '/rest/v1/dom_grade_summary?order=dom_grade', { headers: HD }).then(r => r.json()).catch(() => []),
     fetch(SB + '/rest/v1/agent_activity?order=deal_count.desc&limit=20', { headers: HD }).then(r => r.json()).catch(() => []),
-    fetch(SB + '/rest/v1/community_name_map?select=subdivision_name,community_name', { headers: HD }).then(r => r.json()).catch(() => [])
+    fetch(SB + '/rest/v1/community_name_map?select=subdivision_name,community_name', { headers: HD }).then(r => r.json()).catch(() => []),
+    fetch(SB + '/rest/v1/deals?status=neq.rejected&status=neq.withdrawn&status=neq.expired&order=created_at.desc&limit=1', { headers: HD }).then(r => r.json()).catch(() => []),
+    fetch(SB + '/rest/v1/deal_financing?order=created_at.desc&limit=1', { headers: HD }).then(r => r.json()).catch(() => []),
+    fetch(SB + '/rest/v1/calc_history?order=created_at.desc&limit=1', { headers: HD }).then(r => r.json()).catch(() => [])
   ]);
 
   const nameDict = {};
   nameMap.forEach(m => { nameDict[m.subdivision_name] = m.community_name; });
 
-  _intelData = { communities, flips, seasonal, domGrades, agents, nameDict };
+  const activeDeal = dealsArr.length ? dealsArr[0] : null;
+  const dealFinancing = finArr.length ? finArr[0] : null;
+  const dealCalc = calcArr.length ? calcArr[0] : null;
+
+  _intelData = { communities, flips, seasonal, domGrades, agents, nameDict, activeDeal, dealFinancing, dealCalc };
+
+  // Fetch premium comps for active deal community
+  if (_intelData.activeDeal && _intelData.activeDeal.subdivision_name) {
+    try {
+      const premRes = await fetch(SB + '/rest/v1/sold_comps?subdivision_name=eq.' + encodeURIComponent(_intelData.activeDeal.subdivision_name) + '&price_per_sqft=gte.450&order=price_per_sqft.desc&limit=10', { headers: HD });
+      _intelData._premiumComps = await premRes.json();
+    } catch(e) { _intelData._premiumComps = []; }
+  }
+
   _intelLoading = false;
   return _intelData;
 }
@@ -85,8 +101,55 @@ function buildBriefContext(data) {
     ctx += 'Grade ' + g.dom_grade + ': ' + (g.comp_count || 0) + ' comps, ' + Math.round(g.avg_ppsf || 0) + '/SF avg, ' + (g.avg_sale_to_list_pct || 0).toFixed(1) + '% sale-to-list\n';
   });
 
+  // Active deal context
+  if (data.activeDeal) {
+    const d = data.activeDeal;
+    const c = data.dealCalc;
+    const f = data.dealFinancing;
+    ctx += '\nACTIVE DEAL:\n';
+    ctx += 'Address: ' + (d.address || 'Unknown') + '\n';
+    ctx += 'Community: ' + (d.community || 'Unknown') + '\n';
+    ctx += 'Purchase Price: $' + (d.accepted_price || d.offer_price || 0).toLocaleString() + '\n';
+    ctx += 'Square Feet: ' + (d.sqft || d.living_area || 'Unknown') + '\n';
+    if (c) {
+      ctx += 'Projected ARV: $' + Number(c.arv || 0).toLocaleString() + ' ($' + (c.arv && d.sqft ? Math.round(c.arv / d.sqft) : '?') + '/SF)\n';
+      ctx += 'Reno Budget: $' + Number(c.rehab_budget || 0).toLocaleString() + '\n';
+      ctx += 'Projected Total Cost: $' + Number(c.total_cost || 0).toLocaleString() + '\n';
+      ctx += 'Projected Profit: $' + Number(c.net_profit || 0).toLocaleString() + '\n';
+      ctx += 'Projected ROI: ' + (c.roi || 0) + '%\n';
+      ctx += 'Hold Period: ' + (c.hold_months || 8) + ' months\n';
+    }
+    if (f) {
+      ctx += 'Lender: ' + (f.lender_name || 'Unknown') + '\n';
+      ctx += 'Interest Rate: ' + (f.interest_rate || 0) + '%\n';
+      ctx += 'Monthly Payment: $' + Number(f.monthly_interest_payment || 0).toLocaleString() + '\n';
+      ctx += 'Loan Term: ' + (f.loan_term_months || 12) + ' months\n';
+      ctx += 'Maturity: ' + (f.maturity_date || 'Unknown') + '\n';
+      ctx += 'Rehab Holdback: $' + Number(f.rehab_holdback || 0).toLocaleString() + '\n';
+    }
+    ctx += 'COE Date: ' + (d.coe_date || 'Unknown') + '\n';
+    ctx += 'Deal Status: ' + (d.status || 'Unknown') + '\n';
+  }
+
+  // Premium comp tier for active deal community
+  if (data.activeDeal) {
+    const dealCommunity = data.activeDeal.community || '';
+    const nd = data.nameDict || {};
+    const subNames = Object.keys(nd).filter(k => nd[k] === dealCommunity || nd[k].includes(dealCommunity));
+
+    ctx += '\nPREMIUM COMPS IN DEAL COMMUNITY (top PPSF sales — these are the renovated homes your deal competes against):\n';
+    ctx += 'NOTE: Community avg PPSF includes unrenovated homes. Premium renovated comps sell at MUCH higher PPSF. Always reference premium comps for ARV analysis, not community average.\n';
+
+    if (data._premiumComps && data._premiumComps.length) {
+      data._premiumComps.forEach(pc => {
+        ctx += pc.address + ': $' + Number(pc.sold_price).toLocaleString() + ', ' + pc.sqft + ' SF, $' + pc.price_per_sqft + '/SF, ' + (pc.days_on_market || '?') + ' DOM, sold ' + pc.sold_date + '\n';
+      });
+    } else {
+      ctx += '(Premium comp data not loaded — use community ceiling PPSF as proxy)\n';
+    }
+  }
+
   ctx += '\nTODAY: ' + new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) + '\n';
-  ctx += 'ACTIVE DEAL: 4507 Denaro Dr, Siena (guard-gated 55+), $1,008,800 purchase, closing April 8 2026, Kiavi loan 11.99%, 12-month term.\n';
 
   return ctx;
 }
@@ -282,7 +345,7 @@ async function sendIntelChat() {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 800,
-        system: 'You are the Sovereign House intelligence advisor. You have full access to market data for guard-gated Summerlin communities in Las Vegas.\n\nAnswer questions using the provided data. Be specific with numbers. Be direct.\nIf comparing communities, use actual PPSF, DOM, and sales volume.\nIf asked about timing, reference seasonal patterns.\nIf the data doesn\'t support a conclusion, say so.\n\nKeep responses concise \u2014 under 150 words unless a detailed breakdown is requested.\nUse **bold** for key numbers and community names.\nYou\'re talking to King J and Lisa \u2014 experienced luxury flippers. No hand-holding.',
+        system: 'You are the Sovereign House intelligence advisor. You have full access to market data for guard-gated Summerlin communities in Las Vegas.\n\nAnswer questions using the provided data. Be specific with numbers. Be direct.\nIf comparing communities, use actual PPSF, DOM, and sales volume.\nIf asked about timing, reference seasonal patterns.\nIf the data doesn\'t support a conclusion, say so.\n\nKeep responses concise \u2014 under 150 words unless a detailed breakdown is requested.\nUse **bold** for key numbers and community names.\nYou\'re talking to King J and Lisa \u2014 experienced luxury flippers. No hand-holding.\n\nWhen asked about the active deal (Denaro, listing price, ARV, etc), use the ACTIVE DEAL and PREMIUM COMPS sections from the data. Reference specific premium comps by address and PPSF \u2014 not community averages. The community average PPSF includes unrenovated homes and is NOT appropriate for ARV analysis on a renovated flip.',
         messages: messages
       })
     });
