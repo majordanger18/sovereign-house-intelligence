@@ -3106,7 +3106,6 @@ function openDocLightbox(idx){
       </div>
     </div>
   </div>`;
-  modal.onclick=function(e){if(e.target===modal)closeDocsModal();};
 }
 
 async function toggleDocStar(docId,starred){
