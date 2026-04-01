@@ -506,6 +506,7 @@ async function openDeal(dealId){
       }).join(''):`<div style="font-size:11px;color:#475569;padding:12px">No events logged yet. Log a counter or update status to start the timeline.</div>`}</div>
     </div>
 
+    ${['offer_drafted','offer_submitted','counter_received','counter_sent','accepted'].includes(d.status)?`
     <!-- AGENTS -->
     <div style="margin-bottom:16px;padding:14px;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">
       <div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:10px">AGENTS</div>
@@ -522,6 +523,7 @@ async function openDeal(dealId){
       </div>
       <div class="fld"><label>EMAIL</label><input id="deal_ba_email" type="email" class="cinput" value="${esc(d.buyer_agent_email||'')}" onchange="saveDealField('${d.id}','buyer_agent_email',this.value)"/></div>
     </div>
+    `:''}
 
     <!-- ADD NOTE -->
     <div style="display:flex;gap:6px;margin-bottom:16px">
