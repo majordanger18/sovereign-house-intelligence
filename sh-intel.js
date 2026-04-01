@@ -387,7 +387,7 @@ function renderCommunityCard(communities) {
   const maxSales = Math.max(...communities.map(c => c.total_sales || 0));
 
   let h = '<details class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
-  h += '<summary>COMMUNITY LEADERBOARD <span class="intel-badge">' + communities.length + '</span></summary>';
+  h += '<summary>COMMUNITY LEADERBOARD</summary>';
   h += '<div style="padding:4px 16px 20px">';
 
   communities.forEach((c, i) => {
@@ -447,7 +447,7 @@ function renderFlipCard(flips) {
   const gradeBorders = { strong: '#22c55e', viable: '#d4af37', tight: '#f97316', underwater: '#ef4444' };
 
   let h = '<details class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
-  h += '<summary>FLIP ACTIVITY <span class="intel-badge">' + flips.length + '</span></summary>';
+  h += '<summary>FLIP ACTIVITY</summary>';
   h += '<div style="padding:4px 16px 20px">';
 
   flips.forEach(f => {
@@ -518,7 +518,7 @@ function renderSeasonalCard(seasonal) {
   let bestMonth = valid[0];
 
   let h = '<details class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
-  h += '<summary>WHEN TO LIST <span class="intel-badge">' + valid.length + '</span></summary>';
+  h += '<summary>WHEN TO LIST</summary>';
   h += '<div style="padding:4px 16px 20px">';
 
   valid.forEach(s => {
@@ -586,7 +586,7 @@ function renderDOMCard(domGrades) {
   const totalCount = domGrades.reduce((s, g) => s + (g.comp_count || 0), 0);
 
   let h = '<details class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
-  h += '<summary>SPEED vs PRICE <span class="intel-badge">' + domGrades.length + '</span></summary>';
+  h += '<summary>SPEED vs PRICE</summary>';
   h += '<div style="padding:4px 16px 20px">';
 
   let gradeA = null, gradeD = null;
@@ -654,7 +654,7 @@ function renderAgentCard(agents) {
   if (!buyers.length && !listers.length) return '';
 
   let h = '<details class="intel-card" style="border-top:2px solid rgba(212,175,55,0.15)">';
-  h += '<summary>AGENT ACTIVITY <span class="intel-badge">' + clean.length + '</span></summary>';
+  h += '<summary>AGENT ACTIVITY</summary>';
   h += '<div style="padding:4px 16px 20px">';
 
   function renderAgentSection(title, list) {
