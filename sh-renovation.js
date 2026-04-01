@@ -1419,7 +1419,7 @@ function exportCPAReport(){
   // --- Section 9: P&L ---
   const renoActual=ov?.total_spent||totSpent;
   const finCosts=(f?.total_interest_paid||0)+(f?.origination_fee_amount||0)+(f?.service_fee||0)+(f?.prorated_interest||0)+(f?.other_lender_fees||0);
-  const closingCosts=(f?.escrow_fee||0)+(f?.lenders_title_insurance||0)+(f?.recording_fees||0)+(f?.notary_doc_prep||0)+(f?.wire_fee||0);
+  const closingCosts=(f?.escrow_fee||0)+(f?.lenders_title_insurance||0)+(f?.recording_fees||0)+(f?.notary_doc_prep||0)+(f?.wire_fee||0)+(f?.insurance_premium||0)+(f?.prorations_total||0)+(f?.hoa_advance||0)+(f?.broker_transaction_fee||0);
   const allIn=purchasePrice+renoActual+finCosts+closingCosts;
   const targetArv=d.target_arv||d.arv||0;
 
@@ -1683,8 +1683,20 @@ async function openFinancing(dealId){
       <div class="fld"><label>WIRE FEE</label><input id="fin_wire_fee" type="number" class="cinput" value="${f?.wire_fee||''}" oninput="finCalcClosing()"/></div>
     </div>
     <div class="row2">
-      <div class="fld"><label>TOTAL CLOSING COSTS</label><input id="fin_total_closing_costs" type="number" class="cinput fin-calc" value="${f?.total_closing_costs||''}" readonly tabindex="-1"/></div>
-      <div class="fld"><label style="color:#d4af37;font-size:11px">TOTAL CASH TO CLOSE</label><input id="fin_total_cash_to_close" type="number" class="cinput fin-calc" style="font-size:20px;font-weight:800;color:#d4af37" value="${f?.total_cash_to_close||''}" readonly tabindex="-1"/></div>
+      <div class="fld"><label>INSURANCE PREMIUM</label><input id="fin_insurance_premium" type="number" step="0.01" class="cinput" value="${f?.insurance_premium||''}" oninput="finCalcCash()"/></div>
+      <div class="fld"><label>PRORATIONS TOTAL</label><input id="fin_prorations_total" type="number" step="0.01" class="cinput" value="${f?.prorations_total||''}" oninput="finCalcCash()"/></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>HOA ADVANCE</label><input id="fin_hoa_advance" type="number" step="0.01" class="cinput" value="${f?.hoa_advance||''}" oninput="finCalcCash()"/></div>
+      <div class="fld"><label>BROKER FEE</label><input id="fin_broker_transaction_fee" type="number" step="0.01" class="cinput" value="${f?.broker_transaction_fee||''}" oninput="finCalcCash()"/></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>EMD / DEPOSIT (CREDIT)</label><input id="fin_deposit_emd" type="number" step="0.01" class="cinput" value="${f?.deposit_emd||''}" oninput="finCalcCash()"/></div>
+      <div class="fld"><label></label><div></div></div>
+    </div>
+    <div class="row2">
+      <div class="fld"><label>TOTAL CLOSING COSTS</label><input id="fin_total_closing_costs" type="number" class="cinput fin-calc" value="${f?.total_closing_costs||''}" oninput="finCalcCash()"/></div>
+      <div class="fld"><label style="color:#d4af37;font-size:11px">TOTAL CASH TO CLOSE</label><input id="fin_total_cash_to_close" type="number" class="cinput fin-calc" style="font-size:20px;font-weight:800;color:#d4af37" value="${f?.total_cash_to_close||''}" oninput="finCalcCSB()"/></div>
     </div>
     <div style="margin-top:12px;padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">
       <div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:8px">CASH SOURCE BREAKDOWN</div>
@@ -1694,79 +1706,6 @@ async function openFinancing(dealId){
         <div class="fld"><label>LISA COMMISSION CREDIT</label><input id="fin_csb_commission" type="number" class="cinput" value="${(f?.cash_source_breakdown?.commission_credit)||''}" oninput="finCalcCSB()"/></div>
       </div>
       <div id="finCSBCheck" style="font-size:11px;font-weight:700;margin-top:4px"></div>
-    </div>
-  `);
-
-  // Section 3B: ALTA Settlement Breakdown
-  const altaItems=f?.alta_line_items||[];
-  const hasAlta=altaItems.length>0;
-  const altaSum=hasAlta?`${altaItems.length} line items | Cash to Close: ${$r(f?.total_cash_to_close)}`:'No ALTA data — upload settlement statement';
-  h+=finSection('fin5','ALTA SETTLEMENT BREAKDOWN',altaSum,false,`
-    <div id="altaBreakdownArea">
-      ${hasAlta?renderAltaBreakdownHTML(altaItems,f):'<div style="text-align:center;padding:20px;color:#64748b;font-size:12px">Upload an ALTA Settlement Statement to see the full breakdown</div>'}
-    </div>
-  `);
-
-  // Section 3C: Prorations & Additional Charges
-  const proTotal=(f?.prorations_tax||0)+(f?.prorations_hoa||0)+(f?.prorations_sewer||0)+(f?.prorations_trash||0)+(f?.prorations_other||0);
-  const s3cSum=f?`Prorations: ${$r(proTotal)} | Insurance: ${$r(f?.insurance_premium)} | HOA Adv: ${$r(f?.hoa_advance)}`:'';
-  h+=finSection('fin6','PRORATIONS & ADDITIONAL CHARGES',s3cSum,isNew,`
-    <div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:8px">PRORATIONS (BUYER DEBITS AT CLOSE)</div>
-    <div class="row2">
-      <div class="fld"><label>COUNTY TAX PRORATION</label><input id="fin_prorations_tax" type="number" step="0.01" class="cinput" value="${f?.prorations_tax||''}" oninput="finCalcProrations()"/></div>
-      <div class="fld"><label>HOA PRORATION</label><input id="fin_prorations_hoa" type="number" step="0.01" class="cinput" value="${f?.prorations_hoa||''}" oninput="finCalcProrations()"/></div>
-    </div>
-    <div class="row2">
-      <div class="fld"><label>SEWER</label><input id="fin_prorations_sewer" type="number" step="0.01" class="cinput" value="${f?.prorations_sewer||''}" oninput="finCalcProrations()"/></div>
-      <div class="fld"><label>TRASH</label><input id="fin_prorations_trash" type="number" step="0.01" class="cinput" value="${f?.prorations_trash||''}" oninput="finCalcProrations()"/></div>
-    </div>
-    <div class="row2">
-      <div class="fld"><label>OTHER PRORATIONS</label><input id="fin_prorations_other" type="number" step="0.01" class="cinput" value="${f?.prorations_other||''}" oninput="finCalcProrations()"/></div>
-      <div class="fld"><label>PRORATIONS TOTAL</label><input id="fin_prorations_total" type="number" class="cinput fin-calc" value="${f?.prorations_total||proTotal||''}" readonly tabindex="-1"/></div>
-    </div>
-    <div style="margin-top:12px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04)">
-      <div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:8px">ADDITIONAL CHARGES</div>
-      <div class="row2">
-        <div class="fld"><label>HOMEOWNER'S INSURANCE</label><input id="fin_insurance_premium" type="number" step="0.01" class="cinput" value="${f?.insurance_premium||''}" oninput="finCalcCash()"/></div>
-        <div class="fld"><label>HOA ADVANCE DUES</label><input id="fin_hoa_advance" type="number" step="0.01" class="cinput" value="${f?.hoa_advance||''}" oninput="finCalcCash()"/></div>
-      </div>
-      <div class="row2">
-        <div class="fld"><label>BROKER TRANSACTION FEE</label><input id="fin_broker_transaction_fee" type="number" step="0.01" class="cinput" value="${f?.broker_transaction_fee||''}" oninput="finCalcCash()"/></div>
-        <div class="fld"><label>DEPOSIT / EMD</label><input id="fin_deposit_emd" type="number" step="0.01" class="cinput" value="${f?.deposit_emd||''}" oninput="finCalcCash()"/></div>
-      </div>
-    </div>
-    <div style="margin-top:12px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04)">
-      <div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:8px">TITLE CHARGES (DETAIL)</div>
-      <div class="row2">
-        <div class="fld"><label>SETTLEMENT/CLOSING FEE</label><input id="fin_title_settlement_fee" type="number" step="0.01" class="cinput" value="${f?.title_settlement_fee||''}" oninput="finCalcClosing()"/></div>
-        <div class="fld"><label>SIGNING FEE</label><input id="fin_title_signing_fee" type="number" step="0.01" class="cinput" value="${f?.title_signing_fee||''}" oninput="finCalcClosing()"/></div>
-      </div>
-      <div class="row2">
-        <div class="fld"><label>ENDORSEMENTS</label><input id="fin_title_endorsements" type="number" step="0.01" class="cinput" value="${f?.title_endorsements||''}" oninput="finCalcClosing()"/></div>
-        <div class="fld"><label>INSPECTION FEE</label><input id="fin_title_inspection_fee" type="number" step="0.01" class="cinput" value="${f?.title_inspection_fee||''}" oninput="finCalcClosing()"/></div>
-      </div>
-      <div class="row2">
-        <div class="fld"><label>FINCEN FEE</label><input id="fin_title_fincen_fee" type="number" step="0.01" class="cinput" value="${f?.title_fincen_fee||''}" oninput="finCalcClosing()"/></div>
-        <div class="fld"><label>CPL (LENDER) FEE</label><input id="fin_title_cpl_fee" type="number" step="0.01" class="cinput" value="${f?.title_cpl_fee||''}" oninput="finCalcClosing()"/></div>
-      </div>
-      <div class="row2">
-        <div class="fld"><label>E-RECORDING FEE</label><input id="fin_erecording_fee" type="number" step="0.01" class="cinput" value="${f?.erecording_fee||''}" oninput="finCalcClosing()"/></div>
-        <div class="fld"><label>DAILY INTEREST RATE</label><input id="fin_daily_interest_rate" type="number" step="0.01" class="cinput" value="${f?.daily_interest_rate||''}" readonly tabindex="-1"/></div>
-      </div>
-    </div>
-    <div style="margin-top:8px">
-      <div class="row2">
-        <div class="fld"><label>SETTLEMENT DATE</label><input id="fin_settlement_date" type="date" class="cinput" value="${f?.settlement_date||''}"/></div>
-        <div class="fld"><label>DISBURSEMENT DATE</label><input id="fin_disbursement_date" type="date" class="cinput" value="${f?.disbursement_date||''}"/></div>
-      </div>
-      <div class="row2">
-        <div class="fld"><label>ESCROW COMPANY</label><input id="fin_escrow_company" class="cinput" value="${esc(f?.escrow_company||'')}"/></div>
-        <div class="fld"><label>FILE NUMBER</label><input id="fin_file_number" class="cinput" value="${esc(f?.file_number||'')}"/></div>
-      </div>
-      <div class="row2">
-        <div class="fld"><label>ESCROW OFFICER</label><input id="fin_escrow_officer" class="cinput" value="${esc(f?.escrow_officer||'')}"/></div>
-        <div class="fld"><label>SELLER NAME</label><input id="fin_seller_name" class="cinput" value="${esc(f?.seller_name||'')}"/></div>
-      </div>
     </div>
   `);
 
@@ -1798,7 +1737,7 @@ async function openFinancing(dealId){
     document.getElementById("finExtFields").style.display=this.checked?"block":"none";
   });
   // Init live calcs
-  finCalcTotal();finCalcClosing();finCalcCash();finCalcCSB();finCalcProrations();
+  finCalcTotal();finCalcClosing();finCalcCash();finCalcCSB();
 }
 
 function finSection(id,title,summary,open,content){
@@ -1934,16 +1873,28 @@ async function parseFinDoc(file){
   const docBlock=isPdf
     ?{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}
     :{type:"image",source:{type:"base64",media_type:file.type,data:b64}};
-  const content=[
-    docBlock,
-    {type:"text",text:'Parse this loan closing document. It may be an ALTA Settlement Statement, Closing Disclosure, or Loan Summary.\n\nALTA SETTLEMENT STATEMENTS have two columns: Debit (buyer pays) and Credit (buyer receives). The "Due from Buyer" at the bottom is the net cash to close.\n\nCRITICAL RULES:\n- "Prepaid Interest" line shows the TOTAL prepaid interest (e.g. $6,954.77), NOT the daily rate. The daily rate may appear in parentheses in the description (e.g. "$302.38 per day"). Extract the TOTAL from the Debit column, and the daily rate separately.\n- "Construction Holdback" is a debit that offsets against the loan credit — it is NOT cash the buyer pays. Do NOT add it to closing costs.\n- "Deposit" in the Credit column is the EMD (earnest money deposit) — it reduces cash to close.\n- "Loan Amount" in the Credit column is the total loan funding.\n- Prorations (taxes, HOA, sewer, trash) are DEBITS the buyer pays at closing.\n- Title charges, recording fees, insurance premium, HOA advance, broker fees — all DEBITS.\n\nReturn ONLY a JSON object with these fields (use null if not found):\n\n{"doc_type":"alta_settlement or closing_disclosure or loan_summary","lender_name":"string","loan_number":"string or null","loan_officer":"string or null","escrow_company":"string or null","escrow_officer":"string or null","file_number":"string or null","seller_name":"string or null","settlement_date":"YYYY-MM-DD or null","disbursement_date":"YYYY-MM-DD or null","purchase_price":null,"funded_principal":null,"rehab_holdback":null,"total_loan_amount":null,"deposit_emd":null,"down_payment":null,"interest_rate":null,"interest_rate_type":"fixed","origination_fee_pct":null,"origination_fee_amount":null,"service_fee":null,"prorated_interest":null,"daily_interest_rate":null,"prepaid_interest_days":null,"monthly_interest_payment":null,"loan_term_months":null,"maturity_date":"YYYY-MM-DD or null","first_payment_date":"YYYY-MM-DD or null","payment_due_day":null,"construction_holdback":null,"prorations_tax":null,"prorations_hoa":null,"prorations_sewer":null,"prorations_trash":null,"prorations_other":null,"insurance_premium":null,"hoa_advance":null,"broker_transaction_fee":null,"escrow_fee":null,"lenders_title_insurance":null,"title_settlement_fee":null,"title_signing_fee":null,"title_endorsements":null,"title_inspection_fee":null,"title_fincen_fee":null,"title_cpl_fee":null,"recording_fees":null,"erecording_fee":null,"notary_doc_prep":null,"wire_fee":null,"other_lender_fees":null,"total_closing_costs":null,"total_cash_to_close":null,"max_draws":null,"holdback_pct":null,"draw_fee":null,"alta_line_items":[{"description":"exact line text","debit":null,"credit":null,"category":"financial|proration|loan_charge|title|government|misc"}]}\n\nIMPORTANT:\n- "prorated_interest" must be the TOTAL amount from the Debit column, not the daily rate\n- "total_cash_to_close" should match "Due from Buyer" on the ALTA\n- "alta_line_items" should contain EVERY line item from the statement\n- For recording_fees, SUM all recording sub-items (deed + mortgage + other)\n- For title_endorsements, SUM all endorsement line items\n- Return ONLY the JSON, no markdown, no explanation.'}
-  ];
+  const PARSER_PROMPT=`Parse this loan closing document. It may be an ALTA Settlement Statement, Closing Disclosure, or Loan Summary.
+
+CRITICAL NUMBER RULES — read numbers EXACTLY as printed:
+1. "Sale Price of Property" — read the EXACT Debit column number. Do NOT misread digits. Typical residential range: $500K-$3M.
+2. "Prepaid Interest" — the Debit column shows the TOTAL (e.g. $6,954.77). The description may mention a daily rate (e.g. "$302.38 per day"). Extract the TOTAL as "prorated_interest". Extract the daily rate as "daily_interest_rate".
+3. "Construction Holdback" is a Debit offset by the Loan Credit — NOT out-of-pocket cash.
+4. "Deposit" in Credit column = EMD. "Loan Amount" in Credit = total loan.
+5. "Due from Buyer" at bottom = total_cash_to_close.
+6. Sum ALL title/escrow charges into total_closing_costs.
+7. Sum property tax + HOA + sewer + trash prorations into prorations_total (and each individually).
+
+Return ONLY a JSON object, no markdown, no explanation:
+{"lender_name":null,"loan_number":null,"loan_officer":null,"purchase_price":null,"funded_principal":null,"rehab_holdback":null,"total_loan_amount":null,"down_payment":null,"interest_rate":null,"interest_rate_type":"fixed","origination_fee_pct":null,"origination_fee_amount":null,"service_fee":null,"prorated_interest":null,"daily_interest_rate":null,"monthly_interest_payment":null,"loan_term_months":null,"maturity_date":null,"first_payment_date":null,"payment_due_day":null,"escrow_fee":null,"lenders_title_insurance":null,"recording_fees":null,"notary_doc_prep":null,"wire_fee":null,"total_closing_costs":null,"total_cash_to_close":null,"max_draws":null,"holdback_pct":null,"draw_fee":null,"other_lender_fees":null,"insurance_premium":null,"prorations_total":null,"prorations_tax":null,"prorations_hoa":null,"prorations_sewer":null,"prorations_trash":null,"hoa_advance":null,"broker_transaction_fee":null,"deposit_emd":null,"escrow_company":null,"escrow_officer":null,"file_number":null,"seller_name":null,"settlement_date":null,"disbursement_date":null}
+
+VALIDATION: prorated_interest must be the TOTAL from the Debit column, NOT the daily rate. If total_cash_to_close matches "Due from Buyer" on the document, that confirms correct parsing.`;
+  const content=[docBlock,{type:"text",text:PARSER_PROMPT}];
 
   try{
     const res=await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{"x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:content}]})
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:content}]})
     });
     console.log('[SH FIN PARSER] API response status:',res.status);
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
@@ -1977,20 +1928,11 @@ function prefillFinancing(parsed){
     fin_recording_fees:parsed.recording_fees,fin_notary_doc_prep:parsed.notary_doc_prep,
     fin_wire_fee:parsed.wire_fee,
     fin_max_draws:parsed.max_draws,fin_holdback_pct:parsed.holdback_pct,fin_draw_fee:parsed.draw_fee,
-    fin_prorations_tax:parsed.prorations_tax,fin_prorations_hoa:parsed.prorations_hoa,
-    fin_prorations_sewer:parsed.prorations_sewer,fin_prorations_trash:parsed.prorations_trash,
-    fin_prorations_other:parsed.prorations_other,
-    fin_insurance_premium:parsed.insurance_premium,fin_hoa_advance:parsed.hoa_advance,
+    fin_insurance_premium:parsed.insurance_premium,
+    fin_prorations_total:parsed.prorations_total,
+    fin_hoa_advance:parsed.hoa_advance,
     fin_broker_transaction_fee:parsed.broker_transaction_fee,
-    fin_title_settlement_fee:parsed.title_settlement_fee,fin_title_signing_fee:parsed.title_signing_fee,
-    fin_title_endorsements:parsed.title_endorsements,fin_title_inspection_fee:parsed.title_inspection_fee,
-    fin_title_fincen_fee:parsed.title_fincen_fee,fin_title_cpl_fee:parsed.title_cpl_fee,
-    fin_erecording_fee:parsed.erecording_fee,
-    fin_deposit_emd:parsed.deposit_emd,fin_daily_interest_rate:parsed.daily_interest_rate,
-    fin_prepaid_interest_days:parsed.prepaid_interest_days,
-    fin_settlement_date:parsed.settlement_date,fin_disbursement_date:parsed.disbursement_date,
-    fin_escrow_officer:parsed.escrow_officer,fin_escrow_company:parsed.escrow_company,
-    fin_file_number:parsed.file_number,fin_seller_name:parsed.seller_name
+    fin_deposit_emd:parsed.deposit_emd
   };
   let filled=0,skipped=0;
   for(const[id,val]of Object.entries(fields)){
@@ -2004,12 +1946,8 @@ function prefillFinancing(parsed){
     }else{skipped++;}
   }
   console.log('[SH FIN PARSER] Filled',filled,'fields, skipped',skipped);
-  if(parsed.alta_line_items&&Array.isArray(parsed.alta_line_items)){
-    window._altaLineItems=parsed.alta_line_items;
-    renderAltaBreakdown(parsed.alta_line_items);
-  }
   // Expand all sections so user can see filled values
-  ['fin1','fin2','fin3','fin4','fin5','fin6'].forEach(id=>{
+  ['fin1','fin2','fin3','fin4'].forEach(id=>{
     const body=document.getElementById(id+'_body');
     const chev=document.getElementById(id+'_chev');
     const sum=document.getElementById(id+'_sum');
@@ -2017,63 +1955,8 @@ function prefillFinancing(parsed){
     if(chev)chev.textContent='▼';
     if(sum)sum.style.display='none';
   });
-  finCalcTotal();finCalcClosing();finCalcCash();finCalcOrig();finCalcCSB();finCalcProrations();
+  finCalcTotal();finCalcClosing();finCalcCash();finCalcOrig();finCalcCSB();
   showRenoToast("Loan docs parsed — "+filled+" fields filled. Review and save");
-}
-
-// ═══ ALTA BREAKDOWN RENDERER ═══
-function renderAltaBreakdownHTML(items,f){
-  if(!items||!items.length)return'';
-  let h='<div style="overflow-x:auto">';
-  h+='<table style="width:100%;font-size:11px;border-collapse:collapse">';
-  h+='<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1)">';
-  h+='<th style="text-align:left;padding:6px 4px;color:#94a3b8;font-size:9px;font-weight:700;letter-spacing:1px">DESCRIPTION</th>';
-  h+='<th style="text-align:right;padding:6px 4px;color:#ef4444;font-size:9px;font-weight:700">DEBIT</th>';
-  h+='<th style="text-align:right;padding:6px 4px;color:#22c55e;font-size:9px;font-weight:700">CREDIT</th>';
-  h+='</tr></thead><tbody>';
-  let totalDebit=0,totalCredit=0;
-  const cats={};
-  items.forEach(item=>{const cat=item.category||'misc';if(!cats[cat])cats[cat]=[];cats[cat].push(item);});
-  const catOrder=['financial','proration','loan_charge','title','government','misc'];
-  const catLabels={financial:'FINANCIAL',proration:'PRORATIONS',loan_charge:'LOAN CHARGES',title:'TITLE & ESCROW',government:'GOVERNMENT & RECORDING',misc:'MISCELLANEOUS'};
-  catOrder.forEach(cat=>{
-    if(!cats[cat])return;
-    h+=`<tr><td colspan="3" style="padding:8px 4px 2px;font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px">${catLabels[cat]||cat.toUpperCase()}</td></tr>`;
-    cats[cat].forEach(item=>{
-      const d=item.debit||0;const c=item.credit||0;totalDebit+=d;totalCredit+=c;
-      h+=`<tr style="border-bottom:1px solid rgba(255,255,255,0.03)">`;
-      h+=`<td style="padding:4px;color:#e2e8f0">${esc(item.description||'')}</td>`;
-      h+=`<td style="text-align:right;padding:4px;color:${d?'#ef4444':'#334155'}">${d?$r(d):'—'}</td>`;
-      h+=`<td style="text-align:right;padding:4px;color:${c?'#22c55e':'#334155'}">${c?$r(c):'—'}</td>`;
-      h+='</tr>';
-    });
-  });
-  h+=`<tr style="border-top:2px solid rgba(255,255,255,0.1);font-weight:800">`;
-  h+=`<td style="padding:8px 4px;color:#e2e8f0">SUBTOTALS</td>`;
-  h+=`<td style="text-align:right;padding:8px 4px;color:#ef4444">${$r(totalDebit)}</td>`;
-  h+=`<td style="text-align:right;padding:8px 4px;color:#22c55e">${$r(totalCredit)}</td>`;
-  h+='</tr>';
-  const dueFromBuyer=totalDebit-totalCredit;
-  h+=`<tr style="background:rgba(212,175,55,0.06)">`;
-  h+=`<td style="padding:8px 4px;color:#d4af37;font-weight:800">DUE FROM BUYER</td>`;
-  h+=`<td colspan="2" style="text-align:right;padding:8px 4px;color:#d4af37;font-weight:800;font-size:14px">${$r(dueFromBuyer)}</td>`;
-  h+='</tr>';
-  h+='</tbody></table></div>';
-  if(f?.alta_parsed_at){
-    h+=`<div style="font-size:9px;color:#475569;text-align:right;margin-top:4px">Parsed: ${new Date(f.alta_parsed_at).toLocaleString('en-US',{timeZone:'America/Los_Angeles'})}</div>`;
-  }
-  return h;
-}
-function renderAltaBreakdown(items){
-  const area=document.getElementById('altaBreakdownArea');
-  if(area)area.innerHTML=renderAltaBreakdownHTML(items,null);
-}
-function finCalcProrations(){
-  const ids=['fin_prorations_tax','fin_prorations_hoa','fin_prorations_sewer','fin_prorations_trash','fin_prorations_other'];
-  let sum=0;ids.forEach(id=>{sum+=Number(document.getElementById(id)?.value)||0;});
-  const el=document.getElementById('fin_prorations_total');
-  if(el)el.value=sum||'';
-  finCalcCash();
 }
 
 // ═══ FINANCING LIVE CALCULATIONS ═══
@@ -2092,7 +1975,7 @@ function finCalcOrig(){
   finCalcCash();
 }
 function finCalcClosing(){
-  const ids=["fin_escrow_fee","fin_lenders_title_insurance","fin_recording_fees","fin_notary_doc_prep","fin_wire_fee","fin_title_settlement_fee","fin_title_signing_fee","fin_title_endorsements","fin_title_inspection_fee","fin_title_fincen_fee","fin_title_cpl_fee","fin_erecording_fee"];
+  const ids=["fin_escrow_fee","fin_lenders_title_insurance","fin_recording_fees","fin_notary_doc_prep","fin_wire_fee"];
   let sum=0;ids.forEach(id=>{sum+=Number(document.getElementById(id)?.value)||0;});
   const el=document.getElementById("fin_total_closing_costs");
   if(el)el.value=sum||'';
@@ -2105,14 +1988,14 @@ function finCalcCash(){
   const sf=Number(document.getElementById("fin_service_fee")?.value)||0;
   const pi=Number(document.getElementById("fin_prorated_interest")?.value)||0;
   const olf=Number(document.getElementById("fin_other_lender_fees")?.value)||0;
-  const pror=Number(document.getElementById("fin_prorations_total")?.value)||0;
   const ins=Number(document.getElementById("fin_insurance_premium")?.value)||0;
+  const pror=Number(document.getElementById("fin_prorations_total")?.value)||0;
   const hoaAdv=Number(document.getElementById("fin_hoa_advance")?.value)||0;
   const broker=Number(document.getElementById("fin_broker_transaction_fee")?.value)||0;
   const emd=Number(document.getElementById("fin_deposit_emd")?.value)||0;
-  const total=dp+cc+orig+sf+pi+olf+pror+ins+hoaAdv+broker-emd;
+  const total=dp+cc+orig+sf+pi+olf+ins+pror+hoaAdv+broker-emd;
   const el=document.getElementById("fin_total_cash_to_close");
-  if(el)el.value=total||'';
+  if(el)el.value=total?total.toFixed(2):'';
   finCalcCSB();
 }
 function finCalcCSB(){
@@ -2188,22 +2071,11 @@ async function saveFinancing(dealId){
     escrow_fee:gn("fin_escrow_fee")||null,lenders_title_insurance:gn("fin_lenders_title_insurance")||null,
     recording_fees:gn("fin_recording_fees")||null,notary_doc_prep:gn("fin_notary_doc_prep")||null,
     wire_fee:gn("fin_wire_fee")||null,
-    prorations_tax:gn("fin_prorations_tax")||null,prorations_hoa:gn("fin_prorations_hoa")||null,
-    prorations_sewer:gn("fin_prorations_sewer")||null,prorations_trash:gn("fin_prorations_trash")||null,
-    prorations_other:gn("fin_prorations_other")||null,prorations_total:gn("fin_prorations_total")||null,
-    insurance_premium:gn("fin_insurance_premium")||null,hoa_advance:gn("fin_hoa_advance")||null,
+    insurance_premium:gn("fin_insurance_premium")||null,
+    prorations_total:gn("fin_prorations_total")||null,
+    hoa_advance:gn("fin_hoa_advance")||null,
     broker_transaction_fee:gn("fin_broker_transaction_fee")||null,
-    title_settlement_fee:gn("fin_title_settlement_fee")||null,title_signing_fee:gn("fin_title_signing_fee")||null,
-    title_endorsements:gn("fin_title_endorsements")||null,title_inspection_fee:gn("fin_title_inspection_fee")||null,
-    title_fincen_fee:gn("fin_title_fincen_fee")||null,title_cpl_fee:gn("fin_title_cpl_fee")||null,
-    erecording_fee:gn("fin_erecording_fee")||null,
-    daily_interest_rate:gn("fin_daily_interest_rate")||null,prepaid_interest_days:gn("fin_prepaid_interest_days")||null,
-    deposit_emd:gn("fin_deposit_emd")||null,construction_holdback:gn("fin_rehab_holdback")||null,
-    settlement_date:gv("fin_settlement_date")||null,disbursement_date:gv("fin_disbursement_date")||null,
-    escrow_officer:gv("fin_escrow_officer")||null,escrow_company:gv("fin_escrow_company")||null,
-    file_number:gv("fin_file_number")||null,seller_name:gv("fin_seller_name")||null,
-    alta_line_items:window._altaLineItems||(finData?.alta_line_items)||[],
-    alta_parsed_at:window._altaLineItems?new Date().toISOString():(finData?.alta_parsed_at||null),
+    deposit_emd:gn("fin_deposit_emd")||null,
     total_closing_costs:gn("fin_total_closing_costs")||null,total_cash_to_close:gn("fin_total_cash_to_close")||null,
     cash_source_breakdown:{cash:gn("fin_csb_cash")||0,loc:gn("fin_csb_loc")||0,commission_credit:gn("fin_csb_commission")||0},
     max_draws:gn("fin_max_draws")||null,holdback_pct:gn("fin_holdback_pct")||null,
