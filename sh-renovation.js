@@ -3074,7 +3074,7 @@ async function deleteDoc(docId){
 }
 
 function closeDocsModal(){
-  const m=document.getElementById('renoModal');if(m)m.style.display='none';
+  const m=document.getElementById('renoModal');if(m){m.style.display='none';m.onclick=function(){};}
   // Reset file inputs
   const pi=document.getElementById('docsPhotoInput');if(pi)pi.value='';
   const di=document.getElementById('docsDocInput');if(di)di.value='';
@@ -3106,6 +3106,7 @@ function openDocLightbox(idx){
       </div>
     </div>
   </div>`;
+  modal.onclick=function(e){if(e.target===modal)closeDocsModal();};
 }
 
 async function toggleDocStar(docId,starred){
