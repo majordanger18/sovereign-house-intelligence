@@ -101,9 +101,9 @@ function renderDashboard(){
     const t=b.dataset.tab;
     b.classList.toggle("active",(t==="properties"&&isFeed)||(t==="deals"&&view==="deals")||(t==="reno"&&view==="renovation")||(t==="contacts"&&view==="contacts")||(t==="intel"&&view==="intel"));
   });
-  // Properties tab count
+  // Properties tab label
   const propTab=document.querySelector('[data-tab="properties"]');
-  if(propTab)propTab.innerHTML=`<span class="bnav-icon">🏠</span>Properties (${st.total})`;
+  if(propTab)propTab.innerHTML=`<span class="bnav-icon">🏠</span>Properties`;
   // Deals dot
   const dd=document.getElementById("dealsDot");
   if(dd)dd.style.display=activeDeals.length>0?"block":"none";
