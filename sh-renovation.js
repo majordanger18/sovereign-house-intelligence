@@ -63,6 +63,38 @@ async function robustParseJSON(data,apiKey,matchArray){
   if(!fixMatch)throw new Error("Could not fix JSON");
   return JSON.parse(fixMatch[0]);
 }
+function postProcessFinParse(p){
+  // Fix 1: If prorated_interest matches daily_interest_rate, parser grabbed the wrong number
+  if(p.prorated_interest&&p.daily_interest_rate&&Math.abs(p.prorated_interest-p.daily_interest_rate)<1){
+    console.warn('[SH FIN POST] prorated_interest matches daily_interest_rate — clearing (parser grabbed daily rate)');
+    p.prorated_interest=null;
+  }
+  if(p.prorated_interest&&p.prorated_interest<500&&p.daily_interest_rate&&p.prorated_interest<=p.daily_interest_rate*1.01){
+    console.warn('[SH FIN POST] prorated_interest suspiciously low and matches daily rate — clearing');
+    p.prorated_interest=null;
+  }
+  // Fix 2: Prorations total should equal sum of individual prorations
+  const proSum=(p.prorations_tax||0)+(p.prorations_hoa||0)+(p.prorations_sewer||0)+(p.prorations_trash||0);
+  if(proSum>0&&p.prorations_total&&Math.abs(p.prorations_total-proSum)>1){
+    console.warn('[SH FIN POST] prorations_total mismatch: stated='+p.prorations_total+' calc='+proSum+' — using calculated');
+    p.prorations_total=Math.round(proSum*100)/100;
+  }else if(proSum>0&&!p.prorations_total){
+    p.prorations_total=Math.round(proSum*100)/100;
+  }
+  // Fix 3: down_payment — if it equals ~10% of purchase_price, it's a calc not from the doc
+  if(p.purchase_price&&p.down_payment){
+    const tenPct=p.purchase_price*0.10;
+    if(Math.abs(p.down_payment-tenPct)<100){
+      console.warn('[SH FIN POST] down_payment looks like 10% LTV calc, not from ALTA — clearing');
+      p.down_payment=null;
+    }
+  }
+  // Fix 5: Log cash to close for verification
+  if(p.total_cash_to_close&&p.purchase_price){
+    console.log('[SH FIN POST] ALTA total_cash_to_close (Due from Buyer): '+p.total_cash_to_close);
+  }
+  return p;
+}
 const RENO_WH={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=representation"};
 
 // ═══ CURRENCY ═══
@@ -1593,9 +1625,16 @@ async function openFinancing(dealId){
   h+=`<div style="margin-bottom:16px"><button onclick="openFinDocUpload()" class="btn" style="width:100%;padding:12px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">📄 Upload Loan Documents</button><div style="font-size:10px;color:#64748b;text-align:center;margin-top:4px">Upload closing disclosure, settlement statement, or other loan docs</div></div>`;
   // Show already-uploaded closing docs
   const closingDocs=renoDocs.filter(d=>d.doc_category==='closing');
-  if(closingDocs.length){
+  const seenNames=new Set();
+  const dedupedDocs=closingDocs.filter(cd=>{
+    const name=cd.file_name||cd.id;
+    if(seenNames.has(name))return false;
+    seenNames.add(name);
+    return true;
+  });
+  if(dedupedDocs.length){
     h+=`<div style="margin-bottom:16px">`;
-    closingDocs.forEach(cd=>{
+    dedupedDocs.forEach(cd=>{
       const dt=cd.created_at?new Date(cd.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit',timeZone:'America/Los_Angeles'}):'';
       h+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.04)"><span style="font-size:14px">📄</span><a href="${esc(cd.file_url)}" target="_blank" onclick="event.stopPropagation()" style="flex:1;font-size:12px;font-weight:600;color:#60a5fa;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(cd.file_name||'Loan Document')}</a><span style="font-size:10px;color:#475569;flex-shrink:0">${dt}</span></div>`;
     });
@@ -1873,21 +1912,24 @@ async function parseFinDoc(file){
   const docBlock=isPdf
     ?{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}
     :{type:"image",source:{type:"base64",media_type:file.type,data:b64}};
-  const PARSER_PROMPT=`Parse this loan closing document. It may be an ALTA Settlement Statement, Closing Disclosure, or Loan Summary.
+  const PARSER_PROMPT=`Parse this loan closing document and extract financial details.
 
-CRITICAL NUMBER RULES — read numbers EXACTLY as printed:
-1. "Sale Price of Property" — read the EXACT Debit column number. Do NOT misread digits. Typical residential range: $500K-$3M.
-2. "Prepaid Interest" — the Debit column shows the TOTAL (e.g. $6,954.77). The description may mention a daily rate (e.g. "$302.38 per day"). Extract the TOTAL as "prorated_interest". Extract the daily rate as "daily_interest_rate".
-3. "Construction Holdback" is a Debit offset by the Loan Credit — NOT out-of-pocket cash.
-4. "Deposit" in Credit column = EMD. "Loan Amount" in Credit = total loan.
-5. "Due from Buyer" at bottom = total_cash_to_close.
-6. Sum ALL title/escrow charges into total_closing_costs.
-7. Sum property tax + HOA + sewer + trash prorations into prorations_total (and each individually).
+IMPORTANT — PREPAID INTEREST:
+The "Prepaid Interest" line has TWO numbers. Example:
+  "Prepaid Interest ($302.38 per day from 04/08/2026 to 05/01/2026)    $6,954.77"
+The $302.38 is the DAILY RATE (in the description text).
+The $6,954.77 is the TOTAL (in the Debit column).
+For "prorated_interest", return the TOTAL from the Debit column ($6,954.77).
+For "daily_interest_rate", return the daily rate ($302.38).
+These two numbers will NEVER be equal. If they are equal in your output, you made an error.
 
-Return ONLY a JSON object, no markdown, no explanation:
-{"lender_name":null,"loan_number":null,"loan_officer":null,"purchase_price":null,"funded_principal":null,"rehab_holdback":null,"total_loan_amount":null,"down_payment":null,"interest_rate":null,"interest_rate_type":"fixed","origination_fee_pct":null,"origination_fee_amount":null,"service_fee":null,"prorated_interest":null,"daily_interest_rate":null,"monthly_interest_payment":null,"loan_term_months":null,"maturity_date":null,"first_payment_date":null,"payment_due_day":null,"escrow_fee":null,"lenders_title_insurance":null,"recording_fees":null,"notary_doc_prep":null,"wire_fee":null,"total_closing_costs":null,"total_cash_to_close":null,"max_draws":null,"holdback_pct":null,"draw_fee":null,"other_lender_fees":null,"insurance_premium":null,"prorations_total":null,"prorations_tax":null,"prorations_hoa":null,"prorations_sewer":null,"prorations_trash":null,"hoa_advance":null,"broker_transaction_fee":null,"deposit_emd":null,"escrow_company":null,"escrow_officer":null,"file_number":null,"seller_name":null,"settlement_date":null,"disbursement_date":null}
+PRORATIONS: Sum tax+HOA+sewer+trash individually AND as prorations_total.
+DOWN PAYMENT: Only include if explicitly labeled "Down Payment" on the document. Do NOT calculate it.
+TOTAL CASH TO CLOSE: Use the "Due from Buyer" line at the bottom of the settlement statement.
+TOTAL CLOSING COSTS: Sum all Title Charges & Escrow lines.
 
-VALIDATION: prorated_interest must be the TOTAL from the Debit column, NOT the daily rate. If total_cash_to_close matches "Due from Buyer" on the document, that confirms correct parsing.`;
+Return ONLY a JSON object, no markdown:
+{"lender_name":null,"loan_number":null,"loan_officer":null,"purchase_price":null,"funded_principal":null,"rehab_holdback":null,"total_loan_amount":null,"down_payment":null,"interest_rate":null,"interest_rate_type":"fixed","origination_fee_pct":null,"origination_fee_amount":null,"service_fee":null,"prorated_interest":null,"daily_interest_rate":null,"monthly_interest_payment":null,"loan_term_months":null,"maturity_date":null,"first_payment_date":null,"payment_due_day":null,"escrow_fee":null,"lenders_title_insurance":null,"recording_fees":null,"notary_doc_prep":null,"wire_fee":null,"total_closing_costs":null,"total_cash_to_close":null,"max_draws":null,"holdback_pct":null,"draw_fee":null,"other_lender_fees":null,"insurance_premium":null,"prorations_total":null,"prorations_tax":null,"prorations_hoa":null,"prorations_sewer":null,"prorations_trash":null,"hoa_advance":null,"broker_transaction_fee":null,"deposit_emd":null,"escrow_company":null,"escrow_officer":null,"file_number":null,"seller_name":null,"settlement_date":null,"disbursement_date":null}`;
   const content=[docBlock,{type:"text",text:PARSER_PROMPT}];
 
   try{
@@ -1899,10 +1941,11 @@ VALIDATION: prorated_interest must be the TOTAL from the Debit column, NOT the d
     console.log('[SH FIN PARSER] API response status:',res.status);
     if(!res.ok){if(res.status===401)localStorage.removeItem("sh_claude_key");throw new Error("API error "+res.status);}
     const data=await res.json();
-    const parsed=await robustParseJSON(data,apiKey);
-    console.log('[SH FIN PARSER] Parsed fields:',parsed);
+    let parsed=await robustParseJSON(data,apiKey);
+    console.log('[SH FIN PARSER] Raw parsed:',JSON.stringify(parsed));
+    parsed=postProcessFinParse(parsed);
+    console.log('[SH FIN PARSER] Post-processed:',parsed);
     const ld=document.getElementById('finDocLoading');if(ld)ld.remove();
-    console.log('[SH FIN PARSER] Calling prefillFinancing');
     prefillFinancing(parsed);
   }catch(e){
     console.error("[SH FIN PARSER] Parse error:",e);
@@ -1939,9 +1982,13 @@ function prefillFinancing(parsed){
     if(val!=null&&val!==''&&val!==0){
       const el=document.getElementById(id);
       if(!el){console.warn('[SH FIN PARSER] Element not found:',id);skipped++;continue;}
-      if(el.value&&el.value!==''){console.log('[SH FIN PARSER] Skipping (already filled):',id,'=',el.value);skipped++;continue;}
+      const oldVal=el.value;
       el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));
-      console.log('[SH FIN PARSER] Set:',id,'→',el.value);
+      if(oldVal&&oldVal!==''&&oldVal!==String(val)){
+        console.log('[SH FIN PARSER] Overwrote:',id,oldVal,'→',val);
+      }else{
+        console.log('[SH FIN PARSER] Set:',id,'→',val);
+      }
       filled++;
     }else{skipped++;}
   }
