@@ -1074,10 +1074,9 @@ async function loadDealFinSummary(dealId){
     }
     el.innerHTML=`<div style="margin-bottom:8px">
       <div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:4px">FINANCING</div>
-      <div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);font-size:11px;color:${sc2}">
-        ${esc(f.lender_name||'—')} | ${f.interest_rate||'—'}% | ${$r(f.funded_principal)} principal${matWarn}
-        ${pending?' · <span style="color:#eab308">⏳ Pending funding</span>':''}
-        <button onclick="openFinancing('${dealId}')" style="float:right;padding:4px 10px;border-radius:6px;border:1px solid rgba(212,175,55,0.25);background:rgba(212,175,55,0.08);color:#d4af37;font-size:10px;font-weight:700;cursor:pointer">View Details</button>
+      <div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div style="font-size:11px;color:${sc2}">${esc(f.lender_name||'—')} | ${f.interest_rate||'—'}% | ${$r(f.funded_principal)} principal${matWarn}${pending?' · <span style="color:#eab308">⏳ Pending funding</span>':''}</div>
+        <button onclick="openFinancing('${dealId}')" style="padding:4px 10px;border-radius:6px;border:1px solid rgba(212,175,55,0.25);background:rgba(212,175,55,0.08);color:#d4af37;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">View Details</button>
       </div>
     </div>`;
   }catch(e){el.innerHTML='';}
