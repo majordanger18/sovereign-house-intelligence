@@ -62,12 +62,24 @@ async function loadIntelData(force) {
   const dealFinancing = finArr.length ? finArr[0] : null;
   const dealCalc = calcArr.length ? calcArr[0] : null;
 
+  // Fetch linked property for subdivision_name and sqft (not on deals table)
+  if (activeDeal && activeDeal.property_id) {
+    try {
+      const propRes = await fetch(SB + '/rest/v1/properties?id=eq.' + activeDeal.property_id + '&select=subdivision_name,sqft', { headers: HD });
+      const propArr = await propRes.json();
+      if (propArr.length) {
+        activeDeal._subdivision_name = propArr[0].subdivision_name;
+        activeDeal._sqft = propArr[0].sqft;
+      }
+    } catch(e) {}
+  }
+
   _intelData = { communities, flips, seasonal, domGrades, agents, nameDict, activeDeal, dealFinancing, dealCalc };
 
   // Fetch premium comps for active deal community
-  if (_intelData.activeDeal && _intelData.activeDeal.subdivision_name) {
+  if (_intelData.activeDeal && _intelData.activeDeal._subdivision_name) {
     try {
-      const premRes = await fetch(SB + '/rest/v1/sold_comps?subdivision_name=eq.' + encodeURIComponent(_intelData.activeDeal.subdivision_name) + '&price_per_sqft=gte.450&order=price_per_sqft.desc&limit=10', { headers: HD });
+      const premRes = await fetch(SB + '/rest/v1/sold_comps?subdivision_name=eq.' + encodeURIComponent(_intelData.activeDeal._subdivision_name) + '&price_per_sqft=gte.450&order=price_per_sqft.desc&limit=10', { headers: HD });
       _intelData._premiumComps = await premRes.json();
     } catch(e) { _intelData._premiumComps = []; }
   }
@@ -110,9 +122,10 @@ function buildBriefContext(data) {
     ctx += 'Address: ' + (d.address || 'Unknown') + '\n';
     ctx += 'Community: ' + (d.community || 'Unknown') + '\n';
     ctx += 'Purchase Price: $' + (d.accepted_price || d.offer_price || 0).toLocaleString() + '\n';
-    ctx += 'Square Feet: ' + (d.sqft || d.living_area || 'Unknown') + '\n';
+    const sf = d._sqft || d.sqft || 0;
+    ctx += 'Square Feet: ' + (sf || 'Unknown') + '\n';
     if (c) {
-      ctx += 'Projected ARV: $' + Number(c.arv || 0).toLocaleString() + ' ($' + (c.arv && d.sqft ? Math.round(c.arv / d.sqft) : '?') + '/SF)\n';
+      ctx += 'Projected ARV: $' + Number(c.arv || 0).toLocaleString() + ' ($' + (c.arv && sf ? Math.round(c.arv / sf) : '?') + '/SF)\n';
       ctx += 'Reno Budget: $' + Number(c.rehab_budget || 0).toLocaleString() + '\n';
       ctx += 'Projected Total Cost: $' + Number(c.total_cost || 0).toLocaleString() + '\n';
       ctx += 'Projected Profit: $' + Number(c.net_profit || 0).toLocaleString() + '\n';
