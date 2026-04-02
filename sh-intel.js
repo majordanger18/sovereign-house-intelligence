@@ -258,6 +258,99 @@ async function regenerateBrief() {
   renderIntelView();
 }
 
+// ═══ INTELLIGENCE SIGNALS ═══
+function renderIntelAlerts() {
+  if (typeof alerts === 'undefined' || !alerts.length) return '';
+
+  const dismissed = JSON.parse(localStorage.getItem("sh_dismissed_alerts") || "[]");
+  const intelAlerts = alerts.filter(a =>
+    a.alert_type === 'INTELLIGENCE' && !dismissed.includes(String(a.id))
+  );
+
+  if (!intelAlerts.length) return '';
+
+  // Sort newest first
+  intelAlerts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  let h = '<div id="intelSignals" style="margin-bottom:16px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+  h += '<div style="font-size:10px;color:#d4af37;font-weight:800;letter-spacing:3px">\ud83e\udde0 SIGNALS</div>';
+  h += '<div style="font-size:9px;color:#475569">' + intelAlerts.length + ' active</div>';
+  h += '</div>';
+
+  intelAlerts.forEach(a => {
+    const msg = (a.message || '').replace(/^\ud83e\udde0\s*/, '');
+    const addr = a.address || '';
+    const dt = a.created_at ? new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    const matchProp = typeof props !== 'undefined' ? props.find(p => p.mls_number && a.mls_number && p.mls_number === a.mls_number) : null;
+    const propId = matchProp ? matchProp.id : (a.property_id || null);
+
+    h += '<div id="intel-signal-' + a.id + '" style="padding:14px;border-radius:12px;background:rgba(212,175,55,0.03);border:1px solid rgba(212,175,55,0.15);border-left:3px solid #d4af37;margin-bottom:8px;position:relative">';
+
+    // Dismiss X
+    h += '<button onclick="event.stopPropagation();dismissIntelSignal(\'' + a.id + '\')" style="position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:none;background:transparent;color:#475569;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">\u2715</button>';
+
+    // Label
+    h += '<div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:6px">SIGNAL</div>';
+
+    // Address (if available)
+    if (addr) {
+      h += '<div style="font-size:12px;color:#94a3b8;font-weight:600;margin-bottom:4px">' + _esc(addr) + '</div>';
+    }
+
+    // Message
+    h += '<div style="font-size:13px;color:#e2e8f0;font-weight:600;line-height:1.5;padding-right:24px">' + _esc(msg) + '</div>';
+
+    // Timestamp
+    if (dt) {
+      h += '<div style="font-size:9px;color:#475569;margin-top:6px">' + dt + '</div>';
+    }
+
+    // Action button
+    if (propId) {
+      h += '<button onclick="event.stopPropagation();openDetail(\'' + propId + '\')" style="margin-top:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(212,175,55,0.3);background:rgba(212,175,55,0.08);color:#d4af37;font-size:11px;font-weight:700;cursor:pointer">View Property</button>';
+    }
+
+    h += '</div>';
+  });
+
+  h += '</div>';
+  return h;
+}
+
+function dismissIntelSignal(aid) {
+  // Use existing dismiss logic from sh-alerts.js
+  markRead(aid);
+
+  // Animate out
+  const el = document.getElementById('intel-signal-' + aid);
+  if (el) {
+    el.style.transition = 'all 0.3s ease';
+    el.style.maxHeight = '0px';
+    el.style.opacity = '0';
+    el.style.margin = '0';
+    el.style.padding = '0';
+    el.style.overflow = 'hidden';
+    el.style.borderWidth = '0';
+    setTimeout(() => {
+      el.remove();
+      // Update count
+      const wrap = document.getElementById('intelSignals');
+      if (wrap) {
+        const remaining = wrap.querySelectorAll('[id^="intel-signal-"]').length;
+        if (remaining === 0) {
+          wrap.remove();
+        } else {
+          const countEl = wrap.querySelector('div > div:last-child');
+          if (countEl) countEl.textContent = remaining + ' active';
+        }
+      }
+      // Also update alert badge
+      if (typeof updateAlertBadge === 'function') updateAlertBadge();
+    }, 320);
+  }
+}
+
 // ═══ ASK THE BRAIN — STANDOUT CHAT ═══
 function renderChatSection() {
   let h = '<div style="margin-bottom:16px;border-radius:16px;overflow:hidden;position:relative;background:rgba(255,255,255,0.02);border:1px solid rgba(212,175,55,0.15)">';
@@ -392,6 +485,9 @@ async function renderIntelView() {
 
   // 1. Morning Brief
   h += await renderMorningBrief(data);
+
+  // 1.5 Intelligence Signals
+  h += renderIntelAlerts();
 
   // 2. Ask the Brain
   h += renderChatSection();
