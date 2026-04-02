@@ -62,8 +62,7 @@ function renderDashboard(){
   else{statsEl.style.display="";statsEl.innerHTML=[sB("LISTINGS",st.total,"#e2e8f0",screenedSub),sB("AVG SCORE",st.avgScore,sc(st.avgScore)),sB("AVG PRICE",$k(st.avgPrice),"#e2e8f0"),sB("AVG DOM",st.avgDom,"#f59e0b","days")].join("");}
 
   // Update alert badge (deduplicated)
-  const dismissed=JSON.parse(localStorage.getItem("sh_dismissed_alerts")||"[]");
-  const dedupedVisible=dedupeAlerts(alerts.filter(a=>!dismissed.includes(String(a.id))));
+  const dedupedVisible=dedupeAlerts(alerts.filter(a=>!a.is_read));
   const alertCount=dedupedVisible.length;
   const badge=document.getElementById("alertBadge");
   if(alertCount>0){badge.style.display="flex";document.getElementById("alertCount").textContent=alertCount;}

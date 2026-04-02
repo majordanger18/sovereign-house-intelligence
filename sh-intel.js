@@ -262,9 +262,8 @@ async function regenerateBrief() {
 function renderIntelAlerts() {
   if (typeof alerts === 'undefined' || !alerts.length) return '';
 
-  const dismissed = JSON.parse(localStorage.getItem("sh_dismissed_alerts") || "[]");
   const intelAlerts = alerts.filter(a =>
-    a.alert_type === 'INTELLIGENCE' && !dismissed.includes(String(a.id))
+    a.alert_type === 'INTELLIGENCE' && !a.is_read
   );
 
   if (!intelAlerts.length) return '';
@@ -321,6 +320,8 @@ function renderIntelAlerts() {
 function dismissIntelSignal(aid) {
   // Use existing dismiss logic from sh-alerts.js
   markRead(aid);
+  const localAlert = alerts.find(a => String(a.id) === String(aid));
+  if (localAlert) localAlert.is_read = true;
 
   // Animate out
   const el = document.getElementById('intel-signal-' + aid);
