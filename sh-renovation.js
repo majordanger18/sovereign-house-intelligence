@@ -66,11 +66,11 @@ async function robustParseJSON(data,apiKey,matchArray){
 function postProcessFinParse(p){
   // Fix 1: If prorated_interest matches daily_interest_rate, parser grabbed the wrong number
   if(p.prorated_interest&&p.daily_interest_rate&&Math.abs(p.prorated_interest-p.daily_interest_rate)<1){
-    console.warn('[SH FIN POST] prorated_interest matches daily_interest_rate — clearing (parser grabbed daily rate)');
+    console.warn('[SH FIN POST] prorated_interest matches daily_interest_rate — clearing');
     p.prorated_interest=null;
   }
   if(p.prorated_interest&&p.prorated_interest<500&&p.daily_interest_rate&&p.prorated_interest<=p.daily_interest_rate*1.01){
-    console.warn('[SH FIN POST] prorated_interest suspiciously low and matches daily rate — clearing');
+    console.warn('[SH FIN POST] prorated_interest suspiciously low — clearing');
     p.prorated_interest=null;
   }
   // Fix 2: Prorations total should equal sum of individual prorations
@@ -81,17 +81,40 @@ function postProcessFinParse(p){
   }else if(proSum>0&&!p.prorations_total){
     p.prorations_total=Math.round(proSum*100)/100;
   }
-  // Fix 3: down_payment — if it equals ~10% of purchase_price, it's a calc not from the doc
-  if(p.purchase_price&&p.down_payment){
-    const tenPct=p.purchase_price*0.10;
-    if(Math.abs(p.down_payment-tenPct)<100){
-      console.warn('[SH FIN POST] down_payment looks like 10% LTV calc, not from ALTA — clearing');
-      p.down_payment=null;
+  // Fix 3: ALWAYS clear down_payment from ALTA — it's never on the settlement statement
+  if(p.down_payment){
+    console.warn('[SH FIN POST] Clearing down_payment from ALTA parse (not a settlement field):',p.down_payment);
+    p.down_payment=null;
+  }
+  // Fix 4: Cross-validate purchase_price vs total_cash_to_close
+  if(p.purchase_price&&p.total_cash_to_close){
+    console.log('[SH FIN POST] ALTA total_cash_to_close (Due from Buyer): '+p.total_cash_to_close);
+    if(p.purchase_price>p.total_cash_to_close*10){
+      console.warn('[SH FIN POST] purchase_price ('+p.purchase_price+') > 10x cash_to_close ('+p.total_cash_to_close+') — likely misread, clearing');
+      p.purchase_price=null;
     }
   }
-  // Fix 5: Log cash to close for verification
-  if(p.total_cash_to_close&&p.purchase_price){
-    console.log('[SH FIN POST] ALTA total_cash_to_close (Due from Buyer): '+p.total_cash_to_close);
+  // Fix 5: funded_principal must be <= total_loan_amount
+  if(p.funded_principal&&p.total_loan_amount&&p.funded_principal>p.total_loan_amount){
+    console.warn('[SH FIN POST] funded_principal ('+p.funded_principal+') > total_loan_amount ('+p.total_loan_amount+') — clearing');
+    p.funded_principal=null;
+  }
+  // Fix 6: Derive funded_principal from total_loan_amount - rehab_holdback if missing
+  if(!p.funded_principal&&p.total_loan_amount&&p.rehab_holdback){
+    p.funded_principal=Math.round((p.total_loan_amount-p.rehab_holdback)*100)/100;
+    console.log('[SH FIN POST] Derived funded_principal: '+p.total_loan_amount+' - '+p.rehab_holdback+' = '+p.funded_principal);
+  }
+  // Fix 7: Validate origination_fee_amount matches pct * total_loan
+  if(p.origination_fee_amount&&p.origination_fee_pct&&p.total_loan_amount){
+    const expected=p.total_loan_amount*p.origination_fee_pct/100;
+    if(Math.abs(p.origination_fee_amount-expected)>expected*0.1){
+      console.warn('[SH FIN POST] origination_fee_amount ('+p.origination_fee_amount+') doesnt match '+p.origination_fee_pct+'% of '+p.total_loan_amount+' (expected '+expected.toFixed(2)+') — using calculated');
+      p.origination_fee_amount=Math.round(expected*100)/100;
+    }
+  }
+  // Fix 8: Lender name OCR cleanup
+  if(p.lender_name){
+    p.lender_name=p.lender_name.replace(/\bKiwi\b/gi,'Kiavi').replace(/\bKiava\b/gi,'Kiavi');
   }
   return p;
 }
@@ -1977,21 +2000,35 @@ function prefillFinancing(parsed){
     fin_broker_transaction_fee:parsed.broker_transaction_fee,
     fin_deposit_emd:parsed.deposit_emd
   };
-  let filled=0,skipped=0;
+  let filled=0,skipped=0,blocked=0;
   for(const[id,val]of Object.entries(fields)){
     if(val!=null&&val!==''&&val!==0){
       const el=document.getElementById(id);
       if(!el){console.warn('[SH FIN PARSER] Element not found:',id);skipped++;continue;}
       const oldVal=el.value;
-      el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));
-      if(oldVal&&oldVal!==''&&oldVal!==String(val)){
+      // Smart overwrite: if field already has a value, check ratio guard for numeric fields
+      if(oldVal&&oldVal!==''){
+        const oldNum=parseFloat(oldVal.replace(/[,$]/g,''));
+        const newNum=typeof val==='number'?val:parseFloat(String(val).replace(/[,$]/g,''));
+        if(!isNaN(oldNum)&&!isNaN(newNum)&&oldNum!==0){
+          const ratio=newNum/oldNum;
+          if(ratio>1.5||ratio<0.67){
+            console.warn('[SH FIN PARSER] BLOCKED overwrite:',id,oldVal,'→',val,'(ratio '+ratio.toFixed(2)+' outside 0.67-1.5)');
+            blocked++;continue;
+          }
+        }
+        // Text fields or matching values: allow overwrite
+        el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));
         console.log('[SH FIN PARSER] Overwrote:',id,oldVal,'→',val);
       }else{
+        // Empty field: always fill
+        el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));
         console.log('[SH FIN PARSER] Set:',id,'→',val);
       }
       filled++;
     }else{skipped++;}
   }
+  if(blocked>0)console.warn('[SH FIN PARSER] Blocked',blocked,'overwrites (ratio guard)');
   console.log('[SH FIN PARSER] Filled',filled,'fields, skipped',skipped);
   // Expand all sections so user can see filled values
   ['fin1','fin2','fin3','fin4'].forEach(id=>{
