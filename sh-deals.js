@@ -486,7 +486,7 @@ async function openDeal(dealId){
     </div>`}
 
     <!-- TIMELINE -->
-    <div style="margin-bottom:16px">
+    <div style="margin-top:8px;margin-bottom:16px">
       <div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:10px">TIMELINE (${tl.length} events)</div>
       <div id="dealTimeline">${tl.length?tl.slice().reverse().map(e=>{
         const typeColors={offer_submitted:'#3b82f6',counter_received:'#f59e0b',counter_sent:'#a855f7',accepted:'#22c55e',rejected:'#ef4444',expired:'#64748b',note:'#94a3b8',status_change:'#06b6d4'};
@@ -1074,7 +1074,7 @@ async function loadDealFinSummary(dealId){
       if(diff<4)matWarn=` · <span style="color:#ef4444;font-weight:800">Matures ${new Date(f.maturity_date+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric",timeZone:"America/Los_Angeles"})}</span>`;
       else matWarn=` · Matures ${new Date(f.maturity_date+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric",timeZone:"America/Los_Angeles"})}`;
     }
-    el.innerHTML=`<div style="margin-bottom:8px">
+    el.innerHTML=`<div style="margin-bottom:16px">
       <div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:4px">FINANCING</div>
       <div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:center;gap:10px">
         <div style="font-size:11px;color:${sc2}">${esc(f.lender_name||'—')} | ${f.interest_rate||'—'}% | ${$r(f.funded_principal)} principal${matWarn}${pending?' · <span style="color:#eab308">⏳ Pending funding</span>':''}</div>
