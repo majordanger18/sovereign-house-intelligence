@@ -64,58 +64,57 @@ async function robustParseJSON(data,apiKey,matchArray){
   return JSON.parse(fixMatch[0]);
 }
 function postProcessFinParse(p){
-  // Fix 1: If prorated_interest matches daily_interest_rate, parser grabbed the wrong number
+  // Fix 1: Prepaid interest — if it matches daily rate, parser grabbed wrong number
   if(p.prorated_interest&&p.daily_interest_rate&&Math.abs(p.prorated_interest-p.daily_interest_rate)<1){
     console.warn('[SH FIN POST] prorated_interest matches daily_interest_rate — clearing');
     p.prorated_interest=null;
   }
-  if(p.prorated_interest&&p.prorated_interest<500&&p.daily_interest_rate&&p.prorated_interest<=p.daily_interest_rate*1.01){
-    console.warn('[SH FIN POST] prorated_interest suspiciously low — clearing');
+  if(p.prorated_interest&&p.prorated_interest<500&&p.daily_interest_rate){
+    console.warn('[SH FIN POST] prorated_interest < $500, likely daily rate — clearing');
     p.prorated_interest=null;
   }
-  // Fix 2: Prorations total should equal sum of individual prorations
+
+  // Fix 2: Prorations total must equal sum of individuals
   const proSum=(p.prorations_tax||0)+(p.prorations_hoa||0)+(p.prorations_sewer||0)+(p.prorations_trash||0);
-  if(proSum>0&&p.prorations_total&&Math.abs(p.prorations_total-proSum)>1){
-    console.warn('[SH FIN POST] prorations_total mismatch: stated='+p.prorations_total+' calc='+proSum+' — using calculated');
-    p.prorations_total=Math.round(proSum*100)/100;
-  }else if(proSum>0&&!p.prorations_total){
+  if(proSum>0){
     p.prorations_total=Math.round(proSum*100)/100;
   }
-  // Fix 3: ALWAYS clear down_payment from ALTA — it's never on the settlement statement
+
+  // Fix 3: ALTA never has "down payment" — always clear
   if(p.down_payment){
-    console.warn('[SH FIN POST] Clearing down_payment from ALTA parse (not a settlement field):',p.down_payment);
+    console.warn('[SH FIN POST] Clearing down_payment — not on ALTA');
     p.down_payment=null;
   }
-  // Fix 4: Cross-validate purchase_price vs total_cash_to_close
-  if(p.purchase_price&&p.total_cash_to_close){
-    console.log('[SH FIN POST] ALTA total_cash_to_close (Due from Buyer): '+p.total_cash_to_close);
-    if(p.purchase_price>p.total_cash_to_close*10){
-      console.warn('[SH FIN POST] purchase_price ('+p.purchase_price+') > 10x cash_to_close ('+p.total_cash_to_close+') — likely misread, clearing');
-      p.purchase_price=null;
-    }
-  }
-  // Fix 5: funded_principal must be <= total_loan_amount
-  if(p.funded_principal&&p.total_loan_amount&&p.funded_principal>p.total_loan_amount){
-    console.warn('[SH FIN POST] funded_principal ('+p.funded_principal+') > total_loan_amount ('+p.total_loan_amount+') — clearing');
+
+  // Fix 4: funded_principal — ALTA shows total loan as "Loan Amount" credit.
+  // If funded_principal equals total_loan_amount, the parser confused them.
+  // Clear funded_principal — let the Kiavi value stand.
+  if(p.funded_principal&&p.total_loan_amount&&Math.abs(p.funded_principal-p.total_loan_amount)<100){
+    console.warn('[SH FIN POST] funded_principal equals total_loan_amount — parser confused them, clearing funded_principal');
     p.funded_principal=null;
   }
-  // Fix 6: Derive funded_principal from total_loan_amount - rehab_holdback if missing
-  if(!p.funded_principal&&p.total_loan_amount&&p.rehab_holdback){
-    p.funded_principal=Math.round((p.total_loan_amount-p.rehab_holdback)*100)/100;
-    console.log('[SH FIN POST] Derived funded_principal: '+p.total_loan_amount+' - '+p.rehab_holdback+' = '+p.funded_principal);
+
+  // Fix 5: Lender name cleanup
+  if(p.lender_name){
+    p.lender_name=p.lender_name.replace(/Kiwi/gi,'Kiavi').replace(/Klavi/gi,'Kiavi');
   }
-  // Fix 7: Validate origination_fee_amount matches pct * total_loan
-  if(p.origination_fee_amount&&p.origination_fee_pct&&p.total_loan_amount){
-    const expected=p.total_loan_amount*p.origination_fee_pct/100;
-    if(Math.abs(p.origination_fee_amount-expected)>expected*0.1){
-      console.warn('[SH FIN POST] origination_fee_amount ('+p.origination_fee_amount+') doesnt match '+p.origination_fee_pct+'% of '+p.total_loan_amount+' (expected '+expected.toFixed(2)+') — using calculated');
-      p.origination_fee_amount=Math.round(expected*100)/100;
+
+  // Fix 6: loan_officer — ALTA shows escrow officer, not loan officer. Clear it.
+  if(p.loan_officer){
+    console.warn('[SH FIN POST] Clearing loan_officer — ALTA shows escrow officer not loan officer');
+    p.loan_officer=null;
+  }
+
+  // Fix 7: Origination — if pct and total_loan_amount exist, recalc amount
+  if(p.origination_fee_pct&&p.total_loan_amount){
+    const expected=Math.round(p.origination_fee_pct/100*p.total_loan_amount);
+    if(p.origination_fee_amount&&Math.abs(p.origination_fee_amount-expected)>50){
+      console.warn('[SH FIN POST] origination_fee_amount mismatch, using from doc: '+p.origination_fee_amount);
+      // Keep the doc value — it's the actual ALTA number
     }
   }
-  // Fix 8: Lender name OCR cleanup
-  if(p.lender_name){
-    p.lender_name=p.lender_name.replace(/\bKiwi\b/gi,'Kiavi').replace(/\bKiava\b/gi,'Kiavi');
-  }
+
+  console.log('[SH FIN POST] Validated:',JSON.stringify(p));
   return p;
 }
 const RENO_WH={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=representation"};
@@ -2000,36 +1999,46 @@ function prefillFinancing(parsed){
     fin_broker_transaction_fee:parsed.broker_transaction_fee,
     fin_deposit_emd:parsed.deposit_emd
   };
+  // Fields the ALTA should NEVER overwrite (Kiavi term sheet is authoritative)
+  const ALTA_NEVER_OVERWRITE=['fin_funded_principal','fin_down_payment','fin_loan_officer','fin_monthly_interest_payment','fin_max_draws','fin_holdback_pct','fin_draw_fee','fin_loan_term_months','fin_maturity_date','fin_payment_due_day','fin_first_payment_date','fin_acct_mgr_name','fin_acct_mgr_phone','fin_acct_mgr_email'];
+
+  // Fields the ALTA IS authoritative for (always overwrite, even if filled)
+  const ALTA_ALWAYS_OVERWRITE=['fin_prorated_interest','fin_insurance_premium','fin_prorations_total','fin_hoa_advance','fin_broker_transaction_fee','fin_deposit_emd','fin_total_cash_to_close','fin_recording_fees','fin_lenders_title_insurance','fin_escrow_fee','fin_escrow_company','fin_escrow_officer','fin_file_number','fin_seller_name','fin_settlement_date','fin_disbursement_date'];
+
   let filled=0,skipped=0,blocked=0;
   for(const[id,val]of Object.entries(fields)){
     if(val!=null&&val!==''&&val!==0){
       const el=document.getElementById(id);
       if(!el){console.warn('[SH FIN PARSER] Element not found:',id);skipped++;continue;}
       const oldVal=el.value;
-      // Smart overwrite: if field already has a value, check ratio guard for numeric fields
-      if(oldVal&&oldVal!==''){
-        const oldNum=parseFloat(oldVal.replace(/[,$]/g,''));
-        const newNum=typeof val==='number'?val:parseFloat(String(val).replace(/[,$]/g,''));
-        if(!isNaN(oldNum)&&!isNaN(newNum)&&oldNum!==0){
-          const ratio=newNum/oldNum;
-          if(ratio>1.5||ratio<0.67){
-            console.warn('[SH FIN PARSER] BLOCKED overwrite:',id,oldVal,'→',val,'(ratio '+ratio.toFixed(2)+' outside 0.67-1.5)');
-            blocked++;continue;
-          }
-        }
-        // Text fields or matching values: allow overwrite
+      const hasOldVal=oldVal&&oldVal!=='';
+
+      // Rule 1: ALTA-authoritative fields — always overwrite
+      if(ALTA_ALWAYS_OVERWRITE.includes(id)){
         el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));
-        console.log('[SH FIN PARSER] Overwrote:',id,oldVal,'→',val);
-      }else{
-        // Empty field: always fill
-        el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));
-        console.log('[SH FIN PARSER] Set:',id,'→',val);
+        if(hasOldVal&&oldVal!==String(val)){console.log('[SH FIN PARSER] ALTA overwrote:',id,oldVal,'→',val);}
+        else{console.log('[SH FIN PARSER] Set:',id,'→',val);}
+        filled++;continue;
       }
+
+      // Rule 2: Never-overwrite fields — skip if already filled
+      if(hasOldVal&&ALTA_NEVER_OVERWRITE.includes(id)){
+        console.log('[SH FIN PARSER] Protected (Kiavi):',id,'=',oldVal);
+        skipped++;continue;
+      }
+
+      // Rule 3: All other fields — overwrite if empty, skip if filled
+      if(hasOldVal){
+        console.log('[SH FIN PARSER] Kept existing:',id,'=',oldVal);
+        skipped++;continue;
+      }
+
+      el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));
+      console.log('[SH FIN PARSER] Set:',id,'→',val);
       filled++;
     }else{skipped++;}
   }
-  if(blocked>0)console.warn('[SH FIN PARSER] Blocked',blocked,'overwrites (ratio guard)');
-  console.log('[SH FIN PARSER] Filled',filled,'fields, skipped',skipped);
+  console.log('[SH FIN PARSER] Filled',filled+', skipped',skipped);
   // Expand all sections so user can see filled values
   ['fin1','fin2','fin3','fin4'].forEach(id=>{
     const body=document.getElementById(id+'_body');
