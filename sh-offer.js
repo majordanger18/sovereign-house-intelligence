@@ -64,7 +64,7 @@ async function openOffer(id){
     <div style="margin-bottom:16px;padding-right:40px">
       <div style="font-size:10px;color:#22c55e;font-weight:800;letter-spacing:3px">MAKE OFFER</div>
       <div style="font-size:17px;font-weight:800;margin-top:2px">${esc(p.address)}</div>
-      <div style="font-size:11px;color:#64748b;margin-top:1px">${(p.subdivision_name&&truncSub(p.subdivision_name))?esc(truncSub(p.subdivision_name))+' · ':''}${p.city}, NV ${p.zip_code} · MLS# ${p.mls_number}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:1px">${(p.subdivision_name&&truncSub((window.communityNameMap&&window.communityNameMap[p.subdivision_name])||p.subdivision_name))?esc(truncSub((window.communityNameMap&&window.communityNameMap[p.subdivision_name])||p.subdivision_name))+' · ':''}${p.city}, NV ${p.zip_code} · MLS# ${p.mls_number}</div>
       <div style="font-size:12px;color:#94a3b8;margin-top:4px">List: <span style="color:#e2e8f0;font-weight:700">${$(p.list_price)}</span> · ${p.bedrooms}/${p.bathrooms} · ${p.sqft?.toLocaleString()}sf</div>
       <div style="font-size:9px;margin-top:4px;padding:3px 8px;border-radius:6px;display:inline-block;${hasCalc?'background:rgba(34,197,94,0.08);color:#22c55e;border:1px solid rgba(34,197,94,0.15)':'background:rgba(249,115,22,0.08);color:#f97316;border:1px solid rgba(249,115,22,0.15)'};font-weight:700">${hasCalc?'✓ Using saved calculator data':'⚠ Using AI defaults — save a calculator run for exact numbers'}</div>
       ${(()=>{const ed=deals.find(x=>x.property_id===id&&!DEAD_STATUSES.includes(x.status));return ed?`<div style="margin-top:8px;padding:10px 14px;border-radius:10px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:#22c55e;font-weight:700">Active deal exists (${(DEAL_STAGES[ed.status]||{}).label||ed.status})</span><button onclick="closeOffer();document.getElementById('detailModal').style.display='none';openDeal('${ed.id}')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(34,197,94,0.3);background:rgba(34,197,94,0.12);color:#22c55e;font-size:11px;font-weight:700;cursor:pointer">Open Deal →</button></div>`:''})()}
@@ -220,7 +220,7 @@ async function generateOfferPackage(id){
     property_id:p.id,
     mls_number:p.mls_number,
     address:p.address,
-    community:truncSub(p.subdivision_name)||null,
+    community:truncSub((window.communityNameMap&&window.communityNameMap[p.subdivision_name])||p.subdivision_name)||null,
     zip_code:p.zip_code,
     sqft:p.sqft,
     beds:p.bedrooms,
