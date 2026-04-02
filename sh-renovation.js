@@ -1953,13 +1953,15 @@ RECORDING FEES: Sum ALL recording-related charges (Recording Fees + E-Recording 
 
 TITLE MISC CHARGES: Sum all Title Charges and Escrow Settlement Charges that are NOT the main lender title policy or settlement/closing fee. This includes CPL, FinCEN, Inspection Fee, Endorsement, Signing Fee, and any similar small title charges. Return as title_misc_charges.
 
+FUNDED DATE: Look for the document print date or the date Kiavi/lender wired funds. This is usually the Print Date at the top of the ALTA, NOT the settlement date. Return as funded_date in YYYY-MM-DD format.
+
 PRORATIONS: Sum tax+HOA+sewer+trash individually AND as prorations_total.
 DOWN PAYMENT: Only include if explicitly labeled "Down Payment" on the document. Do NOT calculate it.
 TOTAL CASH TO CLOSE: Use the "Due from Buyer" line at the bottom of the settlement statement.
 TOTAL CLOSING COSTS: Sum all Title Charges and Escrow lines including title_misc_charges.
 
 Return ONLY a JSON object, no markdown:
-{"lender_name":null,"loan_number":null,"loan_officer":null,"purchase_price":null,"funded_principal":null,"rehab_holdback":null,"total_loan_amount":null,"down_payment":null,"interest_rate":null,"interest_rate_type":"fixed","origination_fee_pct":null,"origination_fee_amount":null,"service_fee":null,"prorated_interest":null,"daily_interest_rate":null,"monthly_interest_payment":null,"loan_term_months":null,"maturity_date":null,"first_payment_date":null,"payment_due_day":null,"escrow_fee":null,"lenders_title_insurance":null,"recording_fees":null,"notary_doc_prep":null,"wire_fee":null,"title_misc_charges":null,"total_closing_costs":null,"total_cash_to_close":null,"max_draws":null,"holdback_pct":null,"draw_fee":null,"other_lender_fees":null,"insurance_premium":null,"prorations_total":null,"prorations_tax":null,"prorations_hoa":null,"prorations_sewer":null,"prorations_trash":null,"hoa_advance":null,"broker_transaction_fee":null,"deposit_emd":null,"escrow_company":null,"escrow_officer":null,"file_number":null,"seller_name":null,"settlement_date":null,"disbursement_date":null}`;
+{"lender_name":null,"loan_number":null,"loan_officer":null,"purchase_price":null,"funded_principal":null,"rehab_holdback":null,"total_loan_amount":null,"down_payment":null,"interest_rate":null,"interest_rate_type":"fixed","origination_fee_pct":null,"origination_fee_amount":null,"service_fee":null,"prorated_interest":null,"daily_interest_rate":null,"monthly_interest_payment":null,"loan_term_months":null,"maturity_date":null,"first_payment_date":null,"payment_due_day":null,"escrow_fee":null,"lenders_title_insurance":null,"recording_fees":null,"notary_doc_prep":null,"wire_fee":null,"title_misc_charges":null,"total_closing_costs":null,"total_cash_to_close":null,"max_draws":null,"holdback_pct":null,"draw_fee":null,"other_lender_fees":null,"insurance_premium":null,"prorations_total":null,"prorations_tax":null,"prorations_hoa":null,"prorations_sewer":null,"prorations_trash":null,"hoa_advance":null,"broker_transaction_fee":null,"deposit_emd":null,"escrow_company":null,"escrow_officer":null,"file_number":null,"seller_name":null,"settlement_date":null,"disbursement_date":null,"funded_date":null}`;
   const content=[docBlock,{type:"text",text:PARSER_PROMPT}];
 
   try{
@@ -2005,7 +2007,8 @@ function prefillFinancing(parsed){
     fin_prorations_total:parsed.prorations_total,
     fin_hoa_advance:parsed.hoa_advance,
     fin_broker_transaction_fee:parsed.broker_transaction_fee,
-    fin_deposit_emd:parsed.deposit_emd
+    fin_deposit_emd:parsed.deposit_emd,
+    fin_funded_date:parsed.funded_date
   };
   // Fields the ALTA should NEVER overwrite (Kiavi term sheet is authoritative)
   const ALTA_NEVER_OVERWRITE=['fin_funded_principal','fin_down_payment','fin_loan_officer','fin_monthly_interest_payment','fin_max_draws','fin_holdback_pct','fin_draw_fee','fin_loan_term_months','fin_maturity_date','fin_payment_due_day','fin_first_payment_date','fin_acct_mgr_name','fin_acct_mgr_phone','fin_acct_mgr_email'];
