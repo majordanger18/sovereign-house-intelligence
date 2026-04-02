@@ -454,7 +454,7 @@ async function openDeal(dealId){
     </div>`:''}
 
     ${['financing','closing','clear_to_close','closed','in_renovation','renovation_complete','listing_prep','listed','sold'].includes(d.status)?`
-    <details style="margin-bottom:16px;border:1px solid rgba(255,255,255,0.06);border-radius:14px;background:rgba(255,255,255,0.02)">
+    <details style="margin-bottom:24px;border:1px solid rgba(255,255,255,0.06);border-radius:14px;background:rgba(255,255,255,0.02)">
       <summary style="padding:12px 14px;cursor:pointer;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#d4af37;list-style:none;display:flex;justify-content:space-between;align-items:center">
         <span>DEAL TERMS</span>
         <span style="font-size:11px;font-weight:600;color:#94a3b8;letter-spacing:0">${$(d.accepted_price||d.offer_price)} · ${d.accepted_commission_pct!=null?d.accepted_commission_pct:d.lisa_buy_commission_pct||0}% · COE ${d.coe_date?new Date(d.coe_date+'T00:00:00').toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric',timeZone:'America/Los_Angeles'}):'—'}</span>
@@ -486,7 +486,7 @@ async function openDeal(dealId){
     </div>`}
 
     <!-- TIMELINE -->
-    <div style="margin-top:8px;margin-bottom:16px">
+    <div style="margin-top:16px;margin-bottom:16px">
       <div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:10px">TIMELINE (${tl.length} events)</div>
       <div id="dealTimeline">${tl.length?tl.slice().reverse().map(e=>{
         const typeColors={offer_submitted:'#3b82f6',counter_received:'#f59e0b',counter_sent:'#a855f7',accepted:'#22c55e',rejected:'#ef4444',expired:'#64748b',note:'#94a3b8',status_change:'#06b6d4'};
@@ -804,7 +804,7 @@ async function renderOriginalUnderwriting(dealId,propertyId){
   if(maxOffer)rows+=`<div class="uw-row"><span class="uw-label">Max Offer</span><span class="uw-value">${f(maxOffer)}</span></div>`;
 
   container.innerHTML=`
-    <details class="uw-section" style="margin-bottom:16px;">
+    <details class="uw-section" style="margin-bottom:24px;">
       <summary style="cursor:pointer;user-select:none;font-size:13px;font-weight:600;color:#d4af37;letter-spacing:1px;padding:12px 0;display:flex;align-items:center;gap:8px;">
         <span style="font-size:11px;">▶</span> ORIGINAL UNDERWRITING
         <span style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.3);margin-left:auto;">${sourceLabel}</span>
@@ -1074,7 +1074,7 @@ async function loadDealFinSummary(dealId){
       if(diff<4)matWarn=` · <span style="color:#ef4444;font-weight:800">Matures ${new Date(f.maturity_date+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric",timeZone:"America/Los_Angeles"})}</span>`;
       else matWarn=` · Matures ${new Date(f.maturity_date+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric",timeZone:"America/Los_Angeles"})}`;
     }
-    el.innerHTML=`<div style="margin-bottom:16px">
+    el.innerHTML=`<div style="margin-bottom:24px">
       <div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:4px">FINANCING</div>
       <div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:center;gap:10px">
         <div style="font-size:11px;color:${sc2}">${esc(f.lender_name||'—')} | ${f.interest_rate||'—'}% | ${$r(f.funded_principal)} principal${matWarn}${pending?' · <span style="color:#eab308">⏳ Pending funding</span>':''}</div>
