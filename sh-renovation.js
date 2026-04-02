@@ -2208,8 +2208,8 @@ async function saveFinancing(dealId){
     const dl=deals.find(x=>x.id===dealId);
     if(dl)Object.assign(dl,dealSync);
 
-    // Sync close/funding date to deal coe_date if available
-    const parsedCloseDate=payload.funded_date||payload.first_payment_date||null;
+    // COE = escrow close date (settlement/disbursement), NOT funded_date (lender wire date)
+    const parsedCloseDate=(document.getElementById("fin_settlement_date")?.value)||(document.getElementById("fin_disbursement_date")?.value)||null;
     if(parsedCloseDate&&/^\d{4}-\d{2}-\d{2}/.test(parsedCloseDate)){
       try{
         await fetch(SB+"/rest/v1/deals?id=eq."+dealId,{method:"PATCH",headers:RENO_WH,body:JSON.stringify({coe_date:parsedCloseDate})});
