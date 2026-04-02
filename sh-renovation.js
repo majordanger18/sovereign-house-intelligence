@@ -3234,7 +3234,7 @@ function openDocLightbox(idx){
   const modal=document.getElementById('renoModal');
   modal.style.display='block';
   modal.innerHTML=`<div style="position:relative;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px">
-    <button onclick="closeDocsModal()" style="position:absolute;top:12px;right:12px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:20px;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center">✕</button>
+    <button onclick="closeDocsModal()" style="position:absolute;top:env(safe-area-inset-top, 48px);right:12px;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:20px;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center">✕</button>
     ${idx>0?`<button onclick="openDocLightbox(${idx-1})" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:20px;cursor:pointer">‹</button>`:''}
     ${idx<photos.length-1?`<button onclick="openDocLightbox(${idx+1})" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:20px;cursor:pointer">›</button>`:''}
     <img src="${esc(p.file_url)}" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:8px"/>
