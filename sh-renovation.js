@@ -1744,6 +1744,10 @@ async function openFinancing(dealId){
       <div class="fld"><label>WIRE FEE</label><input id="fin_wire_fee" type="number" class="cinput" value="${f?.wire_fee||''}" oninput="finCalcClosing()"/></div>
     </div>
     <div class="row2">
+      <div class="fld"><label>TITLE MISC <span style="font-size:8px;color:#475569">(CPL/FinCEN/Insp/Endorse/Sign)</span></label><input id="fin_title_misc_charges" type="number" step="0.01" class="cinput" value="${f?.title_misc_charges||''}" oninput="finCalcClosing()"/></div>
+      <div class="fld"><label></label><div></div></div>
+    </div>
+    <div class="row2">
       <div class="fld"><label>INSURANCE PREMIUM</label><input id="fin_insurance_premium" type="number" step="0.01" class="cinput" value="${f?.insurance_premium||''}" oninput="finCalcCash()"/></div>
       <div class="fld"><label>PRORATIONS TOTAL</label><input id="fin_prorations_total" type="number" step="0.01" class="cinput" value="${f?.prorations_total||''}" oninput="finCalcCash()"/></div>
     </div>
@@ -1945,13 +1949,17 @@ For "prorated_interest", return the TOTAL from the Debit column ($6,954.77).
 For "daily_interest_rate", return the daily rate ($302.38).
 These two numbers will NEVER be equal. If they are equal in your output, you made an error.
 
+RECORDING FEES: Sum ALL recording-related charges (Recording Fees + E-Recording Fee). Example: if Recording Fees = $84.00 and E-Recording Fee = $10.00, return recording_fees = 94.00.
+
+TITLE MISC CHARGES: Sum all Title Charges and Escrow Settlement Charges that are NOT the main lender title policy or settlement/closing fee. This includes CPL, FinCEN, Inspection Fee, Endorsement, Signing Fee, and any similar small title charges. Return as title_misc_charges.
+
 PRORATIONS: Sum tax+HOA+sewer+trash individually AND as prorations_total.
 DOWN PAYMENT: Only include if explicitly labeled "Down Payment" on the document. Do NOT calculate it.
 TOTAL CASH TO CLOSE: Use the "Due from Buyer" line at the bottom of the settlement statement.
-TOTAL CLOSING COSTS: Sum all Title Charges & Escrow lines.
+TOTAL CLOSING COSTS: Sum all Title Charges and Escrow lines including title_misc_charges.
 
 Return ONLY a JSON object, no markdown:
-{"lender_name":null,"loan_number":null,"loan_officer":null,"purchase_price":null,"funded_principal":null,"rehab_holdback":null,"total_loan_amount":null,"down_payment":null,"interest_rate":null,"interest_rate_type":"fixed","origination_fee_pct":null,"origination_fee_amount":null,"service_fee":null,"prorated_interest":null,"daily_interest_rate":null,"monthly_interest_payment":null,"loan_term_months":null,"maturity_date":null,"first_payment_date":null,"payment_due_day":null,"escrow_fee":null,"lenders_title_insurance":null,"recording_fees":null,"notary_doc_prep":null,"wire_fee":null,"total_closing_costs":null,"total_cash_to_close":null,"max_draws":null,"holdback_pct":null,"draw_fee":null,"other_lender_fees":null,"insurance_premium":null,"prorations_total":null,"prorations_tax":null,"prorations_hoa":null,"prorations_sewer":null,"prorations_trash":null,"hoa_advance":null,"broker_transaction_fee":null,"deposit_emd":null,"escrow_company":null,"escrow_officer":null,"file_number":null,"seller_name":null,"settlement_date":null,"disbursement_date":null}`;
+{"lender_name":null,"loan_number":null,"loan_officer":null,"purchase_price":null,"funded_principal":null,"rehab_holdback":null,"total_loan_amount":null,"down_payment":null,"interest_rate":null,"interest_rate_type":"fixed","origination_fee_pct":null,"origination_fee_amount":null,"service_fee":null,"prorated_interest":null,"daily_interest_rate":null,"monthly_interest_payment":null,"loan_term_months":null,"maturity_date":null,"first_payment_date":null,"payment_due_day":null,"escrow_fee":null,"lenders_title_insurance":null,"recording_fees":null,"notary_doc_prep":null,"wire_fee":null,"title_misc_charges":null,"total_closing_costs":null,"total_cash_to_close":null,"max_draws":null,"holdback_pct":null,"draw_fee":null,"other_lender_fees":null,"insurance_premium":null,"prorations_total":null,"prorations_tax":null,"prorations_hoa":null,"prorations_sewer":null,"prorations_trash":null,"hoa_advance":null,"broker_transaction_fee":null,"deposit_emd":null,"escrow_company":null,"escrow_officer":null,"file_number":null,"seller_name":null,"settlement_date":null,"disbursement_date":null}`;
   const content=[docBlock,{type:"text",text:PARSER_PROMPT}];
 
   try{
@@ -1991,7 +1999,7 @@ function prefillFinancing(parsed){
     fin_other_lender_fees:parsed.other_lender_fees,
     fin_escrow_fee:parsed.escrow_fee,fin_lenders_title_insurance:parsed.lenders_title_insurance,
     fin_recording_fees:parsed.recording_fees,fin_notary_doc_prep:parsed.notary_doc_prep,
-    fin_wire_fee:parsed.wire_fee,
+    fin_wire_fee:parsed.wire_fee,fin_title_misc_charges:parsed.title_misc_charges,
     fin_max_draws:parsed.max_draws,fin_holdback_pct:parsed.holdback_pct,fin_draw_fee:parsed.draw_fee,
     fin_insurance_premium:parsed.insurance_premium,
     fin_prorations_total:parsed.prorations_total,
@@ -2003,7 +2011,7 @@ function prefillFinancing(parsed){
   const ALTA_NEVER_OVERWRITE=['fin_funded_principal','fin_down_payment','fin_loan_officer','fin_monthly_interest_payment','fin_max_draws','fin_holdback_pct','fin_draw_fee','fin_loan_term_months','fin_maturity_date','fin_payment_due_day','fin_first_payment_date','fin_acct_mgr_name','fin_acct_mgr_phone','fin_acct_mgr_email'];
 
   // Fields the ALTA IS authoritative for (always overwrite, even if filled)
-  const ALTA_ALWAYS_OVERWRITE=['fin_prorated_interest','fin_insurance_premium','fin_prorations_total','fin_hoa_advance','fin_broker_transaction_fee','fin_deposit_emd','fin_total_cash_to_close','fin_recording_fees','fin_lenders_title_insurance','fin_escrow_fee','fin_escrow_company','fin_escrow_officer','fin_file_number','fin_seller_name','fin_settlement_date','fin_disbursement_date'];
+  const ALTA_ALWAYS_OVERWRITE=['fin_prorated_interest','fin_insurance_premium','fin_prorations_total','fin_hoa_advance','fin_broker_transaction_fee','fin_deposit_emd','fin_total_cash_to_close','fin_recording_fees','fin_lenders_title_insurance','fin_escrow_fee','fin_escrow_company','fin_escrow_officer','fin_file_number','fin_seller_name','fin_settlement_date','fin_disbursement_date','fin_title_misc_charges'];
 
   let filled=0,skipped=0,blocked=0;
   for(const[id,val]of Object.entries(fields)){
@@ -2068,7 +2076,7 @@ function finCalcOrig(){
   finCalcCash();
 }
 function finCalcClosing(){
-  const ids=["fin_escrow_fee","fin_lenders_title_insurance","fin_recording_fees","fin_notary_doc_prep","fin_wire_fee"];
+  const ids=["fin_escrow_fee","fin_lenders_title_insurance","fin_recording_fees","fin_notary_doc_prep","fin_wire_fee","fin_title_misc_charges"];
   let sum=0;ids.forEach(id=>{sum+=Number(document.getElementById(id)?.value)||0;});
   const el=document.getElementById("fin_total_closing_costs");
   if(el)el.value=sum||'';
@@ -2163,7 +2171,7 @@ async function saveFinancing(dealId){
     other_lender_fees:gn("fin_other_lender_fees")||null,
     escrow_fee:gn("fin_escrow_fee")||null,lenders_title_insurance:gn("fin_lenders_title_insurance")||null,
     recording_fees:gn("fin_recording_fees")||null,notary_doc_prep:gn("fin_notary_doc_prep")||null,
-    wire_fee:gn("fin_wire_fee")||null,
+    wire_fee:gn("fin_wire_fee")||null,title_misc_charges:gn("fin_title_misc_charges")||null,
     insurance_premium:gn("fin_insurance_premium")||null,
     prorations_total:gn("fin_prorations_total")||null,
     hoa_advance:gn("fin_hoa_advance")||null,
