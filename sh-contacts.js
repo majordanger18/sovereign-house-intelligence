@@ -1466,6 +1466,21 @@ async function awardBid(bidId){
           }else{
             Object.keys(sowAmounts).forEach(ln=>{sowAmounts[ln]=Math.round(sowAmounts[ln]);});
           }
+          // Normalize so SOW planned_budget total equals contracted amount
+          const sowTotal = Object.values(sowAmounts).reduce((s, v) => s + v, 0);
+          if (sowTotal > 0 && amount > 0) {
+            const scale = amount / sowTotal;
+            Object.keys(sowAmounts).forEach(ln => {
+              sowAmounts[ln] = Math.round(sowAmounts[ln] * scale);
+            });
+            // Fix rounding drift: adjust the largest line to make sum exact
+            const newTotal = Object.values(sowAmounts).reduce((s, v) => s + v, 0);
+            const drift = amount - newTotal;
+            if (drift !== 0) {
+              const maxLn = Object.entries(sowAmounts).reduce((a, b) => b[1] > a[1] ? b : a)[0];
+              sowAmounts[maxLn] += drift;
+            }
+          }
           for(const[ln,amt]of Object.entries(sowAmounts)){
             if(amt>0){
               const sowLine=sowLines.find(l=>l.line_number===Number(ln));
