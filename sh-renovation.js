@@ -1786,6 +1786,13 @@ async function openFinancing(dealId){
       <div class="fld"><label>DRAW FEE ($)</label><input id="fin_draw_fee" type="number" class="cinput" value="${f?.draw_fee||d.lender_draw_fee||''}"/></div>
       <div class="fld"><label>FINAL DRAW MIN (%)</label><input id="fin_final_draw_min_pct" type="number" class="cinput" value="${f?.final_draw_min_pct||10}" placeholder="10"/></div>
     </div>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.04)">
+      <div style="font-size:9px;color:#d4af37;font-weight:700;letter-spacing:1px;margin-bottom:8px">LINE OF CREDIT</div>
+      <div class="row2">
+        <div class="fld"><label>LOC LIMIT ($)</label><input id="fin_loc_limit" type="number" class="cinput" value="${f?.loc_limit||''}"/></div>
+        <div class="fld"><label>LOC APR (%)</label><input id="fin_loc_apr" type="number" step="0.01" class="cinput" value="${f?.loc_apr||''}"/></div>
+      </div>
+    </div>
   `);
 
   // Section 5: Running Totals (read-only)
@@ -2184,6 +2191,7 @@ async function saveFinancing(dealId){
     cash_source_breakdown:{cash:gn("fin_csb_cash")||0,loc:gn("fin_csb_loc")||0,commission_credit:gn("fin_csb_commission")||0},
     max_draws:gn("fin_max_draws")||null,holdback_pct:gn("fin_holdback_pct")||null,
     draw_fee:gn("fin_draw_fee")||null,final_draw_min_pct:gn("fin_final_draw_min_pct")||10,
+    loc_limit:gn("fin_loc_limit")||null,loc_apr:gn("fin_loc_apr")||null,
     funded_date:gv("fin_funded_date")||null,notes:gv("fin_notes")||null,
     status:finData?.status||"application"
   };
