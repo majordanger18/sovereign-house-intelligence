@@ -566,24 +566,36 @@ function renderProjectV(el){
   h+=`<div class="reno-scard" style="background:${ueBg};border-color:${ueBr}"><div class="reno-sl">UNREIMBURSED</div><div class="reno-sv" style="color:${ue>50000?"#ef4444":"#f1f5f9"}">${$r(ue)}</div></div>`;
   h+=`<div class="reno-scard"><div class="reno-sl">DRAWS USED</div><div class="reno-sv">${du} / ${md}</div></div>`;
   h+=`</div>`;
-  // LOC Exposure card
-  const _locKiavi=renoFin?.rehab_holdback||ov?.total_lender_approved||0;
-  const _locPlanned=renoDeal?.contracted_reno_amount||ov?.total_planned_budget||0;
-  const _locGap=Math.max(_locPlanned-_locKiavi,0);
-  const _locLimit=renoFin?.loc_limit||0;
-  const _locHead=_locLimit-_locGap;
-  if(_locGap>0||_locLimit>0){
-    const _gapColor=_locGap>0?"#f59e0b":"#22c55e";
-    const _headColor=_locHead>=100000?"#22c55e":_locHead>=50000?"#eab308":"#ef4444";
+  // Capital Tracker card
+  const _cashOnHand = renoFin?.cash_on_hand || 0;
+  const _locLimit = renoFin?.loc_limit || 0;
+  const _totalCapital = _cashOnHand + _locLimit;
+  const _cashToClose = renoFin?.total_cash_to_close || 0;
+  const _lisaCommission = renoDeal?.contracted_reno_amount ? Math.round((renoFin?.purchase_price || 0) * 0.025) : 0;
+  const _capitalAfterClose = _totalCapital - _cashToClose + _lisaCommission;
+  const _kiavi = renoFin?.rehab_holdback || ov?.total_lender_approved || 0;
+  const _renoBudget = renoDeal?.contracted_reno_amount || ov?.total_planned_budget || 0;
+  const _permanentGap = Math.max(_renoBudget - _kiavi, 0);
+  const _totalSpent = renoExp.reduce((s, e) => s + (e.amount || 0), 0);
+  const _totalReimbursed = renoDraws.filter(d => d.status === 'disbursed').reduce((s, d) => s + (d.amount_received || d.amount_requested || 0), 0);
+  const _unreimbursedFloat = _totalSpent - _totalReimbursed;
+  const _availableNow = _capitalAfterClose - _permanentGap - _unreimbursedFloat;
+  const _availColor = _availableNow < 30000 ? '#ef4444' : _availableNow < 75000 ? '#eab308' : '#22c55e';
+  if(_totalCapital>0){
+    const _gapColor = _permanentGap > 0 ? '#f59e0b' : '#22c55e';
+    const _floatColor = _unreimbursedFloat > 0 ? '#f59e0b' : '#f1f5f9';
     h+=`<div style="margin:12px 0;padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
-    h+=`<div style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:#d4af37;margin-bottom:10px">LOC EXPOSURE</div>`;
+    h+=`<div style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:#d4af37;margin-bottom:10px">CAPITAL TRACKER</div>`;
     h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">KIAVI APPROVED</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_locKiavi)}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">PLANNED BUDGET</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_locPlanned)}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">COVERAGE GAP</div><div style="font-size:15px;font-weight:800;color:${_gapColor};margin-top:2px">${$r(_locGap)}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC LIMIT</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${_locLimit?$r(_locLimit):"Not set"}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC DRAWN</div><div style="font-size:15px;font-weight:800;color:${_gapColor};margin-top:2px">${$r(_locGap)}</div></div>`;
-    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">LOC HEADROOM</div><div style="font-size:15px;font-weight:800;color:${_locLimit?_headColor:"#64748b"};margin-top:2px">${_locLimit?$r(_locHead):"—"}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">TOTAL CAPITAL</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_totalCapital)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">CASH TO CLOSE</div><div style="font-size:15px;font-weight:800;color:#f59e0b;margin-top:2px">${$r(_cashToClose)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">AFTER CLOSE</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_capitalAfterClose)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">RENO BUDGET</div><div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${$r(_renoBudget)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">KIAVI COVERS</div><div style="font-size:15px;font-weight:800;color:#22c55e;margin-top:2px">${$r(_kiavi)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">PERMANENT GAP</div><div style="font-size:15px;font-weight:800;color:${_gapColor};margin-top:2px">${$r(_permanentGap)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">SPENT (UNREIMBURSED)</div><div style="font-size:15px;font-weight:800;color:${_floatColor};margin-top:2px">${$r(_unreimbursedFloat)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">REIMBURSED</div><div style="font-size:15px;font-weight:800;color:#22c55e;margin-top:2px">${$r(_totalReimbursed)}</div></div>`;
+    h+=`<div style="text-align:center"><div style="font-size:8px;color:#475569;font-weight:700;letter-spacing:1px">AVAILABLE NOW</div><div style="font-size:17px;font-weight:900;color:${_availColor};margin-top:2px">${$r(_availableNow)}</div></div>`;
     h+=`</div></div>`;
   }
   // Monthly interest (no financing button)
@@ -1792,6 +1804,9 @@ async function openFinancing(dealId){
         <div class="fld"><label>LOC LIMIT ($)</label><input id="fin_loc_limit" type="number" class="cinput" value="${f?.loc_limit||''}"/></div>
         <div class="fld"><label>LOC APR (%)</label><input id="fin_loc_apr" type="number" step="0.01" class="cinput" value="${f?.loc_apr||''}"/></div>
       </div>
+      <div class="row2">
+        <div class="fld"><label>CASH ON HAND ($)</label><input id="fin_cash_on_hand" type="number" class="cinput" value="${f?.cash_on_hand||''}"/></div>
+      </div>
     </div>
   `);
 
@@ -2192,6 +2207,7 @@ async function saveFinancing(dealId){
     max_draws:gn("fin_max_draws")||null,holdback_pct:gn("fin_holdback_pct")||null,
     draw_fee:gn("fin_draw_fee")||null,final_draw_min_pct:gn("fin_final_draw_min_pct")||10,
     loc_limit:gn("fin_loc_limit")||null,loc_apr:gn("fin_loc_apr")||null,
+    cash_on_hand:gn("fin_cash_on_hand")||null,
     funded_date:gv("fin_funded_date")||null,notes:gv("fin_notes")||null,
     status:finData?.status||"application"
   };
