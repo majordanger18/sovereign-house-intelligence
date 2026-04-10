@@ -443,7 +443,7 @@ function renderProjectV(el){
   const contractedBudget=renoDeal?.contracted_reno_amount||null;
   const tb=contractedBudget||ov?.total_planned_budget||0;
   const renoExpensesSpent=ov?.total_spent||0; const cashToClose=Number(renoFin?.total_cash_to_close)||0; const ts=renoExpensesSpent+cashToClose; const rem=tb-renoExpensesSpent;
-  const pct=tb>0?(ts/tb*100):0;
+  const pct=tb>0?(renoExpensesSpent/tb*100):0;
   let h='';
 
   // ROW 1: Two SVG gauges
@@ -457,7 +457,7 @@ function renderProjectV(el){
   }
   const timeColor=!renoFin?.funded_date?"#64748b":timePct>80?"#ef4444":timePct>60?"#eab308":"#3b82f6";
   h+=`<div class="reno-gauges">`;
-  h+=renderGauge(pct,"BUDGET",`${$r(ts)} / ${$r(tb)}`,budgetColor);
+  h+=renderGauge(pct,"BUDGET",`${$r(renoExpensesSpent)} / ${$r(tb)}`,budgetColor);
   h+=renderGauge(renoFin?.funded_date?timePct:NaN,"TIME",timeDetail,timeColor);
   h+=`</div>`;
 
@@ -660,7 +660,7 @@ function renderProjectV(el){
   const sc=pct>100?"#ef4444":pct>80?"#eab308":"#22c55e";
   const rc=rem<0?"#ef4444":"#22c55e";
   const tla=ov?.total_lender_approved||0;
-  h+=`<details style="margin-top:8px;border:1px solid rgba(255,255,255,0.06);border-radius:12px;background:rgba(255,255,255,0.02)"><summary style="padding:12px 14px;cursor:pointer;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#d4af37;list-style:none;display:flex;justify-content:space-between;align-items:center"><span>BUDGET BREAKDOWN</span><span style="font-size:11px;font-weight:600;color:#64748b;letter-spacing:0">${$r(ts)} of ${$r(tb)} across ${renoBLines.length} SOW lines</span></summary><div style="padding:0 14px 14px">`;
+  h+=`<details style="margin-top:8px;border:1px solid rgba(255,255,255,0.06);border-radius:12px;background:rgba(255,255,255,0.02)"><summary style="padding:12px 14px;cursor:pointer;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#d4af37;list-style:none;display:flex;justify-content:space-between;align-items:center"><span>BUDGET BREAKDOWN</span><span style="font-size:11px;font-weight:600;color:#64748b;letter-spacing:0">${$r(renoExpensesSpent)} of ${$r(tb)} across ${renoBLines.length} SOW lines</span></summary><div style="padding:0 14px 14px">`;
   // Big Three cards
   h+=`<div class="reno-hero" style="margin-top:8px"><div class="reno-hcard"><div class="reno-hl">TOTAL BUDGET</div><div class="reno-hv">${$r(tb)}</div>${tla&&tla!==tb?`<div style="font-size:10px;color:#64748b;margin-top:2px">Lender: ${$r(tla)}</div>`:''}${contractedBudget?`<div style="font-size:10px;color:rgba(212,175,55,0.6);margin-top:2px">Contracted: ${esc(renoDeal?.contracted_reno_contractor||"—")}</div>`:''}</div><div class="reno-hcard"><div class="reno-hl">TOTAL SPENT</div><div class="reno-hv" style="color:${sc}">${$r(ts)}</div>${cashToClose>0?`<div style="font-size:10px;color:#64748b;margin-top:2px">Reno: ${$r(renoExpensesSpent)} · Closing: ${$r(cashToClose)}</div>`:''}</div><div class="reno-hcard"><div class="reno-hl">REMAINING</div><div class="reno-hv" style="color:${rc}">${$r(rem)}</div></div></div>`;
   // Progress bar
@@ -668,7 +668,7 @@ function renderProjectV(el){
   const _barW=Math.min(pct,100);
   const _labelInside=_barW>=15;
   const _barPulse=pct>100?"animation:overBudgetPulse 2s ease-in-out infinite;":"";
-  h+=`<div style="margin:16px 0"><div style="position:relative;height:40px;border-radius:20px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);overflow:hidden"><div style="height:100%;width:${_barW}%;background:${_barGrad};border-radius:20px;transition:width .6s ease;box-shadow:inset 0 1px 0 rgba(255,255,255,0.2);${_barPulse}"></div><div style="position:absolute;top:0;${_labelInside?'right:16px':'left:'+(_barW+2)+'%'};height:100%;display:flex;align-items:center;font-size:14px;font-weight:700;${_labelInside?'color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.6)':'color:rgba(255,255,255,0.5)'}">${pct.toFixed(1)}% spent</div></div><div style="display:flex;justify-content:space-between;margin-top:4px"><div style="font-size:12px;color:rgba(255,255,255,0.35)">${$r(rem)} remaining</div><div style="font-size:12px;color:rgba(255,255,255,0.35)">${$r(ts)} of ${$r(tb)}</div></div></div>`;
+  h+=`<div style="margin:16px 0"><div style="position:relative;height:40px;border-radius:20px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);overflow:hidden"><div style="height:100%;width:${_barW}%;background:${_barGrad};border-radius:20px;transition:width .6s ease;box-shadow:inset 0 1px 0 rgba(255,255,255,0.2);${_barPulse}"></div><div style="position:absolute;top:0;${_labelInside?'right:16px':'left:'+(_barW+2)+'%'};height:100%;display:flex;align-items:center;font-size:14px;font-weight:700;${_labelInside?'color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.6)':'color:rgba(255,255,255,0.5)'}">${pct.toFixed(1)}% spent</div></div><div style="display:flex;justify-content:space-between;margin-top:4px"><div style="font-size:12px;color:rgba(255,255,255,0.35)">${$r(rem)} remaining</div><div style="font-size:12px;color:rgba(255,255,255,0.35)">${$r(renoExpensesSpent)} of ${$r(tb)}</div></div></div>`;
   // Out of Pocket
   if(tb>la&&la>0){
     const oop=tb-la;
