@@ -1129,35 +1129,50 @@ async function saveNewDraw(num){
 }
 
 // ═══ EXPENSES VIEW ═══
-function renderExpV(el){
+function renderExpV(el,prefill){
   let h='';
   // Action buttons row
   h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">`;
-  h+=`<button onclick="toggleExpForm()" id="expFormToggle" class="btn" style="padding:10px;font-size:13px;background:transparent;border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">+ Log Expense</button>`;
+  h+=`<button onclick="toggleExpForm()" id="expFormToggle" class="btn" style="padding:10px;font-size:13px;background:transparent;border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">${prefill?"− Cancel":"+ Log Expense"}</button>`;
   h+=`<button onclick="openReceiptUpload()" class="btn" style="padding:10px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.15),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.3);color:#d4af37;font-weight:800">📷 Scan Receipt</button>`;
   h+=`</div>`;
   // Collapsible expense form
-  h+=`<div id="expFormArea" style="display:none">`;
+  h+=`<div id="expFormArea" style="display:${prefill?"block":"none"}">`;
   h+=`<div class="reno-ef"><div style="font-size:10px;color:#d4af37;font-weight:700;letter-spacing:2px;margin-bottom:10px">LOG EXPENSE</div><div class="reno-eg">`;
-  h+=`<div class="fld"><label>DATE</label><input id="exD" type="date" class="cinput" value="${new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'})}"/></div>`;
+  const dateVal=prefill&&prefill.date?prefill.date:new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  h+=`<div class="fld"><label>DATE</label><input id="exD" type="date" class="cinput" value="${dateVal}"/></div>`;
   const sowFiltered=renoSOW.filter(l=>Number(l.lender_approved)>0||Number(l.planned_budget)>0);
   console.log("[SH] Expense SOW dropdown: renoSOW="+renoSOW.length+", filtered="+sowFiltered.length,renoSOW.slice(0,3));
+  const prefillSowId=prefill&&prefill.suggested_sow_line?(() => {const sl=renoSOW.find(l=>l.line_number==prefill.suggested_sow_line);return sl?sl.id:null;})():null;
   h+=`<div class="fld"><label>SOW LINE</label><select id="exS" class="cinput">`;
-  sowFiltered.forEach(l=>{h+=`<option value="${l.id}">#${l.line_number} — ${esc(l.description||l.category||"")} (${$r(l.planned_budget||l.lender_approved||0)})</option>`;});
+  sowFiltered.forEach(l=>{h+=`<option value="${l.id}"${prefillSowId&&l.id===prefillSowId?" selected":""}>#${l.line_number} — ${esc(l.description||l.category||"")} (${$r(l.planned_budget||l.lender_approved||0)})</option>`;});
   h+=`</select></div>`;
-  h+=`<div class="fld"><label>DESCRIPTION</label><input id="exDe" type="text" class="cinput" placeholder="What was purchased or paid for"/></div>`;
-  h+=`<div class="fld"><label>AMOUNT</label><input id="exA" type="number" class="cinput" placeholder="$0.00" step="0.01"/></div>`;
-  h+=`<div class="fld"><label>TYPE</label><select id="exT" class="cinput"><option value="material">Material</option><option value="labor">Labor</option><option value="permit">Permit</option><option value="fee">Fee</option><option value="other">Other</option></select></div>`;
-  h+=`<div class="fld"><label>PAYMENT</label><select id="exPm" class="cinput"><option value="">—</option><option value="cash">Cash</option><option value="loc">Line of Credit</option><option value="credit_card">Credit Card</option><option value="check">Check</option><option value="wire">Wire</option></select></div>`;
+  h+=`<div class="fld"><label>DESCRIPTION</label><input id="exDe" type="text" class="cinput" placeholder="What was purchased or paid for"${prefill&&prefill.description?` value="${esc(prefill.description)}"`:""}/></div>`;
+  h+=`<div class="fld"><label>AMOUNT</label><input id="exA" type="number" class="cinput" placeholder="$0.00" step="0.01"${prefill&&prefill.amount?` value="${prefill.amount}"`:""}/></div>`;
+  const expTypes=["material","labor","permit","fee","other"];
+  const prefillType=prefill&&prefill.expense_type?prefill.expense_type:"";
+  h+=`<div class="fld"><label>TYPE</label><select id="exT" class="cinput">`;
+  expTypes.forEach(t=>{h+=`<option value="${t}"${prefillType===t?" selected":""}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`;});
+  h+=`</select></div>`;
+  const pmOpts=[{v:"",l:"—"},{v:"cash",l:"Cash"},{v:"loc",l:"Line of Credit"},{v:"credit_card",l:"Credit Card"},{v:"check",l:"Check"},{v:"wire",l:"Wire"}];
+  const prefillPm=prefill&&prefill.payment_method?prefill.payment_method:"";
+  h+=`<div class="fld"><label>PAYMENT</label><select id="exPm" class="cinput">`;
+  pmOpts.forEach(o=>{h+=`<option value="${o.v}"${prefillPm===o.v?" selected":""}>${o.l}</option>`;});
+  h+=`</select></div>`;
   h+=`</div>`;
   // More details
-  h+=`<button id="exMoreBtn" onclick="toggleExpMore()" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:700;cursor:pointer;padding:4px 0;margin-bottom:8px">More Details ▸</button>`;
-  h+=`<div id="exMore" style="display:none"><div class="reno-eg">`;
-  h+=`<div class="fld"><label>VENDOR</label><input id="exV" type="text" class="cinput" placeholder="Vendor name" list="vdl"/><datalist id="vdl">${[...new Set(renoExp.map(e=>e.vendor_name).filter(Boolean))].map(v=>`<option value="${esc(v)}">`).join("")}</datalist></div>`;
-  h+=`<div class="fld"><label>PRODUCT NAME</label><input id="exPn" type="text" class="cinput" placeholder="Product name"/></div>`;
-  h+=`<div class="fld"><label>UNIT COST</label><input id="exUC" type="number" class="cinput" step="0.01" placeholder="Per unit"/></div>`;
-  h+=`<div class="fld"><label>UNIT TYPE</label><select id="exUT" class="cinput"><option value="">—</option><option value="sf">SF</option><option value="lf">LF</option><option value="unit">Unit</option><option value="each">Each</option><option value="hour">Hour</option></select></div>`;
-  h+=`<div class="fld"><label>QUANTITY</label><input id="exQ" type="number" class="cinput" placeholder="0"/></div>`;
+  const moreOpen=prefill&&prefill.vendor;
+  h+=`<button id="exMoreBtn" onclick="toggleExpMore()" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:700;cursor:pointer;padding:4px 0;margin-bottom:8px">${moreOpen?"Less Details ▾":"More Details ▸"}</button>`;
+  h+=`<div id="exMore" style="display:${moreOpen?"block":"none"}"><div class="reno-eg">`;
+  h+=`<div class="fld"><label>VENDOR</label><input id="exV" type="text" class="cinput" placeholder="Vendor name"${prefill&&prefill.vendor?` value="${esc(prefill.vendor)}"`:""} list="vdl"/><datalist id="vdl">${[...new Set(renoExp.map(e=>e.vendor_name).filter(Boolean))].map(v=>`<option value="${esc(v)}">`).join("")}</datalist></div>`;
+  h+=`<div class="fld"><label>PRODUCT NAME</label><input id="exPn" type="text" class="cinput" placeholder="Product name"${prefill&&prefill.product_name?` value="${esc(prefill.product_name)}"`:""}/></div>`;
+  h+=`<div class="fld"><label>UNIT COST</label><input id="exUC" type="number" class="cinput" step="0.01" placeholder="Per unit"${prefill&&prefill.unit_cost?` value="${prefill.unit_cost}"`:""}/></div>`;
+  const utOpts=[{v:"",l:"—"},{v:"sf",l:"SF"},{v:"lf",l:"LF"},{v:"unit",l:"Unit"},{v:"each",l:"Each"},{v:"hour",l:"Hour"}];
+  const prefillUt=prefill&&prefill.unit_type?prefill.unit_type:"";
+  h+=`<div class="fld"><label>UNIT TYPE</label><select id="exUT" class="cinput">`;
+  utOpts.forEach(o=>{h+=`<option value="${o.v}"${prefillUt===o.v?" selected":""}>${o.l}</option>`;});
+  h+=`</select></div>`;
+  h+=`<div class="fld"><label>QUANTITY</label><input id="exQ" type="number" class="cinput" placeholder="0"${prefill&&prefill.quantity?` value="${prefill.quantity}"`:""}/></div>`;
   h+=`<div class="fld"><label>NOTES</label><input id="exN" type="text" class="cinput" placeholder="Notes"/></div>`;
   h+=`</div></div>`;
   h+=`<button onclick="saveExpense()" class="btn" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;margin-top:8px">Log Expense</button></div></div>`;
@@ -1312,7 +1327,7 @@ async function saveEditedExpense(expId){
 async function openReceiptUpload(){
   const input=document.createElement('input');
   input.type='file';input.accept='image/*,.pdf';
-  input.onchange=async function(){const file=input.files[0];if(!file)return;await parseReceipt(file);};
+  input.onchange=async function(){const file=input.files[0];if(!file)return;showRenoToast("Scanning invoice...");await parseReceipt(file);};
   input.click();
 }
 
@@ -1367,37 +1382,26 @@ async function parseReceipt(file){
 }
 
 function prefillExpenseForm(parsed){
-  const el=document.getElementById("renoContent");
-  if(el)renderExpV(el);
-  setTimeout(()=>{
-    if(parsed.date){const d=document.getElementById("exD");if(d)d.value=parsed.date;}
-    if(parsed.suggested_sow_line){
-      const sel=document.getElementById("exS");
-      if(sel){const sowLine=renoSOW.find(l=>l.line_number==parsed.suggested_sow_line);if(sowLine)sel.value=sowLine.id;}
-    }
-    const items=parsed.items||[];
-    if(items.length===1){
-      const item=items[0];
-      const de=document.getElementById("exDe");if(de)de.value=item.description||"";
-      const a=document.getElementById("exA");if(a)a.value=parsed.total||item.amount||"";
-      const t=document.getElementById("exT");if(t)t.value=item.expense_type||"material";
-      if(item.product_name){const pn=document.getElementById("exPn");if(pn)pn.value=item.product_name;}
-      if(item.unit_cost){const uc=document.getElementById("exUC");if(uc)uc.value=item.unit_cost;}
-      if(item.unit_type){const ut=document.getElementById("exUT");if(ut)ut.value=item.unit_type;}
-      if(item.quantity){const q=document.getElementById("exQ");if(q)q.value=item.quantity;}
-    }else if(items.length>1){
-      const de=document.getElementById("exDe");if(de)de.value=items.map(i=>i.description).join(", ");
-      const a=document.getElementById("exA");if(a)a.value=parsed.total||items.reduce((s,i)=>s+(i.amount||0),0);
-      const t=document.getElementById("exT");if(t)t.value=items[0]?.expense_type||"material";
-    }
-    if(parsed.vendor){
-      const more=document.getElementById("exMore");if(more)more.style.display="block";
-      const btn=document.getElementById("exMoreBtn");if(btn)btn.textContent="Less Details ▾";
-      const v=document.getElementById("exV");if(v)v.value=parsed.vendor;
-    }
-    if(parsed.payment_method){const pm=document.getElementById("exPm");if(pm)pm.value=parsed.payment_method;}
-    showRenoToast("Receipt parsed — review and save");
-  },100);
+const items=parsed.items||[];
+const firstItem=items[0]||{};
+const description=items.length===1?firstItem.description||"":items.map(i=>i.description).join(", ");
+const amount=parsed.total||(items.length===1?firstItem.amount:items.reduce((s,i)=>s+(i.amount||0),0))||"";
+const prefill={
+date:parsed.date||"",
+description,
+amount,
+expense_type:firstItem.expense_type||"material",
+payment_method:parsed.payment_method||"",
+suggested_sow_line:parsed.suggested_sow_line||"",
+vendor:parsed.vendor||"",
+product_name:firstItem.product_name||"",
+unit_cost:firstItem.unit_cost||"",
+unit_type:firstItem.unit_type||"",
+quantity:firstItem.quantity||""
+};
+const el=document.getElementById("renoContent");
+if(el)renderExpV(el,prefill);
+showRenoToast("Receipt parsed — review and save");
 }
 
 // ═══ CPA REPORT EXPORT ═══
@@ -1905,6 +1909,7 @@ function openFinDocUpload(){
   input.type='file';input.accept='.pdf,image/*';input.multiple=true;
   input.onchange=async function(){
     const files=Array.from(input.files);if(!files.length)return;
+    showRenoToast("Scanning document...");
     console.log('[SH FIN PARSER] Files selected:',files.map(f=>f.name+' '+f.type+' '+f.size));
     // Index all uploaded files in deal_documents
     for(const file of files){
@@ -2271,6 +2276,7 @@ function openSOWUpload(){
 
 function handleSOWFile(input){
   const file=input.files[0];if(!file)return;
+  showRenoToast("Scanning document...");
   const label=document.getElementById("sowFileLabel");
   label.innerHTML=`📄 ${esc(file.name)} <span style="color:#64748b">(${(file.size/1024).toFixed(0)} KB)</span>`;
   label.style.borderColor="rgba(34,197,94,0.4)";label.style.color="#e2e8f0";
