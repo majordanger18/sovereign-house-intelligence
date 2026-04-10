@@ -442,7 +442,7 @@ function renderProjectV(el){
 
   const contractedBudget=renoDeal?.contracted_reno_amount||null;
   const tb=contractedBudget||ov?.total_planned_budget||0;
-  const ts=ov?.total_spent||0,rem=tb-ts;
+  const renoExpensesSpent=ov?.total_spent||0; const cashToClose=Number(renoFin?.total_cash_to_close)||0; const ts=renoExpensesSpent+cashToClose; const rem=tb-renoExpensesSpent;
   const pct=tb>0?(ts/tb*100):0;
   let h='';
 
@@ -662,7 +662,7 @@ function renderProjectV(el){
   const tla=ov?.total_lender_approved||0;
   h+=`<details style="margin-top:8px;border:1px solid rgba(255,255,255,0.06);border-radius:12px;background:rgba(255,255,255,0.02)"><summary style="padding:12px 14px;cursor:pointer;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#d4af37;list-style:none;display:flex;justify-content:space-between;align-items:center"><span>BUDGET BREAKDOWN</span><span style="font-size:11px;font-weight:600;color:#64748b;letter-spacing:0">${$r(ts)} of ${$r(tb)} across ${renoBLines.length} SOW lines</span></summary><div style="padding:0 14px 14px">`;
   // Big Three cards
-  h+=`<div class="reno-hero" style="margin-top:8px"><div class="reno-hcard"><div class="reno-hl">TOTAL BUDGET</div><div class="reno-hv">${$r(tb)}</div>${tla&&tla!==tb?`<div style="font-size:10px;color:#64748b;margin-top:2px">Lender: ${$r(tla)}</div>`:''}${contractedBudget?`<div style="font-size:10px;color:rgba(212,175,55,0.6);margin-top:2px">Contracted: ${esc(renoDeal?.contracted_reno_contractor||"—")}</div>`:''}</div><div class="reno-hcard"><div class="reno-hl">TOTAL SPENT</div><div class="reno-hv" style="color:${sc}">${$r(ts)}</div></div><div class="reno-hcard"><div class="reno-hl">REMAINING</div><div class="reno-hv" style="color:${rc}">${$r(rem)}</div></div></div>`;
+  h+=`<div class="reno-hero" style="margin-top:8px"><div class="reno-hcard"><div class="reno-hl">TOTAL BUDGET</div><div class="reno-hv">${$r(tb)}</div>${tla&&tla!==tb?`<div style="font-size:10px;color:#64748b;margin-top:2px">Lender: ${$r(tla)}</div>`:''}${contractedBudget?`<div style="font-size:10px;color:rgba(212,175,55,0.6);margin-top:2px">Contracted: ${esc(renoDeal?.contracted_reno_contractor||"—")}</div>`:''}</div><div class="reno-hcard"><div class="reno-hl">TOTAL SPENT</div><div class="reno-hv" style="color:${sc}">${$r(ts)}</div>${cashToClose>0?`<div style="font-size:10px;color:#64748b;margin-top:2px">Reno: ${$r(renoExpensesSpent)} · Closing: ${$r(cashToClose)}</div>`:''}</div><div class="reno-hcard"><div class="reno-hl">REMAINING</div><div class="reno-hv" style="color:${rc}">${$r(rem)}</div></div></div>`;
   // Progress bar
   const _barGrad=pct>100?"linear-gradient(90deg,#dc2626,#991b1b)":pct>80?"linear-gradient(90deg,#ef4444,#f87171)":pct>60?"linear-gradient(90deg,#eab308,#f59e0b)":"linear-gradient(90deg,#10b981,#34d399)";
   const _barW=Math.min(pct,100);
