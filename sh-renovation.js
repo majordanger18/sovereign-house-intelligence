@@ -1884,13 +1884,19 @@ function finRunningTotals(f,d){
   h+=`<div class="reno-scard"><div class="reno-sl">ESTIMATED PAYOFF</div><div class="reno-sv" style="color:#ef4444">${$r(estPayoff)}</div></div>`;
   h+=`</div>`;
 
-  // Log Interest Payment button
-  h+=`<div style="margin-top:12px"><button onclick="document.getElementById('finIntForm').style.display=document.getElementById('finIntForm').style.display==='none'?'block':'none'" class="btn" style="width:100%;padding:10px;font-size:12px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);color:#60a5fa;font-weight:700">Log Interest Payment</button>`;
-  h+=`<div id="finIntForm" style="display:none;margin-top:8px;padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">`;
-  h+=`<div class="row2"><div class="fld"><label>PAYMENT DATE</label><input id="finIntDate" type="date" class="cinput" value="${new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'})}"/></div>`;
-  h+=`<div class="fld"><label>AMOUNT</label><input id="finIntAmt" type="number" step="0.01" class="cinput" value="${mip}"/></div></div>`;
-  h+=`<button onclick="logInterestPayment()" class="btn" style="width:100%;padding:10px;font-size:12px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;margin-top:6px">Save Payment</button>`;
-  h+=`</div></div>`;
+  // Upload Lender Statement button
+  h+=`<div style="margin-top:12px"><button onclick="openStatementUpload()" class="btn" style="width:100%;padding:12px;font-size:13px;background:linear-gradient(135deg,rgba(212,175,55,0.12),rgba(212,175,55,0.04));border:1px solid rgba(212,175,55,0.25);color:#d4af37;font-weight:800">\u{1F4C4} Upload Lender Statement</button>`;
+  h+=`<div style="font-size:10px;color:#64748b;text-align:center;margin-top:4px">Upload monthly statement PDF \u2014 AI reads it automatically</div></div>`;
+  // Payment history from parsed statements
+  const payLog=f?.interest_payments_log||[];
+  if(payLog.length){
+    h+=`<div style="margin-top:10px"><div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px">PAYMENT HISTORY</div>`;
+    payLog.slice().reverse().forEach(p=>{
+      const dt=p.date?new Date(p.date+"T00:00:00").toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'\u2014';
+      h+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px"><span style="color:#94a3b8">${dt}</span><span style="color:#e2e8f0;font-weight:600">${$r(p.amount)}</span></div>`;
+    });
+    h+=`</div>`;
+  }
 
   // View Closing Docs link
   if(f?.closing_disclosure_url)h+=`<div style="margin-top:12px"><a href="${esc(f.closing_disclosure_url)}" target="_blank" style="display:flex;align-items:center;gap:6px;padding:10px 12px;border-radius:10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);color:#60a5fa;font-size:12px;font-weight:700;text-decoration:none">📄 View Closing Docs</a></div>`;
@@ -2165,17 +2171,156 @@ async function updateFinStatus(newStatus){
   }catch(e){console.error("Update fin status failed:",e);}
 }
 
-async function logInterestPayment(){
-  if(!finData)return;
-  const amt=Number(document.getElementById("finIntAmt")?.value)||0;
-  if(!amt){showRenoToast("Enter an amount");return;}
-  const newTotal=(finData.total_interest_paid||0)+amt;
+// ═══ STATEMENT UPLOAD & PARSER ═══
+function openStatementUpload(){
+  const input=document.createElement('input');
+  input.type='file';input.accept='.pdf,image/*';
+  input.onchange=async function(){const file=input.files[0];if(!file)return;await parseStatement(file);};
+  input.click();
+}
+
+async function parseStatement(file){
+  const loadEl=document.createElement('div');
+  loadEl.id='stmtLoading';
+  loadEl.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:99999';
+  loadEl.innerHTML='<div style="text-align:center;padding:32px;border-radius:16px;background:#0f172a;border:1px solid rgba(212,175,55,0.2)"><div style="width:32px;height:32px;border:2px solid rgba(212,175,55,0.2);border-top-color:#d4af37;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px"></div><div style="font-size:14px;color:#d4af37;font-weight:700">Reading statement\u2026</div><div style="font-size:11px;color:#64748b;margin-top:6px">10\u201320 seconds</div></div>';
+  document.body.appendChild(loadEl);
+
+  let apiKey=localStorage.getItem("sh_claude_key");
+  if(!apiKey){apiKey=prompt("Enter your Claude API key:");if(!apiKey){loadEl.remove();return;}localStorage.setItem("sh_claude_key",apiKey);}
+
+  const buf=await file.arrayBuffer();
+  const bytes=new Uint8Array(buf);
+  let binary="";const chunk=8192;
+  for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+  const b64=btoa(binary);
+
+  const isPdf=file.type==='application/pdf';
+  const docBlock=isPdf
+    ?{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}
+    :{type:"image",source:{type:"base64",media_type:file.type,data:b64}};
+
   try{
-    await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:RENO_WH,body:JSON.stringify({total_interest_paid:newTotal})});
-    finData.total_interest_paid=newTotal;
-    showRenoToast("Interest payment logged: "+$r(amt));
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,messages:[{role:"user",content:[
+        docBlock,
+        {type:"text",text:`Parse this lender loan statement. Extract the following and return ONLY a JSON object \u2014 no markdown, no explanation, no backticks:
+
+{
+  "statement_date": "YYYY-MM-DD or null",
+  "statement_period": "human readable period, e.g. 'Mar 10 - Apr 9, 2026'",
+  "loan_number": "string or null",
+  "property_address": "string or null",
+  "interest_payment_amount": number (the interest charged this period),
+  "principal_payment_amount": number (usually 0 for interest-only loans),
+  "fees": number (any fees charged this period, 0 if none),
+  "total_payment": number (total of interest + principal + fees),
+  "next_payment_date": "YYYY-MM-DD or null",
+  "next_payment_amount": number or null,
+  "unpaid_balance": number (current principal balance / unpaid balance),
+  "interest_rate": number (annual rate as percentage, e.g. 11.99),
+  "maturity_date": "YYYY-MM-DD or null",
+  "undrawn_amount": number or null (remaining rehab holdback not yet drawn),
+  "draw_count_this_period": number (0 if no draws listed),
+  "draws_this_period": [{"date": "YYYY-MM-DD", "amount": number}] or []
+}
+
+CRITICAL:
+- Read dollar amounts EXACTLY as printed. Do not round.
+- "Interest" in the Payment Summary is what was charged. "Pre-Paid Interest" in Transaction Summary is the same thing for the first period.
+- If the statement shows "Undrawn Amount" that is the remaining rehab holdback.
+- Return ONLY the JSON object.`}
+      ]}]})
+    });
+
+    loadEl.remove();
+
+    if(!res.ok){const err=await res.text();console.error('[SH STMT] API error:',res.status,err);showRenoToast("Statement parse failed \u2014 try again");return;}
+
+    const data=await res.json();
+    console.log('[SH STMT] Raw response:',data.content?.map(c=>c.text||"").join("")||"");
+
+    const parsed=await robustParseJSON(data,apiKey);
+    if(!parsed||!parsed.interest_payment_amount){console.error('[SH STMT] Parse failed or no interest found:',parsed);showRenoToast("Could not read statement \u2014 try a clearer image");return;}
+
+    showStatementConfirm(parsed);
+  }catch(e){loadEl.remove();console.error('[SH STMT] Error:',e);showRenoToast("Statement parse failed");}
+}
+
+function showStatementConfirm(parsed){
+  let confirmArea=document.getElementById('stmtConfirmArea');
+  if(!confirmArea){
+    const uploadBtn=document.querySelector('[onclick="openStatementUpload()"]');
+    if(uploadBtn){confirmArea=document.createElement('div');confirmArea.id='stmtConfirmArea';uploadBtn.closest('div[style*="margin-top"]').after(confirmArea);}
+    else return;
+  }
+  const fmt=n=>n!=null?'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'\u2014';
+  const drawsHtml=parsed.draw_count_this_period>0?'<div style="padding:8px;border-radius:8px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.15);margin-bottom:12px"><div style="font-size:9px;color:#22c55e;font-weight:700">DRAWS THIS PERIOD: '+parsed.draw_count_this_period+'</div>'+(parsed.draws_this_period||[]).map(d=>'<div style="font-size:12px;color:#e2e8f0;margin-top:4px">'+esc(d.date)+': '+fmt(d.amount)+'</div>').join('')+'</div>':'';
+
+  confirmArea.innerHTML=
+    '<div style="margin:12px 0;padding:16px;border-radius:12px;background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.25)">'
+    +'<div style="font-size:13px;font-weight:800;color:#d4af37;margin-bottom:12px">\u{1F4C4} STATEMENT PARSED \u2014 CONFIRM</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
+    +'<div style="padding:8px;border-radius:8px;background:rgba(255,255,255,0.03)"><div style="font-size:9px;color:#64748b;font-weight:700">PERIOD</div><div style="font-size:13px;color:#e2e8f0;font-weight:600">'+esc(parsed.statement_period||'\u2014')+'</div></div>'
+    +'<div style="padding:8px;border-radius:8px;background:rgba(255,255,255,0.03)"><div style="font-size:9px;color:#64748b;font-weight:700">INTEREST CHARGED</div><div style="font-size:13px;color:#d4af37;font-weight:800">'+fmt(parsed.interest_payment_amount)+'</div></div>'
+    +'<div style="padding:8px;border-radius:8px;background:rgba(255,255,255,0.03)"><div style="font-size:9px;color:#64748b;font-weight:700">UNPAID BALANCE</div><div style="font-size:13px;color:#e2e8f0;font-weight:600">'+fmt(parsed.unpaid_balance)+'</div></div>'
+    +'<div style="padding:8px;border-radius:8px;background:rgba(255,255,255,0.03)"><div style="font-size:9px;color:#64748b;font-weight:700">UNDRAWN HOLDBACK</div><div style="font-size:13px;color:#e2e8f0;font-weight:600">'+fmt(parsed.undrawn_amount)+'</div></div>'
+    +'<div style="padding:8px;border-radius:8px;background:rgba(255,255,255,0.03)"><div style="font-size:9px;color:#64748b;font-weight:700">NEXT PAYMENT</div><div style="font-size:13px;color:#e2e8f0;font-weight:600">'+esc(parsed.next_payment_date||'\u2014')+'</div></div>'
+    +'<div style="padding:8px;border-radius:8px;background:rgba(255,255,255,0.03)"><div style="font-size:9px;color:#64748b;font-weight:700">NEXT AMOUNT</div><div style="font-size:13px;color:#e2e8f0;font-weight:600">'+fmt(parsed.next_payment_amount)+'</div></div>'
+    +'</div>'
+    +drawsHtml
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="confirmStatement()" style="flex:1;padding:10px;font-size:12px;background:linear-gradient(135deg,#d4af37,#b8962e);color:#0a0a0a;font-weight:800;border:none;border-radius:8px;cursor:pointer">\u2713 Confirm & Save</button>'
+    +'<button onclick="cancelStatement()" style="flex:0 0 auto;padding:10px 16px;font-size:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#94a3b8;font-weight:700;border-radius:8px;cursor:pointer">Cancel</button>'
+    +'</div></div>';
+
+  window._pendingStatement=parsed;
+}
+
+async function confirmStatement(){
+  const parsed=window._pendingStatement;
+  if(!parsed||!finData)return;
+  const amt=Number(parsed.interest_payment_amount)||0;
+  if(!amt){showRenoToast("No interest amount found");return;}
+
+  const logEntry={
+    date:parsed.statement_date||new Date().toISOString().split('T')[0],
+    amount:amt,
+    statement_period:parsed.statement_period||null,
+    unpaid_balance:parsed.unpaid_balance||null,
+    undrawn_amount:parsed.undrawn_amount||null,
+    parsed_at:new Date().toISOString()
+  };
+
+  const existingLog=finData.interest_payments_log||[];
+  const isDuplicate=existingLog.some(entry=>entry.statement_period&&parsed.statement_period&&entry.statement_period===parsed.statement_period);
+  if(isDuplicate&&!confirm("A payment for this statement period already exists. Add anyway?")){cancelStatement();return;}
+
+  const updatedLog=[...existingLog,logEntry];
+  const newTotal=(finData.total_interest_paid||0)+amt;
+  const patch={total_interest_paid:newTotal,interest_payments_log:updatedLog};
+
+  if(parsed.unpaid_balance)patch.current_principal_balance=parsed.unpaid_balance;
+  if(parsed.next_payment_amount&&parsed.next_payment_amount!==finData.monthly_interest_payment)patch.monthly_interest_payment=parsed.next_payment_amount;
+  if(parsed.maturity_date&&!finData.maturity_date)patch.maturity_date=parsed.maturity_date;
+  if(parsed.interest_rate&&parsed.interest_rate!==finData.interest_rate)console.log('[SH STMT] Rate on statement:',parsed.interest_rate,'vs stored:',finData.interest_rate);
+
+  try{
+    const res=await fetch(SB+"/rest/v1/deal_financing?id=eq."+finData.id,{method:"PATCH",headers:RENO_WH,body:JSON.stringify(patch)});
+    if(!res.ok)throw new Error("PATCH failed: "+res.status);
+    Object.assign(finData,patch);
+    showRenoToast("Payment logged: "+$r(amt));
+    window._pendingStatement=null;
     openFinancing(finDealId);
-  }catch(e){console.error("Log interest failed:",e);showRenoToast("Failed to log payment");}
+  }catch(e){console.error('[SH STMT] Save failed:',e);showRenoToast("Failed to save \u2014 try again");}
+}
+
+function cancelStatement(){
+  window._pendingStatement=null;
+  const confirmArea=document.getElementById('stmtConfirmArea');
+  if(confirmArea)confirmArea.remove();
 }
 
 async function saveFinancing(dealId){
