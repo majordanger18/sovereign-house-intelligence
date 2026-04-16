@@ -2,55 +2,23 @@
 async function openDetail(id){
   window._savedScrollY=window.scrollY;
   const p=props.find(x=>x.id===id);if(!p)return;
-  const[ph,compsRaw]=await Promise.all([
+  const[ph,uaRaw]=await Promise.all([
     sb(`price_changes?mls_number=eq.${p.mls_number}&order=detected_at.desc`),
-    sb(`sold_comps?zip_code=eq.${p.zip_code}&order=sold_date.desc&limit=200`)
+    sb(`underwriting_analyses?property_id=eq.${p.id}&order=created_at.desc&limit=1&select=comp_data,arv_target,arv,arv_ppsf`)
   ]);
   const priceHist=Array.isArray(ph)?ph:[];
-  const allComps=Array.isArray(compsRaw)?compsRaw:[];
-  
-  // Filter comps by similarity — prioritize same subdivision and same street
-  const pSubdiv=(p.subdivision_name||p.community||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-  const pStreet=(p.address||'').split(/\d+\s*/)[1]||'';
-  const pStreetClean=pStreet.toLowerCase().replace(/\s*(st|street|ave|avenue|dr|drive|ct|court|ln|lane|blvd|way|cir|circle|pl|place)\s*$/i,'').trim();
-  const scored=allComps.map(c=>{
-    let score=0;
-    // Tier 1: Same subdivision (highest priority)
-    const cSubdiv=(c.subdivision_name||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-    if(pSubdiv&&cSubdiv&&(cSubdiv.includes(pSubdiv)||pSubdiv.includes(cSubdiv)||cSubdiv.replace(/phase\d+/,'')===pSubdiv.replace(/phase\d+/,'')))score+=10;
-    // Tier 1: Same street
-    const cStreet=(c.address||'').split(/\d+\s*/)[1]||'';
-    const cStreetClean=cStreet.toLowerCase().replace(/\s*(st|street|ave|avenue|dr|drive|ct|court|ln|lane|blvd|way|cir|circle|pl|place)\s*$/i,'').trim();
-    if(pStreetClean&&cStreetClean&&cStreetClean===pStreetClean)score+=8;
-    // Tier 2: Physical similarity
-    const sqftDiff=Math.abs((c.sqft||0)-(p.sqft||0));
-    if(sqftDiff<=500)score+=3;else if(sqftDiff<=800)score+=2;else if(sqftDiff<=1000)score+=1;
-    if(Math.abs((c.bedrooms||0)-(p.bedrooms||0))<=1)score+=2;
-    if(c.pool===p.pool)score+=1;
-    if(c.is_gated===p.is_gated)score+=2;
-    // Proximity scoring (nearby sales regardless of subdivision name)
-    if(p.latitude&&p.longitude&&c.latitude&&c.longitude){
-      const dlat=p.latitude-c.latitude,dlng=p.longitude-c.longitude;
-      const miles=Math.sqrt(dlat*dlat+dlng*dlng)*69;
-      if(miles<=0.25)score+=8;
-      else if(miles<=0.5)score+=5;
-      else if(miles<=1)score+=3;
-    }
-    const adj=c.sold_price||(c.list_price||0);
-    const adjPpsf=c.sqft?Math.round(adj/c.sqft):0;
-    return{...c,comp_score:score,adj_ppsf:adjPpsf};
-  });
-  // Debug: log Silver Oaks scoring
-  const silverOaks=scored.find(c=>(c.address||'').toLowerCase().includes('silver oaks'));
-  if(silverOaks)console.log('Silver Oaks score:',silverOaks.comp_score,'lat:',silverOaks.latitude,'lng:',silverOaks.longitude,'pLat:',p.latitude,'pLng:',p.longitude);
-  const filtered=scored.filter(c=>c.comp_score>=3).sort((a,b)=>b.comp_score-a.comp_score);
-  console.log('Top 10 comp scores:',filtered.slice(0,10).map(c=>c.address+': '+c.comp_score));
-  const scored2=filtered.slice(0,8);
-  
-  // Calculate avg PPSF from comps
-  const compPpsfs=scored2.filter(c=>c.adj_ppsf>0).map(c=>c.adj_ppsf);
+
+  // Read the analyzer's own classified comps (JSONB) — these are the 9 comps Claude scored
+  // with fields: address, sold_price, sf, ppsf, renovation_level, community, relevance_note
+  const ua=Array.isArray(uaRaw)&&uaRaw.length?uaRaw[0]:null;
+  let analyzerComps=[];
+  if(ua&&ua.comp_data){
+    try{analyzerComps=typeof ua.comp_data==="string"?JSON.parse(ua.comp_data):ua.comp_data;}catch(e){analyzerComps=[];}
+    if(!Array.isArray(analyzerComps))analyzerComps=[];
+  }
+  const compPpsfs=analyzerComps.filter(c=>c&&Number(c.ppsf)>0).map(c=>Number(c.ppsf));
   const avgPpsf=compPpsfs.length?Math.round(compPpsfs.reduce((a,b)=>a+b,0)/compPpsfs.length):0;
-  const suggestedArv=avgPpsf&&p.sqft?$(avgPpsf*p.sqft):"—";
+  const arvTarget=ua?(ua.arv_target||ua.arv||0):0;
 
   const isW=watchIds.has(p.id),red=p.original_list_price&&p.list_price<p.original_list_price;
   let dtags="";
@@ -106,7 +74,7 @@ async function openDetail(id){
     </div>
     ${phH}
     
-    ${scored2.length>0?`<div style="margin-top:16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:10px;color:#22c55e;font-weight:700;letter-spacing:2px">📊 SOLD COMPS (${scored2.length})</div>${avgPpsf?`<div style="font-size:11px;color:#94a3b8">Avg <span style="color:#22c55e;font-weight:700">$${avgPpsf}/sf</span>${p.sqft?` → Est. ARV <span style="color:#22c55e;font-weight:700">${suggestedArv}</span>`:""}</div>`:""}</div>${scored2.map(c=>`<div style="padding:10px;margin-bottom:6px;border-radius:10px;background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.08)"><div style="display:flex;justify-content:space-between;align-items:start"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.address)}</div><div style="font-size:10px;color:#64748b;margin-top:2px">${c.bedrooms||"?"}bd/${c.bathrooms||"?"}ba · ${c.sqft?c.sqft.toLocaleString()+"sf":"?"} · ${c.pool?"Pool":"No Pool"}${c.is_gated?" · Gated":""}</div></div><div style="text-align:right;flex-shrink:0;margin-left:10px"><div style="font-size:14px;font-weight:800;color:#22c55e">${$(c.sold_price)}</div><div style="font-size:10px;color:#94a3b8;font-weight:600">$${c.adj_ppsf}/sf</div></div></div><div style="display:flex;gap:8px;margin-top:4px;font-size:10px;color:#475569">${c.sold_date?`<span>Sold ${new Date(c.sold_date).toLocaleDateString()}</span>`:""} ${c.days_on_market?`<span>${c.days_on_market} DOM</span>`:""} ${c.subdivision_name?`<span>${esc(truncSub((window.communityNameMap&&window.communityNameMap[c.subdivision_name])||c.subdivision_name))}</span>`:""}</div></div>`).join("")}</div>`:`<div style="margin-top:16px;padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);text-align:center"><div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:2px">📊 SOLD COMPS</div><div style="font-size:12px;color:#475569;margin-top:6px">No matching comps in ${p.zip_code}</div></div>`}
+    ${analyzerComps.length>0?`<div style="margin-top:16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:10px;color:#22c55e;font-weight:700;letter-spacing:2px">📊 SOLD COMPS (${analyzerComps.length})</div>${avgPpsf?`<div style="font-size:11px;color:#94a3b8">Avg <span style="color:#22c55e;font-weight:700">$${avgPpsf}/sf</span>${arvTarget?` → Est. ARV <span style="color:#22c55e;font-weight:700">${$(arvTarget)}</span>`:""}</div>`:""}</div>${analyzerComps.map(c=>{const rl=(c.renovation_level||"").toLowerCase().trim();const rlColor=rl.includes("premium")?"#22c55e":rl.includes("full")?"#3b82f6":rl.includes("partial")?"#f59e0b":"#94a3b8";const rlBg=rl.includes("premium")?"rgba(34,197,94,0.12)":rl.includes("full")?"rgba(59,130,246,0.12)":rl.includes("partial")?"rgba(245,158,11,0.12)":"rgba(148,163,184,0.1)";const rlBorder=rl.includes("premium")?"rgba(34,197,94,0.25)":rl.includes("full")?"rgba(59,130,246,0.25)":rl.includes("partial")?"rgba(245,158,11,0.25)":"rgba(148,163,184,0.2)";const rlLabel=c.renovation_level?String(c.renovation_level).replace(/_/g," "):"";return `<div style="padding:10px;margin-bottom:6px;border-radius:10px;background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.08)"><div style="display:flex;justify-content:space-between;align-items:start;gap:10px"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.address||"")}</div><div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap">${rlLabel?`<span style="display:inline-block;padding:2px 7px;border-radius:5px;background:${rlBg};color:${rlColor};border:1px solid ${rlBorder};font-size:9px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase">${esc(rlLabel)}</span>`:""}${c.sf?`<span style="font-size:10px;color:#64748b">${Number(c.sf).toLocaleString()}sf</span>`:""}${c.community?`<span style="font-size:10px;color:#64748b">${esc(c.community)}</span>`:""}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:14px;font-weight:800;color:#22c55e">${$(c.sold_price||0)}</div><div style="font-size:10px;color:#94a3b8;font-weight:600">$${c.ppsf||0}/sf</div></div></div>${c.relevance_note?`<div style="margin-top:6px;font-size:10px;color:#64748b;font-style:italic;line-height:1.5">${esc(c.relevance_note)}</div>`:""}</div>`;}).join("")}</div>`:""}
 
     <div style="margin-top:16px"><div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:1px;margin-bottom:6px">NOTES</div><div style="display:flex;gap:8px"><input id="noteInput" type="text" placeholder="Drive-by notes, ideas..." style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#f1f5f9;font-size:16px;outline:none;min-height:44px"/><button onclick="saveNote('${p.id}')" class="btn" style="padding:0 16px;background:rgba(212,175,55,0.15);color:#d4af37;font-size:12px">Save</button></div><div id="notesContainer" style="margin-top:8px">${p.notes?renderNotes(p.id,p.notes):""}</div></div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:20px">
@@ -124,6 +92,40 @@ async function openDetail(id){
 }
 
 function closeDetail(){document.getElementById("detailModal").style.display="none";document.body.style.overflow="";if(typeof window._savedScrollY==="number"){window.scrollTo(0,window._savedScrollY);}}
+
+// UNUSED — kept for reference, consider removing. The detail view now reads comps from
+// underwriting_analyses.comp_data (analyzer-classified) instead of this zip-code query + similarity score.
+async function getLegacyCompsFallback(p){
+  const compsRaw=await sb(`sold_comps?zip_code=eq.${p.zip_code}&order=sold_date.desc&limit=200`);
+  const allComps=Array.isArray(compsRaw)?compsRaw:[];
+  const pSubdiv=(p.subdivision_name||p.community||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const pStreet=(p.address||'').split(/\d+\s*/)[1]||'';
+  const pStreetClean=pStreet.toLowerCase().replace(/\s*(st|street|ave|avenue|dr|drive|ct|court|ln|lane|blvd|way|cir|circle|pl|place)\s*$/i,'').trim();
+  const scored=allComps.map(c=>{
+    let score=0;
+    const cSubdiv=(c.subdivision_name||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(pSubdiv&&cSubdiv&&(cSubdiv.includes(pSubdiv)||pSubdiv.includes(cSubdiv)||cSubdiv.replace(/phase\d+/,'')===pSubdiv.replace(/phase\d+/,'')))score+=10;
+    const cStreet=(c.address||'').split(/\d+\s*/)[1]||'';
+    const cStreetClean=cStreet.toLowerCase().replace(/\s*(st|street|ave|avenue|dr|drive|ct|court|ln|lane|blvd|way|cir|circle|pl|place)\s*$/i,'').trim();
+    if(pStreetClean&&cStreetClean&&cStreetClean===pStreetClean)score+=8;
+    const sqftDiff=Math.abs((c.sqft||0)-(p.sqft||0));
+    if(sqftDiff<=500)score+=3;else if(sqftDiff<=800)score+=2;else if(sqftDiff<=1000)score+=1;
+    if(Math.abs((c.bedrooms||0)-(p.bedrooms||0))<=1)score+=2;
+    if(c.pool===p.pool)score+=1;
+    if(c.is_gated===p.is_gated)score+=2;
+    if(p.latitude&&p.longitude&&c.latitude&&c.longitude){
+      const dlat=p.latitude-c.latitude,dlng=p.longitude-c.longitude;
+      const miles=Math.sqrt(dlat*dlat+dlng*dlng)*69;
+      if(miles<=0.25)score+=8;
+      else if(miles<=0.5)score+=5;
+      else if(miles<=1)score+=3;
+    }
+    const adj=c.sold_price||(c.list_price||0);
+    const adjPpsf=c.sqft?Math.round(adj/c.sqft):0;
+    return{...c,comp_score:score,adj_ppsf:adjPpsf};
+  });
+  return scored.filter(c=>c.comp_score>=3).sort((a,b)=>b.comp_score-a.comp_score).slice(0,8);
+}
 
 async function watchProp(id){const p=props.find(x=>x.id===id);if(!p)return;const res=await sb("watchlist",{method:"POST",body:JSON.stringify({property_id:p.id,price_at_watch:p.list_price,current_price:p.list_price,watch_reason:"Dashboard",status:"Watching"})});if(Array.isArray(res)&&res[0])watchMap[id]=res[0].id;watchIds.add(id);const btn=document.getElementById("watchBtn_"+id);if(btn){btn.textContent="★ Watching";btn.style.background="rgba(212,175,55,0.15)";btn.style.color="#d4af37";btn.setAttribute("onclick","unwatchProp('"+id+"')");}const t=document.getElementById("alertToast");t.innerHTML=`<div style="margin:8px 20px;padding:10px 14px;border-radius:10px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.15);font-size:12px;color:#d4af37;font-weight:600;animation:fadeUp .3s ease">Added to watchlist</div>`;setTimeout(()=>{t.innerHTML="";},2000);}
 async function unwatchProp(id){const w=watchMap[id];if(w){await fetch(`${SB}/rest/v1/watchlist?id=eq.${w}`,{method:"DELETE",headers:HD});watchIds.delete(id);delete watchMap[id];const btn=document.getElementById("watchBtn_"+id);if(btn){btn.textContent="☆ Add to Watchlist";btn.style.background="rgba(212,175,55,0.9)";btn.style.color="#0a0a0a";btn.setAttribute("onclick","watchProp('"+id+"')");}const t=document.getElementById("alertToast");t.innerHTML=`<div style="margin:8px 20px;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);font-size:12px;color:#94a3b8;font-weight:600;animation:fadeUp .3s ease">Removed from watchlist</div>`;setTimeout(()=>{t.innerHTML="";},2000);}}
