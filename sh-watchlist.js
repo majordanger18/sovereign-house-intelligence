@@ -62,37 +62,37 @@ function renderWatchedView() {
   const list = document.getElementById('listArea');
   if (!list) return;
 
-  // Clear and render two sections
-  let h = '';
+  // Remove any existing community section from a previous render
+  const existing = document.getElementById('communityWatchSection');
+  if (existing) existing.remove();
 
-  // Section 1: Communities
-  h += '<div style="flex:1 1 100%;width:100%;padding:16px 20px 8px;display:flex;justify-content:space-between;align-items:center">';
-  h += '<div style="font-size:11px;letter-spacing:2px;color:#d4af37;text-transform:uppercase;font-weight:700">⭐ Communities Watching (' + communityWatches.length + ')</div>';
-  h += '<button onclick="openAddCommunityWatch()" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(212,175,55,0.3);background:rgba(212,175,55,0.08);color:#d4af37;font-size:11px;font-weight:700;cursor:pointer">+ Add Community</button>';
-  h += '</div>';
+  // Build community section as a sibling ABOVE listArea
+  let ch = '<div id="communityWatchSection" style="padding:16px 20px 8px">';
+  ch += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
+  ch += '<div style="font-size:11px;letter-spacing:2px;color:#d4af37;text-transform:uppercase;font-weight:700">⭐ Communities Watching (' + communityWatches.length + ')</div>';
+  ch += '<button onclick="openAddCommunityWatch()" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(212,175,55,0.3);background:rgba(212,175,55,0.08);color:#d4af37;font-size:11px;font-weight:700;cursor:pointer">+ Add Community</button>';
+  ch += '</div>';
 
   if (communityWatches.length === 0) {
-    h += '<div style="flex:1 1 100%;width:100%;margin:0 20px 16px;padding:20px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:#64748b;font-size:12px;text-align:center;font-style:italic">No community watches yet. Click "Add Community" to start tracking a neighborhood.</div>';
+    ch += '<div style="padding:20px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:#64748b;font-size:12px;text-align:center;font-style:italic">No community watches yet. Click "Add Community" to start tracking a neighborhood.</div>';
   } else {
-    h += '<div style="flex:1 1 100%;width:100%;padding:0 20px 16px">';
-    communityWatches.forEach(cw => { h += renderCommunityWatchCard(cw); });
-    h += '</div>';
+    communityWatches.forEach(cw => { ch += renderCommunityWatchCard(cw); });
   }
 
-  // Section 2: Properties
+  ch += '<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.04);font-size:11px;letter-spacing:2px;color:#22c55e;text-transform:uppercase;font-weight:700">🏠 Properties Watching</div>';
+  ch += '</div>';
+
+  list.insertAdjacentHTML('beforebegin', ch);
+
+  // Now render property cards into listArea normally
   const watchedProps = props.filter(p => watchIds.has(p.id) && baseFilter(p));
-  h += '<div style="flex:1 1 100%;width:100%;padding:8px 20px;border-top:1px solid rgba(255,255,255,0.04);margin-top:4px">';
-  h += '<div style="font-size:11px;letter-spacing:2px;color:#22c55e;text-transform:uppercase;font-weight:700">🏠 Properties Watching (' + watchedProps.length + ')</div>';
-  h += '</div>';
-
+  let ph = '';
   if (watchedProps.length === 0) {
-    h += '<div style="flex:1 1 100%;width:100%;margin:0 20px 16px;padding:20px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:#64748b;font-size:12px;text-align:center;font-style:italic">No properties on watchlist.</div>';
+    ph = '<div style="padding:20px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:#64748b;font-size:12px;text-align:center;font-style:italic">No properties on watchlist.</div>';
   } else {
-    // Render property cards using existing cardHtml logic
-    watchedProps.forEach(p => { h += (window.cardHtml ? window.cardHtml(p) : ''); });
+    watchedProps.forEach(p => { ph += (window.cardHtml ? window.cardHtml(p) : ''); });
   }
-
-  list.innerHTML = h;
+  list.innerHTML = ph;
 }
 
 // ═══════════════════════════════════════════════════════════════

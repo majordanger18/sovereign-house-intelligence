@@ -144,6 +144,9 @@ function togglePulse(){
 }
 
 function renderList(){
+  // Clean up community watch section when not on watched view
+  const _cws = document.getElementById('communityWatchSection');
+  if (_cws && view !== 'watched') _cws.remove();
   if(view==="deals"){renderDeals();return;}
   if(view==="watched"){renderWatchedView();return;}
   const q=document.getElementById("searchBox").value.toLowerCase();
