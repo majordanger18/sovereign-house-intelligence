@@ -250,7 +250,12 @@ function editCommunityWatch(id) {
 
 function openCommunityWatchModal(existing) {
   const nm = window.communityNameMap || {};
-  const allCommunities = Array.from(new Set(Object.values(nm))).filter(x => x && x !== 'Unknown').sort();
+  // Only show communities that exist in community_production_stats, are gated, and have 5+ sales
+  const allCommunities = Array.from(new Set(Object.values(nm))).filter(x => {
+    if (!x || x === 'Unknown') return false;
+    const p = communityProd[x];
+    return p && (Number(p.total_sales) || 0) >= 5;
+  }).sort();
   const alreadyWatched = new Set(communityWatches.map(c => c.community_name));
 
   let h = '<div id="cwModalBackdrop" onclick="closeCommunityWatchModal()" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px">';
