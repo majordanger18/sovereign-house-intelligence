@@ -75,7 +75,7 @@ function renderWatchedView() {
     h += '<div style="margin:0 20px 16px;padding:20px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:#64748b;font-size:12px;text-align:center;font-style:italic">No community watches yet. Click "Add Community" to start tracking a neighborhood.</div>';
   } else {
     h += '<div style="padding:0 20px 16px">';
-    communityWatches.forEach(cw => { h += renderCommunityCard(cw); });
+    communityWatches.forEach(cw => { h += renderCommunityWatchCard(cw); });
     h += '</div>';
   }
 
@@ -99,7 +99,7 @@ function renderWatchedView() {
 // COMMUNITY CARD
 // ═══════════════════════════════════════════════════════════════
 
-function renderCommunityCard(cw) {
+function renderCommunityWatchCard(cw) {
   const hist = communityHistory[cw.community_name] || [];
   const curr = hist[0];
   const prev = hist.find(s => {
