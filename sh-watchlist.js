@@ -59,7 +59,7 @@ async function loadCommunityWatchData() {
 // ═══════════════════════════════════════════════════════════════
 
 function renderWatchedView() {
-  const list = document.getElementById('propsList');
+  const list = document.getElementById('listArea');
   if (!list) return;
 
   // Clear and render two sections
