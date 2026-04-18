@@ -89,7 +89,7 @@ function renderWatchedView() {
     h += '<div style="margin:0 20px 16px;padding:20px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:#64748b;font-size:12px;text-align:center;font-style:italic">No properties on watchlist.</div>';
   } else {
     // Render property cards using existing cardHtml logic
-    watchedProps.forEach(p => { h += cardHtml(p); });
+    watchedProps.forEach(p => { h += (window.cardHtml ? window.cardHtml(p) : ''); });
   }
 
   list.innerHTML = h;
