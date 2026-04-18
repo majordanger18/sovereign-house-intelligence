@@ -66,27 +66,27 @@ function renderWatchedView() {
   let h = '';
 
   // Section 1: Communities
-  h += '<div style="padding:16px 20px 8px;display:flex;justify-content:space-between;align-items:center">';
+  h += '<div style="flex:1 1 100%;width:100%;padding:16px 20px 8px;display:flex;justify-content:space-between;align-items:center">';
   h += '<div style="font-size:11px;letter-spacing:2px;color:#d4af37;text-transform:uppercase;font-weight:700">⭐ Communities Watching (' + communityWatches.length + ')</div>';
   h += '<button onclick="openAddCommunityWatch()" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(212,175,55,0.3);background:rgba(212,175,55,0.08);color:#d4af37;font-size:11px;font-weight:700;cursor:pointer">+ Add Community</button>';
   h += '</div>';
 
   if (communityWatches.length === 0) {
-    h += '<div style="margin:0 20px 16px;padding:20px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:#64748b;font-size:12px;text-align:center;font-style:italic">No community watches yet. Click "Add Community" to start tracking a neighborhood.</div>';
+    h += '<div style="flex:1 1 100%;width:100%;margin:0 20px 16px;padding:20px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:#64748b;font-size:12px;text-align:center;font-style:italic">No community watches yet. Click "Add Community" to start tracking a neighborhood.</div>';
   } else {
-    h += '<div style="padding:0 20px 16px">';
+    h += '<div style="flex:1 1 100%;width:100%;padding:0 20px 16px">';
     communityWatches.forEach(cw => { h += renderCommunityWatchCard(cw); });
     h += '</div>';
   }
 
   // Section 2: Properties
   const watchedProps = props.filter(p => watchIds.has(p.id) && baseFilter(p));
-  h += '<div style="padding:8px 20px;border-top:1px solid rgba(255,255,255,0.04);margin-top:4px">';
+  h += '<div style="flex:1 1 100%;width:100%;padding:8px 20px;border-top:1px solid rgba(255,255,255,0.04);margin-top:4px">';
   h += '<div style="font-size:11px;letter-spacing:2px;color:#22c55e;text-transform:uppercase;font-weight:700">🏠 Properties Watching (' + watchedProps.length + ')</div>';
   h += '</div>';
 
   if (watchedProps.length === 0) {
-    h += '<div style="margin:0 20px 16px;padding:20px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:#64748b;font-size:12px;text-align:center;font-style:italic">No properties on watchlist.</div>';
+    h += '<div style="flex:1 1 100%;width:100%;margin:0 20px 16px;padding:20px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:#64748b;font-size:12px;text-align:center;font-style:italic">No properties on watchlist.</div>';
   } else {
     // Render property cards using existing cardHtml logic
     watchedProps.forEach(p => { h += (window.cardHtml ? window.cardHtml(p) : ''); });
