@@ -9,6 +9,7 @@ async function loadData(){
     const wm={},ws=new Set();
     (Array.isArray(w)?w:[]).forEach(x=>{if(x.property_id){ws.add(x.property_id);wm[x.property_id]=x.id;}});
     watchIds=ws;watchMap=wm;alerts=Array.isArray(a)?a:[];
+    await loadCommunityWatchData();
     analysisMap={};
     (Array.isArray(ua)?ua:[]).forEach(x=>{if(x.property_id&&!analysisMap[x.property_id])analysisMap[x.property_id]=x;});
     window.communityNameMap={};
@@ -144,6 +145,7 @@ function togglePulse(){
 
 function renderList(){
   if(view==="deals"){renderDeals();return;}
+  if(view==="watched"){renderWatchedView();return;}
   const q=document.getElementById("searchBox").value.toLowerCase();
   const sortBy=currentSort;
   let list=[...props];
