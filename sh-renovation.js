@@ -18,7 +18,7 @@ const DRAW_PIPE=[
 
 let renoDealId=null,renoSub="project",renoOv=null,renoBLines=[],renoDS=null,renoDraws=[],renoExp=[],renoSOW=[],renoDeal=null,renoExpandedLine=null,renoFin=null,renoTasks=[],renoChangeOrders=[],renoMilestones=[];
 let renoExpF={sow:"all",type:"all",from:"",to:""};
-let renoDocs=[],renoDocFilter="all",renoDocRoom="all",renoDocPhase="all",renoCompareMode=false,renoCompareRoom="kitchen";
+let renoDocs=[],renoDocFilter="all",renoDocRoom="all",renoDocPhase="all",renoCompareMode=false,renoCompareRoom="kitchen",_docsBusy=false;
 let docsPageSize=12,docsPage=0;
 let renoTaskFilter={cat:"all",assignee:"all"};
 let renoEditingTask=null,renoShowDone=false,renoExpandedMs=null;
@@ -3193,6 +3193,8 @@ function docsPickDocument(){document.getElementById('docsDocInput').click();}
 
 async function docsHandlePhotos(files){
   if(!files||!files.length||!renoDealId)return;
+  if(_docsBusy){console.warn('[SH] Upload already in progress, ignoring duplicate trigger');return;}
+  _docsBusy=true;
   const fileArr=Array.from(files);
   const modal=document.getElementById('renoModal');
   modal.style.display='block';
@@ -3282,6 +3284,16 @@ async function classifyPhoto(apiKey,b64,mediaType){
 
 async function docsSaveAll(){
   const classified=window._docsClassified;if(!classified)return;
+  // Disable Save All button to prevent rapid re-tap inserts
+  const saveBtn=document.querySelector('button[onclick="docsSaveAll()"]');
+  if(saveBtn){
+    if(saveBtn.dataset.saving==='1')return; // already running
+    saveBtn.dataset.saving='1';
+    saveBtn.disabled=true;
+    saveBtn.style.opacity='0.5';
+    saveBtn.style.cursor='wait';
+    saveBtn.textContent='Saving...';
+  }
   const deal=deals.find(d=>d.id===renoDealId);
   let saved=0;
   for(let i=0;i<classified.length;i++){
@@ -3323,6 +3335,8 @@ async function docsSaveAll(){
 // ═══ DOCUMENT UPLOAD FLOW ═══
 async function docsHandleDocument(files){
   if(!files||!files.length||!renoDealId)return;
+  if(_docsBusy){console.warn('[SH] Document upload already in progress, ignoring duplicate trigger');return;}
+  _docsBusy=true;
   const file=files[0];
   const modal=document.getElementById('renoModal');
   modal.style.display='block';
@@ -3396,6 +3410,10 @@ function closeDocsModal(){
   // Reset file inputs
   const pi=document.getElementById('docsPhotoInput');if(pi)pi.value='';
   const di=document.getElementById('docsDocInput');if(di)di.value='';
+  // Reset upload busy flag (in case user cancelled mid-flow)
+  _docsBusy=false;
+  // Clear pending classified data (in case user cancelled before save)
+  window._docsClassified=null;
 }
 
 // ═══ PHOTO LIGHTBOX ═══
