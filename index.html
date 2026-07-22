@@ -101,21 +101,54 @@ html,body,#loading,#main,.overlay,.sheet{background:#0a0a0f;color:#fff;margin:0;
 <div id="renoModal" class="overlay" style="display:none;z-index:1200"></div>
 <div id="contactsModal" class="overlay" style="display:none;z-index:1250"></div>
 
+<!-- Crash telemetry — fires before any app code loads -->
+<script>
+(function(){
+  try{
+    var K="_sh_err_",C=0,M=3;
+    function send(msg,stk){
+      if(C>=M)return;
+      try{var s=sessionStorage;var n=parseInt(s.getItem(K)||"0",10);if(n>=M)return;s.setItem(K,""+(n+1));}catch(e){}
+      C++;
+      try{
+        var b=JSON.stringify({
+          message:String(msg).slice(0,2000),
+          stack:stk?String(stk).slice(0,500):null,
+          url:location.href,
+          ua:navigator.userAgent,
+          ts:new Date().toISOString()
+        });
+        fetch("/.netlify/functions/mc-crashlog",{method:"POST",headers:{"Content-Type":"application/json"},body:b}).catch(function(){});
+      }catch(e){}
+    }
+    window.onerror=function(msg,src,line,col,err){
+      send(msg,err&&err.stack?err.stack:src+":"+line+":"+col);
+    };
+    window.addEventListener("unhandledrejection",function(ev){
+      var r=ev.reason;
+      if(r instanceof Error)send(r.message,r.stack);
+      else send(String(r),null);
+    });
+  }catch(e){}
+})();
+</script>
+
 <!-- Modular JS — load order matters -->
-<script src="sh-core.js"></script>
-<script src="sh-dashboard.js"></script>
-<script src="sh-deals.js"></script>
-<script src="sh-watchlist.js"></script>
-<script src="sh-detail.js"></script>
-<script src="sh-ai.js"></script>
-<script src="sh-calculator.js"></script>
-<script src="sh-offer-calc.js"></script>
-<script src="sh-renovation.js"></script>
-<script src="sh-contacts.js"></script>
-<script src="sh-intel.js"></script>
-<script src="sh-alerts.js"></script>
-<script src="sh-offer.js"></script>
-<script src="sh-rpa-init.js"></script>
+<!-- Cache-bust version strings below must be bumped on every deploy. Format: YYYYMMDDHHMM UTC. -->
+<script src="sh-core.js?v=202604192200"></script>
+<script src="sh-dashboard.js?v=202604192200"></script>
+<script src="sh-deals.js?v=202604192200"></script>
+<script src="sh-watchlist.js?v=202604192200"></script>
+<script src="sh-detail.js?v=202604192200"></script>
+<script src="sh-ai.js?v=202604192200"></script>
+<script src="sh-calculator.js?v=202604192200"></script>
+<script src="sh-offer-calc.js?v=202604192200"></script>
+<script src="sh-renovation.js?v=202604192200"></script>
+<script src="sh-contacts.js?v=202604192200"></script>
+<script src="sh-intel.js?v=202604192200"></script>
+<script src="sh-alerts.js?v=202604192200"></script>
+<script src="sh-offer.js?v=202604192200"></script>
+<script src="sh-rpa-init.js?v=202604192200"></script>
 <script>
 // Backdrop close only for alertModal (no forms, no data loss risk)
 document.getElementById("alertModal").addEventListener("click",function(e){
